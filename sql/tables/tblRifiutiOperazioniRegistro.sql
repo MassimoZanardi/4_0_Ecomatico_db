@@ -8,6 +8,7 @@ CREATE TABLE [dbo].[tblRifiutiOperazioniRegistro](
 	[Id] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[OperazioneAuto] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[IsRentri] [bit] NULL,
+	[IsFormulario] [bit] NULL,
 	[IsIntegrazioneFir] [bit] NULL,
 	[IsProduttore] [bit] NULL,
 	[IsTrasportatore] [bit] NULL,

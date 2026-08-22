@@ -1,0 +1,81 @@
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[tblUtenti](
+	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[IdDominio] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdRuolo] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdStato] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Email] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Scadenza] [date] NULL,
+	[PasswordScadenzaGiorni] [int] NULL,
+	[PasswordPrecedenti] [int] NULL,
+	[PasswordLunghezzaMinima] [int] NULL,
+	[Master] [bit] NULL,
+	[TokenReset] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[TokenResetScade] [datetime2](0) NULL,
+	[Lock] [tinyint] NULL,
+ CONSTRAINT [PK_tblUtenti] PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+
+GO
+
+SET ANSI_PADDING ON
+
+GO
+
+CREATE NONCLUSTERED INDEX [IX_Utenti_Email] ON [dbo].[tblUtenti]
+(
+	[Email] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+
+SET ANSI_PADDING ON
+
+GO
+
+CREATE NONCLUSTERED INDEX [IX_Utenti_IdDominio_Lock] ON [dbo].[tblUtenti]
+(
+	[IdDominio] ASC
+)
+WHERE ([Lock]<(2))
+WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+
+SET ANSI_PADDING ON
+
+GO
+
+CREATE NONCLUSTERED INDEX [IX_Utenti_TokenReset] ON [dbo].[tblUtenti]
+(
+	[TokenReset] ASC
+)
+WHERE ([TokenReset] IS NOT NULL)
+WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[tblUtenti]  WITH CHECK ADD  CONSTRAINT [FK_tblUtenti_tblDomini] FOREIGN KEY([IdDominio])
+REFERENCES [dbo].[tblDomini] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblUtenti] CHECK CONSTRAINT [FK_tblUtenti_tblDomini]
+GO
+
+ALTER TABLE [dbo].[tblUtenti]  WITH CHECK ADD  CONSTRAINT [FK_tblUtenti_tblUtentiRuoli] FOREIGN KEY([IdRuolo])
+REFERENCES [dbo].[tblUtentiRuoli] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblUtenti] CHECK CONSTRAINT [FK_tblUtenti_tblUtentiRuoli]
+GO
+
+ALTER TABLE [dbo].[tblUtenti]  WITH CHECK ADD  CONSTRAINT [FK_tblUtenti_tblUtentiStati] FOREIGN KEY([IdStato])
+REFERENCES [dbo].[tblUtentiStati] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblUtenti] CHECK CONSTRAINT [FK_tblUtenti_tblUtentiStati]

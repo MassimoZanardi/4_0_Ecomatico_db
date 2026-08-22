@@ -1,0 +1,43 @@
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[tblCalendari](
+	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[IdSede] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdModulo] [char](3) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Nome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Descrizione] [varchar](500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Lock] [tinyint] NULL,
+ CONSTRAINT [PK_tblCalendari] PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+
+GO
+
+SET ANSI_PADDING ON
+
+GO
+
+CREATE NONCLUSTERED INDEX [IX_Calendari_IdSede] ON [dbo].[tblCalendari]
+(
+	[IdSede] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[tblCalendari]  WITH CHECK ADD  CONSTRAINT [FK_tblCalendari_tblModuli] FOREIGN KEY([IdModulo])
+REFERENCES [dbo].[tblModuli] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblCalendari] CHECK CONSTRAINT [FK_tblCalendari_tblModuli]
+GO
+
+ALTER TABLE [dbo].[tblCalendari]  WITH CHECK ADD  CONSTRAINT [FK_tblCalendari_tblSedi] FOREIGN KEY([IdSede])
+REFERENCES [dbo].[tblSedi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblCalendari] CHECK CONSTRAINT [FK_tblCalendari_tblSedi]

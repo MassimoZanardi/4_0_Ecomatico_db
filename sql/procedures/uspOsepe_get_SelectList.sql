@@ -35,37 +35,13 @@ BEGIN
 		IF @IncludiPersone = 1 INSERT @tblTipi (Tipo) VALUES ('P');
 
 		/*
-
-
-
 		*   Imposta @idAziendaInterna in funzione del Contesto
-
-
-
 		*   0 = Dominio    → IdDominio    (solo da sessione su dominio Master) -- non implementato
-
-
-
 		*   1 = Azienda    → IdAzienda
-
-
-
 		*   2 = Sede       → IdSede
-
-
-
 		*   3 = Registro   → IdRegistro
-
-
-
 		*   4 = Magazzino  → IdMagazzino
-
-
-
 		*   5 = Calendario → IdCalendario
-
-
-
 		*/
 
 		DECLARE @idAziendaInterna CHAR(16);

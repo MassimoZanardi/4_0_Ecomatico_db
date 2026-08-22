@@ -9,29 +9,11 @@ RETURNS VARCHAR(8000)
 AS
 BEGIN
 	/*
-
-
-
      * Normalizza una stringa:
-
-
-
      *   1. Collassa sequenze di spazi multipli in un singolo spazio (senza loop).
-
-
-
      *   2. Rimuove spazi iniziali e finali (LTRIM/RTRIM).
-
-
-
      *   3. Restituisce NULL (o '') se la stringa risultante è vuota.
-
-
-
      *   4. Tronca opzionalmente al limite @len.
-
-
-
      */
 
 	-- Gestione esplicita NULL in ingresso

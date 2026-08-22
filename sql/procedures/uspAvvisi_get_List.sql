@@ -76,64 +76,64 @@ BEGIN
 			AND u.IdRuolo = 'US';
 
 		DECLARE @stmt NVARCHAR(MAX);
-		DECLARE @params NVARCHAR(4000) = N'
-            @RowsPerPage  INT,
-            @Offset       INT,
-            @IdUtente     CHAR(16),
-            @Search       VARCHAR(50),
-            @DallaData    SMALLDATETIME,
-            @AllaData     SMALLDATETIME,
-            @IdCalendario tvpId_char_16 READONLY,
+		DECLARE @params NVARCHAR(4000) = N'
+            @RowsPerPage  INT,
+            @Offset       INT,
+            @IdUtente     CHAR(16),
+            @Search       VARCHAR(50),
+            @DallaData    SMALLDATETIME,
+            @AllaData     SMALLDATETIME,
+            @IdCalendario tvpId_char_16 READONLY,
             @IdTipo       tvpId_char_1  READONLY';
 
-		SET @stmt = N'
-        WITH tbl AS (
-            SELECT
-                Id = CASE e.IdTipo
-                    WHEN ''S'' THEN s.Id
-                    WHEN ''V'' THEN v.Id
-                END,
-                IdEvento         = e.Id,
-                StatoValore      = IIF(e.[Data] < GETDATE(), 1, 0),
-                StatoDescrizione = e.Stato + IIF(e.[Data] < GETDATE(), '' - Scaduto'', ''''),
-                e.IdTipo,
-                Tipo = CASE e.IdTipo
-                    WHEN ''S'' THEN ''Scadenza''
-                    WHEN ''V'' THEN ''Servizio''
-                END,
-                Testo            = e.AvvisoTesto,
-                e.[Data],
-                UrlDestinazione  = IIF(e.Assegnato = 1, ''/servizi/assegnati/'',
-                    CASE e.IdTipo
-                        WHEN ''S'' THEN ''/scadenze/scadenze/''
-                        WHEN ''V'' THEN ''/servizi/servizi/''
-                        ELSE ''''
-                    END)
-            FROM
-                dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendario, @IdTipo) e
-                LEFT JOIN dbo.tblScadenze s WITH (NOLOCK) ON e.Id = s.IdEvento
-                LEFT JOIN dbo.tblServizi  v WITH (NOLOCK) ON e.Id = v.IdEvento
-            WHERE
-                e.IdStato    = ''D''
-                AND e.Avviso     = 1
+		SET @stmt = N'
+        WITH tbl AS (
+            SELECT
+                Id = CASE e.IdTipo
+                    WHEN ''S'' THEN s.Id
+                    WHEN ''V'' THEN v.Id
+                END,
+                IdEvento         = e.Id,
+                StatoValore      = IIF(e.[Data] < GETDATE(), 1, 0),
+                StatoDescrizione = e.Stato + IIF(e.[Data] < GETDATE(), '' - Scaduto'', ''''),
+                e.IdTipo,
+                Tipo = CASE e.IdTipo
+                    WHEN ''S'' THEN ''Scadenza''
+                    WHEN ''V'' THEN ''Servizio''
+                END,
+                Testo            = e.AvvisoTesto,
+                e.[Data],
+                UrlDestinazione  = IIF(e.Assegnato = 1, ''/servizi/assegnati/'',
+                    CASE e.IdTipo
+                        WHEN ''S'' THEN ''/scadenze/scadenze/''
+                        WHEN ''V'' THEN ''/servizi/servizi/''
+                        ELSE ''''
+                    END)
+            FROM
+                dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendario, @IdTipo) e
+                LEFT JOIN dbo.tblScadenze s WITH (NOLOCK) ON e.Id = s.IdEvento
+                LEFT JOIN dbo.tblServizi  v WITH (NOLOCK) ON e.Id = v.IdEvento
+            WHERE
+                e.IdStato    = ''D''
+                AND e.Avviso     = 1
                 AND e.AvvisoData < GETDATE()';
 
 		-- @Search come parametro, NON concatenato → nessun SQL Injection
 		IF @Search IS NOT NULL
-			SET @stmt = @stmt + N'
+			SET @stmt = @stmt + N'
                 AND e.AvvisoTesto LIKE ''%'' + @Search + ''%''';
 
-		SET @stmt = @stmt + N'
-        ),
-        tblCount AS (SELECT COUNT(*) AS RowsCount FROM tbl)
-        SELECT
-            tbl.Id, tbl.IdEvento, tbl.StatoValore, tbl.StatoDescrizione,
-            tbl.IdTipo, tbl.Tipo, tbl.Testo, tbl.[Data], tbl.UrlDestinazione,
-            tblCount.RowsCount
-        FROM tbl
-        CROSS JOIN tblCount
-        ORDER BY tbl.[Data]
-        OFFSET @Offset ROWS
+		SET @stmt = @stmt + N'
+        ),
+        tblCount AS (SELECT COUNT(*) AS RowsCount FROM tbl)
+        SELECT
+            tbl.Id, tbl.IdEvento, tbl.StatoValore, tbl.StatoDescrizione,
+            tbl.IdTipo, tbl.Tipo, tbl.Testo, tbl.[Data], tbl.UrlDestinazione,
+            tblCount.RowsCount
+        FROM tbl
+        CROSS JOIN tblCount
+        ORDER BY tbl.[Data]
+        OFFSET @Offset ROWS
         FETCH NEXT @RowsPerPage ROWS ONLY;';
 
 		EXEC sp_executesql

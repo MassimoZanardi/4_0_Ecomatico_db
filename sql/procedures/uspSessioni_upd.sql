@@ -6,17 +6,17 @@ AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
 
-	/*
-     * Aggiorna il contesto attivo della sessione @Id.
-     *
-     * @Contesto → colonna aggiornata in tblSessioni:
-     *   0 = Dominio    → IdDominio    (solo da sessione su dominio Master)
-     *   1 = Azienda    → IdAzienda
-     *   2 = Sede       → IdSede
-     *   3 = Registro   → IdRegistro
-     *   4 = Magazzino  → IdMagazzino
-     *   5 = Calendario → IdCalendario
-     *
+	/*
+     * Aggiorna il contesto attivo della sessione @Id.
+     *
+     * @Contesto → colonna aggiornata in tblSessioni:
+     *   0 = Dominio    → IdDominio    (solo da sessione su dominio Master)
+     *   1 = Azienda    → IdAzienda
+     *   2 = Sede       → IdSede
+     *   3 = Registro   → IdRegistro
+     *   4 = Magazzino  → IdMagazzino
+     *   5 = Calendario → IdCalendario
+     *
      */
 
 	DECLARE @returnValue INT = 0;

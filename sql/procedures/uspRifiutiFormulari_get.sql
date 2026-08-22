@@ -3,14 +3,14 @@ CREATE PROCEDURE [dbo].[uspRifiutiFormulari_get]
 	@IdSessione CHAR(16) = NULL
 AS
 
-/*
-REGOLE ASSOCIAZIONE REGISTRAZIONE <-> FORMULARI
-1. Da Registrazioni: se @IdDocumentoTrasportoTipo non è un Formulario lo rimuove da Formulari
-2. Da Registrazioni: sarà possibile eliminare una registrazione associata a un formulario. In questo caso, il formulario resterà presente e risulterà non associato ad alcuna registrazione.
-3. Da Formulari: sarà possibile creare un nuovo formulario anche senza associarlo a una registrazione.
-4. Da Formulari: sarà possibile generare una nuova registrazione a partire dal formulario. La registrazione verrà automaticamente associata al formulario stesso. Non sarà consentita l'associazione del
- formulario a registrazioni già esistenti.
-5. Da formulari: sarà possibile creare il formulario e contestualmente la registrazione. Non sarà possibile il contrario.
+/*
+REGOLE ASSOCIAZIONE REGISTRAZIONE <-> FORMULARI
+1. Da Registrazioni: se @IdDocumentoTrasportoTipo non è un Formulario lo rimuove da Formulari
+2. Da Registrazioni: sarà possibile eliminare una registrazione associata a un formulario. In questo caso, il formulario resterà presente e risulterà non associato ad alcuna registrazione.
+3. Da Formulari: sarà possibile creare un nuovo formulario anche senza associarlo a una registrazione.
+4. Da Formulari: sarà possibile generare una nuova registrazione a partire dal formulario. La registrazione verrà automaticamente associata al formulario stesso. Non sarà consentita l'associazione del
+ formulario a registrazioni già esistenti.
+5. Da formulari: sarà possibile creare il formulario e contestualmente la registrazione. Non sarà possibile il contrario.
 */
 
 BEGIN

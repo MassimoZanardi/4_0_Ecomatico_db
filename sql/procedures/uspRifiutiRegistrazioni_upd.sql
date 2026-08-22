@@ -50,13 +50,13 @@ CREATE PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd]
 	@NessunaRegistrazioneAssociata BIT = 0
 AS
 
-/*
-REGOLE ASSOCIAZIONE REGISTRAZIONE <-> FORMULARI
-1. Da Registrazioni: se @IdDocumentoTrasportoTipo non è un Formulario lo rimuove da Formulari
-2. Da Registrazioni: sarà possibile eliminare una registrazione associata a un formulario. In questo caso, il formulario resterà presente e risulterà non associato ad alcuna registrazione.
-3. Da Formulari: sarà possibile creare un nuovo formulario anche senza associarlo a una registrazione.
-4. Da Formulari: sarà possibile generare una nuova registrazione a partire dal formulario. La registrazione verrà automaticamente associata al formulario stesso. Non sarà consentita l'associazione del formulario a registrazioni già esistenti.
-5. Da formulari: sarà possibile creare il formulario e contestualmente la registrazione. Non sarà possibile il contrario.
+/*
+REGOLE ASSOCIAZIONE REGISTRAZIONE <-> FORMULARI
+1. Da Registrazioni: se @IdDocumentoTrasportoTipo non è un Formulario lo rimuove da Formulari
+2. Da Registrazioni: sarà possibile eliminare una registrazione associata a un formulario. In questo caso, il formulario resterà presente e risulterà non associato ad alcuna registrazione.
+3. Da Formulari: sarà possibile creare un nuovo formulario anche senza associarlo a una registrazione.
+4. Da Formulari: sarà possibile generare una nuova registrazione a partire dal formulario. La registrazione verrà automaticamente associata al formulario stesso. Non sarà consentita l'associazione del formulario a registrazioni già esistenti.
+5. Da formulari: sarà possibile creare il formulario e contestualmente la registrazione. Non sarà possibile il contrario.
 */
 
 BEGIN
@@ -156,9 +156,9 @@ BEGIN
 				END
 		FROM
 			dbo.tblRifiutiRegistrazioni r
-		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-		LEFT JOIN dbo.tblRifiutiOperazioniRegistro og ON m.IdOperazione = og.Id
-		LEFT JOIN dbo.tblRifiutiFormulari f ON m.Id = f.IdMovimento
+			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			LEFT JOIN dbo.tblRifiutiOperazioniRegistro og ON m.IdOperazione = og.Id
+			LEFT JOIN dbo.tblRifiutiFormulari f ON m.Id = f.IdMovimento
 		WHERE r.Id = @Id;
 
 		-- Verifica che la registrazione esista
@@ -635,7 +635,15 @@ BEGIN
 					r.Lock < 2
 					AND m.IdRegistro = @idRegistro
 					AND r.DataStampa IS NULL
-					AND (r.[Data] > @RegistrazioneData OR (r.[Data] = @RegistrazioneData AND r.Numero > @RegistrazioneNumero))
+					AND 
+						(
+						r.[Data] > @RegistrazioneData 
+						OR 
+							(
+							r.[Data] = @RegistrazioneData 
+							AND r.Numero > @RegistrazioneNumero
+							)
+						)
 					AND r.[Data] >= @annoInizio
 					AND r.[Data] < @annoFine
 					AND ( (@lock < 2 AND @isLibero2 = 0) OR (@lock = 2 AND @RegistrazioneAuto = 1 AND (@isLibero1 = 0 OR @isLibero2 = 0)) OR (@lock = 2 AND @RegistrazioneAuto = 0 AND @isLibero1 = 0) );

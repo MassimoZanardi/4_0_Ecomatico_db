@@ -1,3 +1,4 @@
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_get_List]
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
@@ -40,8 +41,6 @@ BEGIN
 
 		DECLARE @Offset INT = (@PageNumber - 1) * @RowsPerPage;
 
-		-- viewRifiutiAutorizzazioni espansa con tabelle base per predicate pushdown.
-		-- Query statica con OPTION (RECOMPILE): tutti i filtri opzionali sono inline con IS NULL OR.
 		;WITH tbl AS (
 			-- Autorizzazioni interne: legate alla sessione tramite IdAziendaInterna
 			SELECT
@@ -169,3 +168,4 @@ BEGIN
 	END
 
 END;
+

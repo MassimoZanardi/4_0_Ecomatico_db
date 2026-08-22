@@ -82,79 +82,244 @@ BEGIN
 		DECLARE @Offset INT = (@PageNumber - 1) * @RowsPerPage;
 
 		DECLARE @stmt NVARCHAR(MAX);
-		DECLARE @params NVARCHAR(4000) = N'
-            @RowsPerPage  INT,
-            @Offset       INT,
-            @IdSessione   CHAR(16),
-            @IdIntervallo CHAR(2),
-            @DallaData    SMALLDATETIME,
-            @AllaData     SMALLDATETIME,
-            @Stato        CHAR(1),
-            @Etichetta    VARCHAR(50),
-            @Search       VARCHAR(50),
-            @IdCalendario tvpId_char_16 READONLY,
+		DECLARE @params NVARCHAR(4000) = N'
+
+
+
+            @RowsPerPage  INT,
+
+
+
+            @Offset       INT,
+
+
+
+            @IdSessione   CHAR(16),
+
+
+
+            @IdIntervallo CHAR(2),
+
+
+
+            @DallaData    SMALLDATETIME,
+
+
+
+            @AllaData     SMALLDATETIME,
+
+
+
+            @Stato        CHAR(1),
+
+
+
+            @Etichetta    VARCHAR(50),
+
+
+
+            @Search       VARCHAR(50),
+
+
+
+            @IdCalendario tvpId_char_16 READONLY,
+
+
+
             @IdTipo       tvpId_char_1  READONLY';
 
-		SET @stmt = N'
-        WITH tbl AS (
-            SELECT
-                s.Id,
-                StatoValore = CASE
-                    WHEN e.IdStato IN (''D'', ''I'') AND e.[Data] < GETDATE() THEN 1
-                    WHEN e.IdStato = ''A''                                      THEN 2
-                    ELSE 0
-                END,
-                StatoDescrizione = e.Stato + IIF(e.IdStato IN (''D'', ''I'') AND e.[Data] < GETDATE(), '' - Scaduto'', ''''),
-                IdSerie          = ISNULL(s2.Id, s.Id),
-                s.Descrizione,
-                s.IdEvento,
-                e.[Data],
-                e.Ricorre,
-                e.Eccezione,
-                Tipo             = t.Nome,
-                e.Etichette
-            FROM
-                dbo.tblScadenze s
-                INNER JOIN dbo.tblTipi t ON s.IdTipo = t.Id
-                INNER JOIN dbo.ufnEventi_get_List(@DallaData, @AllaData, @IdCalendario, @IdTipo) e
-                    ON s.IdEvento = e.Id
-                LEFT  JOIN dbo.tblScadenze s2 ON e.IdEccezione = s2.IdEvento
+		SET @stmt = N'
+
+
+
+        WITH tbl AS (
+
+
+
+            SELECT
+
+
+
+                s.Id,
+
+
+
+                StatoValore = CASE
+
+
+
+                    WHEN e.IdStato IN (''D'', ''I'') AND e.[Data] < GETDATE() THEN 1
+
+
+
+                    WHEN e.IdStato = ''A''                                      THEN 2
+
+
+
+                    ELSE 0
+
+
+
+                END,
+
+
+
+                StatoDescrizione = e.Stato + IIF(e.IdStato IN (''D'', ''I'') AND e.[Data] < GETDATE(), '' - Scaduto'', ''''),
+
+
+
+                IdSerie          = ISNULL(s2.Id, s.Id),
+
+
+
+                s.Descrizione,
+
+
+
+                s.IdEvento,
+
+
+
+                e.[Data],
+
+
+
+                e.Ricorre,
+
+
+
+                e.Eccezione,
+
+
+
+                Tipo             = t.Nome,
+
+
+
+                e.Etichette
+
+
+
+            FROM
+
+
+
+                dbo.tblScadenze s
+
+
+
+                INNER JOIN dbo.tblTipi t ON s.IdTipo = t.Id
+
+
+
+                INNER JOIN dbo.ufnEventi_get_List(@DallaData, @AllaData, @IdCalendario, @IdTipo) e
+
+
+
+                    ON s.IdEvento = e.Id
+
+
+
+                LEFT  JOIN dbo.tblScadenze s2 ON e.IdEccezione = s2.IdEvento
+
+
+
             WHERE 1 = 1';
 
 		IF @Etichetta IS NOT NULL
-			SET @stmt = @stmt + N'
-                AND s.IdEvento IN (
-                    SELECT t.Id FROM dbo.tblEventiEtichette t
-                    INNER JOIN dbo.tblEtichette e ON t.IdEtichetta = e.Id
+			SET @stmt = @stmt + N'
+
+
+
+                AND s.IdEvento IN (
+
+
+
+                    SELECT t.Id FROM dbo.tblEventiEtichette t
+
+
+
+                    INNER JOIN dbo.tblEtichette e ON t.IdEtichetta = e.Id
+
+
+
                     WHERE e.Nome LIKE ''%'' + @Etichetta + ''%'')';
 
 		IF @Search IS NOT NULL
-			SET @stmt = @stmt + N'
+			SET @stmt = @stmt + N'
+
+
+
                 AND s.Descrizione LIKE ''%'' + @Search + ''%''';
 
 		IF @Stato <> 'T'
 		BEGIN
 			IF @Stato = 'S'
-				SET @stmt = @stmt + N'
+				SET @stmt = @stmt + N'
+
+
+
                     AND (e.IdStato IN (''D'', ''I'') AND e.[Data] < GETDATE())';
 			ELSE
-				SET @stmt = @stmt + N'
+				SET @stmt = @stmt + N'
+
+
+
                     AND e.IdStato = @Stato';
 		END
 
-		SET @stmt = @stmt + N'
-        ),
-        tblCount AS (SELECT COUNT(*) AS RowsCount FROM tbl)
-        SELECT
-            tbl.Id, tbl.StatoValore, tbl.StatoDescrizione,
-            tbl.IdSerie, tbl.Descrizione, tbl.IdEvento,
-            tbl.[Data], tbl.Ricorre, tbl.Eccezione,
-            tbl.Tipo, tbl.Etichette,
-            tblCount.RowsCount
-        FROM tbl
-        CROSS JOIN tblCount
-        ORDER BY tbl.[Data]
-        OFFSET @Offset ROWS
+		SET @stmt = @stmt + N'
+
+
+
+        ),
+
+
+
+        tblCount AS (SELECT COUNT(*) AS RowsCount FROM tbl)
+
+
+
+        SELECT
+
+
+
+            tbl.Id, tbl.StatoValore, tbl.StatoDescrizione,
+
+
+
+            tbl.IdSerie, tbl.Descrizione, tbl.IdEvento,
+
+
+
+            tbl.[Data], tbl.Ricorre, tbl.Eccezione,
+
+
+
+            tbl.Tipo, tbl.Etichette,
+
+
+
+            tblCount.RowsCount
+
+
+
+        FROM tbl
+
+
+
+        CROSS JOIN tblCount
+
+
+
+        ORDER BY tbl.[Data]
+
+
+
+        OFFSET @Offset ROWS
+
+
+
         FETCH NEXT @RowsPerPage ROWS ONLY;';
 
 		EXEC sp_executesql

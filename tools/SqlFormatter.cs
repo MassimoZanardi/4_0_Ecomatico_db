@@ -785,8 +785,11 @@ public static class SqlFormatter
     // ---- Verification: protected segments must match exactly; Code segments must match after stripping ALL whitespace ----
     public static bool VerifyEquivalent(string original, string reformatted, out string reason)
     {
-        var a = Tokenize(original);
-        var b = Tokenize(reformatted);
+        // Line-ending representation (CRLF vs LF vs a stray doubled CR) is not a content difference for this
+        // check's purposes - normalize both sides the same way NormalizeLineEndingsToLf does before comparing,
+        // so only genuine content changes are ever flagged.
+        var a = Tokenize(NormalizeLineEndingsToLf(original));
+        var b = Tokenize(NormalizeLineEndingsToLf(reformatted));
 
         // A '--' line comment's trailing spaces (right before the newline that ends it) are legitimately
         // trimmed by the formatter's own newline-handling, same as trailing whitespace anywhere else in code -
@@ -833,12 +836,23 @@ public static class SqlFormatter
         return true;
     }
 
+    // Collapses every line-ending variant (CRLF, lone CR, or any run of CRs before an LF) down to a single
+    // bare LF. Run once at the very start of the pipeline so every later pass - including the ones that copy
+    // String/Comment/Bracket segments through verbatim - only ever sees bare LF, never a stray CR. Without
+    // this, a caller's later single-pass "\n"->"\r\n" conversion can double up a CR that was already present
+    // in untouched segment text (produces "\r\r\n"), and repeated formatting passes over the same file
+    // compound the problem each time.
+    public static string NormalizeLineEndingsToLf(string s)
+    {
+        return System.Text.RegularExpressions.Regex.Replace(s, "\r+\n", "\n").Replace('\r', '\n');
+    }
+
     public static string FormatAll(string original)
     {
         // All structural passes operate on space-based indentation (matching the original extraction style).
         // Tabs are introduced exactly once, in the final NormalizeWhitespace call, to avoid double-converting
         // already-tabbed runs (which would corrupt them back into single spaces).
-        string s = original;
+        string s = NormalizeLineEndingsToLf(original);
         s = SplitCombinedSet(s);
         s = SplitFromOntoOwnLine(s);
         s = NormalizeJoinContinuationIndent(s);

@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiOperazioni_get_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiOperazioni_get_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@IsRentri BIT = NULL,
 	@IsFormulario BIT = NULL

@@ -1,5 +1,5 @@
 
-CREATE FUNCTION [dbo].[ufnSedi_get_SediByUtente_List] (
+CREATE OR ALTER FUNCTION [dbo].[ufnSedi_get_SediByUtente_List] (
 	@IdUtente CHAR(16))
 RETURNS TABLE
 WITH SCHEMABINDING

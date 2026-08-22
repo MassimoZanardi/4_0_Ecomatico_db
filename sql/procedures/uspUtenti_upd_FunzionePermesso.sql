@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspUtenti_upd_FunzionePermesso]
+CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_upd_FunzionePermesso]
 	@Id CHAR(16) = NULL,
 	@IdFunzione CHAR(3) = NULL,
 	@IdPermesso INT = 0,

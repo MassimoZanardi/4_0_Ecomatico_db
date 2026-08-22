@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiRegistri_ins]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistri_ins]
 	@IdSessione CHAR(16) = NULL
 AS
 BEGIN

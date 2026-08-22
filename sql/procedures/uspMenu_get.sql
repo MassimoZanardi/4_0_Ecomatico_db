@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspMenu_get]
+CREATE OR ALTER PROCEDURE [dbo].[uspMenu_get]
 	@IdUtente CHAR(16) = NULL
 AS
 BEGIN

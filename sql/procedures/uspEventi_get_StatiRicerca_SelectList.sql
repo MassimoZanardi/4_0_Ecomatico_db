@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspEventi_get_StatiRicerca_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspEventi_get_StatiRicerca_SelectList]
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;

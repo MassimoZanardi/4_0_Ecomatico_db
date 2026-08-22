@@ -1,5 +1,5 @@
 
-CREATE FUNCTION [dbo].[ufnPersone_get_NonCondiviseByUtente_List] (
+CREATE OR ALTER FUNCTION [dbo].[ufnPersone_get_NonCondiviseByUtente_List] (
 	@IdUtente CHAR(16))
 RETURNS TABLE
 WITH SCHEMABINDING

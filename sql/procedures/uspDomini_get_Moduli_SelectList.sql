@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspDomini_get_Moduli_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspDomini_get_Moduli_SelectList]
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;

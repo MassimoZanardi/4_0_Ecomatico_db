@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspScadenze_upd]
+CREATE OR ALTER PROCEDURE [dbo].[uspScadenze_upd]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Descrizione VARCHAR(1000) = NULL,

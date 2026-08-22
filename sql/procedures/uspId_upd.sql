@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspId_upd]
+CREATE OR ALTER PROCEDURE [dbo].[uspId_upd]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Operazione CHAR(1) = NULL

@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiEer_get_List]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiEer_get_List]
 	@Search VARCHAR(50) = NULL
 AS
 BEGIN

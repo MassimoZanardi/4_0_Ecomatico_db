@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspDomini_ins_Modulo]
+CREATE OR ALTER PROCEDURE [dbo].[uspDomini_ins_Modulo]
 	@Id CHAR(16) = NULL,
 	@IdModulo CHAR(3) = NULL,
 	@IdSessione CHAR(16) = NULL

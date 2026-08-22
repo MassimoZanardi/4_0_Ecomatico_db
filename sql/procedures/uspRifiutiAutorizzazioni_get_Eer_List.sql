@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiAutorizzazioni_get_Eer_List]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_get_Eer_List]
 	@Id CHAR(16) = NULL,
 	@DaAssociare BIT = 0,
 	@Search VARCHAR(50) = NULL,

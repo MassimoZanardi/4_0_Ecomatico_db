@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspEtichette_del]
+CREATE OR ALTER PROCEDURE [dbo].[uspEtichette_del]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Reset BIT = 0

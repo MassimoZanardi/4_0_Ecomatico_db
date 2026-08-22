@@ -1,6 +1,6 @@
 
 
-CREATE VIEW [dbo].[viewSedi]
+CREATE OR ALTER VIEW [dbo].[viewSedi]
 WITH SCHEMABINDING
 AS
 SELECT

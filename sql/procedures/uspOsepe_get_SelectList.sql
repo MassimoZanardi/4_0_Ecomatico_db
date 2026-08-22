@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspOsepe_get_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspOsepe_get_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@Contesto INT = -1,
 	@IncludiOggetti BIT = 1,

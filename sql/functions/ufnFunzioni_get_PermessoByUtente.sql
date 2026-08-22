@@ -1,5 +1,5 @@
 -- Step 2: ora l'ALTER e' sbloccato
-CREATE FUNCTION [dbo].[ufnFunzioni_get_PermessoByUtente]
+CREATE OR ALTER FUNCTION [dbo].[ufnFunzioni_get_PermessoByUtente]
 (
 	@IdFunzione CHAR(3),
 	@IdUtente CHAR(16)

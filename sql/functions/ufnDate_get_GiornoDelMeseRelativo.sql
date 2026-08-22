@@ -1,4 +1,4 @@
-CREATE FUNCTION [dbo].[ufnDate_get_GiornoDelMeseRelativo]
+CREATE OR ALTER FUNCTION [dbo].[ufnDate_get_GiornoDelMeseRelativo]
 (
 	@DataInizio SMALLDATETIME,
 	@Data SMALLDATETIME,

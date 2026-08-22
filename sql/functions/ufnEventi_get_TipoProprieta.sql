@@ -1,4 +1,4 @@
-CREATE FUNCTION [dbo].[ufnEventi_get_TipoProprieta]
+CREATE OR ALTER FUNCTION [dbo].[ufnEventi_get_TipoProprieta]
 (
 	@Id CHAR(16),
 	@IdTipo CHAR(16)

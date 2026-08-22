@@ -1,4 +1,4 @@
-CREATE FUNCTION [dbo].[ufnRifiutiRegistrazioni_get_IsQuantitaSuperiore]
+CREATE OR ALTER FUNCTION [dbo].[ufnRifiutiRegistrazioni_get_IsQuantitaSuperiore]
 (
 	@Id CHAR(16),
 	@Quantita DECIMAL(18, 2),

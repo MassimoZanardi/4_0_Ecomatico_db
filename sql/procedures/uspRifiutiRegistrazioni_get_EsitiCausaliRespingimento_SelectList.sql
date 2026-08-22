@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_EsitiCausaliRespingimento_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_EsitiCausaliRespingimento_SelectList]
 	@IdSelected CHAR(1) = NULL
 AS
 BEGIN

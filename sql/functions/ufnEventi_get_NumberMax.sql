@@ -1,4 +1,4 @@
-CREATE FUNCTION [dbo].[ufnEventi_get_NumberMax]
+CREATE OR ALTER FUNCTION [dbo].[ufnEventi_get_NumberMax]
 (
 	@Data SMALLDATETIME,
 	@DataFine SMALLDATETIME,

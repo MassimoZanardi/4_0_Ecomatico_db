@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_Etichette_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_Etichette_SelectList]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS

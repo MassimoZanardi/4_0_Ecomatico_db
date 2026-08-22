@@ -1,4 +1,4 @@
-CREATE FUNCTION [dbo].[ufnSedi_get_AziendeEsterneNonCondiviseByDominio_List] (
+CREATE OR ALTER FUNCTION [dbo].[ufnSedi_get_AziendeEsterneNonCondiviseByDominio_List] (
 	@IdDominio CHAR(16))
 RETURNS TABLE
 WITH SCHEMABINDING

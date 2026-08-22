@@ -1,5 +1,5 @@
 
-CREATE VIEW [dbo].[viewFunzioni]
+CREATE OR ALTER VIEW [dbo].[viewFunzioni]
 WITH SCHEMABINDING
 AS
 SELECT

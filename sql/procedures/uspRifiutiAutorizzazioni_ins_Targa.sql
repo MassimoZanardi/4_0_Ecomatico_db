@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiAutorizzazioni_ins_Targa]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_ins_Targa]
 	@Id CHAR(16) = NULL,
 	@Numero VARCHAR(20) = NULL,
 	@Rimorchio BIT = 0,

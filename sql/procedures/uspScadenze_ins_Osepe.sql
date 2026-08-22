@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspScadenze_ins_Osepe]
+CREATE OR ALTER PROCEDURE [dbo].[uspScadenze_ins_Osepe]
 	@Id CHAR(16) = NULL,
 	@IdOsepe CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL

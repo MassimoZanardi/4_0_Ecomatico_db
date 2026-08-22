@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiRegistrazioni_ins_RelazioniTutte]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_ins_RelazioniTutte]
 	@IdSessione CHAR(16) = NULL,
 	@IdParent CHAR(16) = NULL,
 	@IdRegistro CHAR(16) = NULL,

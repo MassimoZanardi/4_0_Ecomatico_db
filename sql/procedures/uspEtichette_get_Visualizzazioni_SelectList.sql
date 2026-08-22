@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspEtichette_get_Visualizzazioni_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspEtichette_get_Visualizzazioni_SelectList]
 	@IdSelected CHAR(1) = NULL
 AS
 BEGIN

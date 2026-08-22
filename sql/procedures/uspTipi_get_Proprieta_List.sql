@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspTipi_get_Proprieta_List]
+CREATE OR ALTER PROCEDURE [dbo].[uspTipi_get_Proprieta_List]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Search VARCHAR(50) = NULL

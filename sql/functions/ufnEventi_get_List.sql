@@ -1,5 +1,5 @@
 
-CREATE FUNCTION [dbo].[ufnEventi_get_List] (
+CREATE OR ALTER FUNCTION [dbo].[ufnEventi_get_List] (
 	@DallaData SMALLDATETIME,
 	@AllaData SMALLDATETIME,
 	@IdCalendario tvpId_char_16 READONLY,

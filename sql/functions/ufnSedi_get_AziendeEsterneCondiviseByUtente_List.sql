@@ -1,5 +1,5 @@
 
-CREATE FUNCTION [dbo].[ufnSedi_get_AziendeEsterneCondiviseByUtente_List] (
+CREATE OR ALTER FUNCTION [dbo].[ufnSedi_get_AziendeEsterneCondiviseByUtente_List] (
 	@IdUtente CHAR(16))
 RETURNS TABLE
 WITH SCHEMABINDING

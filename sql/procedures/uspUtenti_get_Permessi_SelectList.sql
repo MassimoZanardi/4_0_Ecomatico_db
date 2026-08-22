@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspUtenti_get_Permessi_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_Permessi_SelectList]
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;

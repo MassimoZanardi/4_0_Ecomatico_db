@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspAdr_get_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspAdr_get_SelectList]
 	@IdSelected CHAR(2) = NULL
 AS
 BEGIN

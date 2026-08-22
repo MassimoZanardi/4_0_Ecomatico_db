@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspUtenti_upd_TokenReset]
+CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_upd_TokenReset]
 	@Email NVARCHAR(255) = NULL,
 	@Token NVARCHAR(32) = NULL
 AS

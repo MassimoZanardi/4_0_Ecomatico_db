@@ -1,7 +1,7 @@
 
 
 
-CREATE VIEW [dbo].[viewRifiutiMovimentiIntermediari]
+CREATE OR ALTER VIEW [dbo].[viewRifiutiMovimentiIntermediari]
 AS
 
 SELECT

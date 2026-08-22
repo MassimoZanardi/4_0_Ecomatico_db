@@ -1,4 +1,4 @@
-CREATE VIEW [dbo].[viewRifiutiMovimentiAutorizzazioni]
+CREATE OR ALTER VIEW [dbo].[viewRifiutiMovimentiAutorizzazioni]
 AS
 SELECT
 	m.Id,

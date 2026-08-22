@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_TrasportiTransfrontalieriTipi_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_TrasportiTransfrontalieriTipi_SelectList]
 	@IdSelected CHAR(1) = NULL
 AS
 BEGIN

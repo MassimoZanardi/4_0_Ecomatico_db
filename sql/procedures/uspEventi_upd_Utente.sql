@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspEventi_upd_Utente]
+CREATE OR ALTER PROCEDURE [dbo].[uspEventi_upd_Utente]
 	@Id CHAR(16) = NULL,
 	@IdUtente CHAR(16) = NULL,
 	@Reset BIT = 0,

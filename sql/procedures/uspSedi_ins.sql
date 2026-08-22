@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspSedi_ins]
+CREATE OR ALTER PROCEDURE [dbo].[uspSedi_ins]
 	@IdSessione CHAR(16) = NULL,
 	@IdTipo CHAR(1) = NULL,
 	@InternaEsterna CHAR(1) = NULL,

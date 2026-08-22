@@ -2,7 +2,7 @@
 
 -- select * from viewMenu order by Id, Pos
 
-CREATE VIEW [dbo].[viewMenu]
+CREATE OR ALTER VIEW [dbo].[viewMenu]
 AS
 SELECT
 	m.Id,

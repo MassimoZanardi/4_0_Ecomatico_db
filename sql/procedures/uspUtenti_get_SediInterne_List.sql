@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspUtenti_get_SediInterne_List]
+CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_SediInterne_List]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Search VARCHAR(50) = NULL

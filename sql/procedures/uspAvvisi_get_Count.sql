@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspAvvisi_get_Count]
+CREATE OR ALTER PROCEDURE [dbo].[uspAvvisi_get_Count]
 	@IdUtente CHAR(16) = NULL,
 	@Update BIT = 0
 AS

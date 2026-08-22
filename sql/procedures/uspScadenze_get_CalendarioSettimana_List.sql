@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspScadenze_get_CalendarioSettimana_List]
+CREATE OR ALTER PROCEDURE [dbo].[uspScadenze_get_CalendarioSettimana_List]
 	@IdSessione CHAR(16) = NULL,
 	@DallaData SMALLDATETIME = NULL
 AS

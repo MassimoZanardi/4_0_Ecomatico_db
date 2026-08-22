@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspEtichette_ins]
+CREATE OR ALTER PROCEDURE [dbo].[uspEtichette_ins]
 	@IdModulo CHAR(3) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS

@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspUtenti_upd_ConfermaReset]
+CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_upd_ConfermaReset]
 	@Token NVARCHAR(32) = NULL,
 	@Password NVARCHAR(200) = NULL
 AS

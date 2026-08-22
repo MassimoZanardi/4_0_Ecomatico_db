@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspOsepe_get_NonCondivise_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspOsepe_get_NonCondivise_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@IdSelected CHAR(16) = NULL,
 	@Search VARCHAR(50) = NULL

@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspAvvisi_get_List]
+CREATE OR ALTER PROCEDURE [dbo].[uspAvvisi_get_List]
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
 	@IdUtente CHAR(16) = NULL,

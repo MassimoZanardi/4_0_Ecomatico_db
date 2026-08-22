@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspPersone_ins_Ruolo]
+CREATE OR ALTER PROCEDURE [dbo].[uspPersone_ins_Ruolo]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@IdRuolo CHAR(2) = NULL,

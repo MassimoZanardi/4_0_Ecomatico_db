@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspNazioni_get_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspNazioni_get_SelectList]
 	@IdSelected CHAR(3) = NULL,
 	@Search VARCHAR(50) = NULL
 AS

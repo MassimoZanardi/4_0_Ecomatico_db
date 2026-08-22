@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiEer_get_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiEer_get_SelectList]
 	@IdSelected CHAR(6) = NULL,
 	@Search VARCHAR(50) = NULL
 AS

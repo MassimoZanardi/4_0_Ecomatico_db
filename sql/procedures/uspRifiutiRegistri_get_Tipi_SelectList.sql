@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiRegistri_get_Tipi_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistri_get_Tipi_SelectList]
 	@IdSelected CHAR(1) = NULL
 AS
 BEGIN

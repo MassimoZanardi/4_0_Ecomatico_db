@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspEventi_get_RicorrenzeGiornoMeseRelativo_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspEventi_get_RicorrenzeGiornoMeseRelativo_SelectList]
 	@Data SMALLDATETIME = NULL
 AS
 BEGIN

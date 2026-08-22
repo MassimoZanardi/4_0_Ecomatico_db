@@ -1,4 +1,4 @@
-CREATE VIEW [dbo].[viewDomini]
+CREATE OR ALTER VIEW [dbo].[viewDomini]
 WITH SCHEMABINDING
 AS
 SELECT

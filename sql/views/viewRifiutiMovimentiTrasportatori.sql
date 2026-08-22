@@ -1,5 +1,5 @@
 
-CREATE VIEW [dbo].[viewRifiutiMovimentiTrasportatori]
+CREATE OR ALTER VIEW [dbo].[viewRifiutiMovimentiTrasportatori]
 AS
 
 SELECT

@@ -1,6 +1,6 @@
 
 
-CREATE VIEW [dbo].[viewRifiutiRegistrazioni]
+CREATE OR ALTER VIEW [dbo].[viewRifiutiRegistrazioni]
 AS
 SELECT
 	r.Id,

@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspSedi_get_AziendeInterne_List]
+CREATE OR ALTER PROCEDURE [dbo].[uspSedi_get_AziendeInterne_List]
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
 	@IdSessione CHAR(16) = NULL,

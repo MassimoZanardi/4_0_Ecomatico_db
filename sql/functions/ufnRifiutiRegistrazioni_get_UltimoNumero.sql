@@ -1,4 +1,4 @@
-CREATE FUNCTION [dbo].[ufnRifiutiRegistrazioni_get_UltimoNumero]
+CREATE OR ALTER FUNCTION [dbo].[ufnRifiutiRegistrazioni_get_UltimoNumero]
 (
 	@IdRegistro CHAR(16),
 	@Data DATE

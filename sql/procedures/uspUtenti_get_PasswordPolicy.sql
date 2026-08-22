@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspUtenti_get_PasswordPolicy]
+CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_PasswordPolicy]
 	@Id CHAR(16) = NULL
 AS
 BEGIN

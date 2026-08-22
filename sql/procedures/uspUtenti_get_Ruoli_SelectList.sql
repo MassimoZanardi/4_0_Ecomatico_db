@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspUtenti_get_Ruoli_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_Ruoli_SelectList]
 	@IdSelected CHAR(2) = NULL
 AS
 BEGIN

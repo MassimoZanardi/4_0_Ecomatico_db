@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspSedi_get_Sedi_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspSedi_get_Sedi_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@Contesto INT = -1,
 	@IdSelected CHAR(16) = NULL,

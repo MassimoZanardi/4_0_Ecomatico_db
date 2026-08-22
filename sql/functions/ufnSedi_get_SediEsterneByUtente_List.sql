@@ -1,5 +1,5 @@
 
-CREATE FUNCTION [dbo].[ufnSedi_get_SediEsterneByUtente_List] (
+CREATE OR ALTER FUNCTION [dbo].[ufnSedi_get_SediEsterneByUtente_List] (
 	@IdUtente CHAR(16))
 RETURNS @result TABLE (
 	Id CHAR(16) NOT NULL,

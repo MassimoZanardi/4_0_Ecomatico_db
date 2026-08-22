@@ -1,4 +1,4 @@
-CREATE FUNCTION [dbo].[ufnStringhe_get_Compatta]
+CREATE OR ALTER FUNCTION [dbo].[ufnStringhe_get_Compatta]
 (
 	@str VARCHAR(4000),
 	@len INT = 0,

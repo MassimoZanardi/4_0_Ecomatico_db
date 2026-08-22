@@ -1,4 +1,4 @@
-CREATE FUNCTION [dbo].[ufnUtenti_get_IsAdmin]
+CREATE OR ALTER FUNCTION [dbo].[ufnUtenti_get_IsAdmin]
 (
 	@IdSessione CHAR(16))
 RETURNS INT

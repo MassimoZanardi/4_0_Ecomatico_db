@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspAree_del]
+CREATE OR ALTER PROCEDURE [dbo].[uspAree_del]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Reset BIT = 0

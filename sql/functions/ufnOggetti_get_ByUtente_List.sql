@@ -1,5 +1,5 @@
 
-CREATE FUNCTION [dbo].[ufnOggetti_get_ByUtente_List] (
+CREATE OR ALTER FUNCTION [dbo].[ufnOggetti_get_ByUtente_List] (
 	@IdUtente CHAR(16))
 RETURNS TABLE
 WITH SCHEMABINDING

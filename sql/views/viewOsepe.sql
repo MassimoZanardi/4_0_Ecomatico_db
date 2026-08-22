@@ -3,7 +3,7 @@
 
 -- select * from viewOsepe
 
-CREATE VIEW [dbo].[viewOsepe]
+CREATE OR ALTER VIEW [dbo].[viewOsepe]
 AS
 
 SELECT

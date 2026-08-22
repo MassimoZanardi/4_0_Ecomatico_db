@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspDomini_get_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspDomini_get_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@Search VARCHAR(50) = NULL
 AS

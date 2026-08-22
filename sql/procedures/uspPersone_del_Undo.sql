@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspPersone_del_Undo]
+CREATE OR ALTER PROCEDURE [dbo].[uspPersone_del_Undo]
 	@IdSessione CHAR(16) = NULL
 AS
 BEGIN

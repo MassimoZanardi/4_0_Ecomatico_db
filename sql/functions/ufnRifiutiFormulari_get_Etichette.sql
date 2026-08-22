@@ -1,4 +1,4 @@
-CREATE FUNCTION [dbo].[ufnRifiutiFormulari_get_Etichette]
+CREATE OR ALTER FUNCTION [dbo].[ufnRifiutiFormulari_get_Etichette]
 (
 	@Id CHAR(16)
 )

@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspCalendario_get_AnniSelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspCalendario_get_AnniSelectList]
 	@Anni INT = 10,
 	@Offset INT = -10
 AS

@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspTipi_del_Proprieta]
+CREATE OR ALTER PROCEDURE [dbo].[uspTipi_del_Proprieta]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@IdProprieta CHAR(3) = NULL

@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspUrlNavigazione_ins]
+CREATE OR ALTER PROCEDURE [dbo].[uspUrlNavigazione_ins]
 	@IdSessione CHAR(16) = NULL,
 	@UrlPartenza VARCHAR(2000) = NULL,
 	@UrlDestinazione VARCHAR(2000) = NULL,

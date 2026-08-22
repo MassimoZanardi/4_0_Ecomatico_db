@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspSedi_get_Recapiti_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspSedi_get_Recapiti_SelectList]
 	@Tipo CHAR(1) = NULL
 AS
 BEGIN

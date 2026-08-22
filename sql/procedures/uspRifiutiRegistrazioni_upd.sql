@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@IdEer CHAR(6) = NULL,
@@ -147,7 +147,7 @@ BEGIN
 						SELECT SUM(lq.Quantita)
 						FROM
 							dbo.tblRifiutiRegistrazioniRelazioni lq
-						INNER JOIN dbo.tblRifiutiRegistrazioni rq ON lq.Id = rq.Id
+							INNER JOIN dbo.tblRifiutiRegistrazioni rq ON lq.Id = rq.Id
 						WHERE
 							lq.IdParent = r.Id
 							AND lq.Quantita > 0
@@ -173,7 +173,7 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiRegistri g
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE g.Id = @idRegistro)
 		BEGIN
 			SET @returnValue = -1;
@@ -218,7 +218,14 @@ BEGIN
 			FROM dbo.tblRifiutiRegistrazioni
 			WHERE
 				Id = @Id
-				AND (([Data] = @RegistrazioneData AND Numero = @RegistrazioneNumero) OR Lock = 2)
+				AND
+					(
+						(
+						[Data] = @RegistrazioneData
+						AND Numero = @RegistrazioneNumero
+						)
+					OR Lock = 2
+					)
 		))
 			SET @RinumeraRegistro = 1;
 
@@ -346,7 +353,7 @@ BEGIN
 				SELECT 1
 				FROM
 					dbo.tblRifiutiFormulari f
-				INNER JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id
+					INNER JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id
 				WHERE
 					f.IdMovimento <> @idMovimento
 					AND m.IdRegistro = @idRegistro
@@ -374,14 +381,22 @@ BEGIN
 				SELECT 1
 				FROM
 					dbo.tblRifiutiRegistrazioniRelazioni l
-				INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
-				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-				INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
-				INNER JOIN dbo.tblRifiutiMovimenti mp ON rp.IdMovimento = mp.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
+					INNER JOIN dbo.tblRifiutiMovimenti mp ON rp.IdMovimento = mp.Id
 				WHERE
-					(l.Id = @Id OR l.IdParent = @Id)
+					(
+					l.Id = @Id
+					OR l.IdParent = @Id
+					)
 					AND mp.IdOperazione <> 'M'
-					AND ( m.IdEer <> @IdEer OR m.IdStatoFisico <> @IdStatoFisico OR m.IdUnitaMisura <> @IdUnitaMisura )
+					AND
+						(
+						m.IdEer <> @IdEer
+						OR m.IdStatoFisico <> @IdStatoFisico
+						OR m.IdUnitaMisura <> @IdUnitaMisura
+						)
 					AND l.Quantita > 0
 					AND r.Lock < 2
 			)
@@ -399,7 +414,7 @@ BEGIN
 				SELECT 1
 				FROM
 					dbo.tblRifiutiRegistrazioni r
-				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 				WHERE
 					r.Lock < 2
 					AND m.IdRegistro = @idRegistro
@@ -422,7 +437,7 @@ BEGIN
 				SELECT 1
 				FROM
 					dbo.tblRifiutiRegistrazioni r
-				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 				WHERE
 					r.Lock < 2
 					AND m.IdRegistro = @idRegistro
@@ -446,7 +461,7 @@ BEGIN
 				SELECT 1
 				FROM
 					dbo.tblRifiutiRegistrazioni r
-				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 				WHERE
 					r.Lock < 2
 					AND m.IdRegistro = @idRegistro
@@ -470,11 +485,19 @@ BEGIN
 				SELECT 1
 				FROM
 					dbo.tblRifiutiRegistrazioniRelazioni l
-				INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
-				INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
 				WHERE
 					l.Id = @Id
-					AND ( rp.[Data] < @RegistrazioneData OR (rp.[Data] = @RegistrazioneData AND rp.Numero < @RegistrazioneNumero) )
+					AND
+						(
+						rp.[Data] < @RegistrazioneData
+						OR
+							(
+							rp.[Data] = @RegistrazioneData
+							AND rp.Numero < @RegistrazioneNumero
+							)
+						)
 					AND l.Quantita > 0
 					AND r.Lock < 2
 			)
@@ -492,7 +515,7 @@ BEGIN
 				SELECT SUM(l.Quantita)
 				FROM
 					dbo.tblRifiutiRegistrazioniRelazioni l
-				INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
 				WHERE
 					l.Id = @Id
 					AND l.Quantita > 0
@@ -528,24 +551,44 @@ BEGIN
 				SELECT 1
 				FROM
 					dbo.tblRifiutiMovimenti m
-				LEFT JOIN dbo.tblRifiutiRegistrazioni r ON m.Id = r.IdMovimento
-				LEFT JOIN dbo.tblRifiutiFormulari f ON m.Id = f.IdMovimento
+					LEFT JOIN dbo.tblRifiutiRegistrazioni r ON m.Id = r.IdMovimento
+					LEFT JOIN dbo.tblRifiutiFormulari f ON m.Id = f.IdMovimento
 				WHERE
 					m.Id = @idMovimento
-					AND ( ISNULL(m.IdEer, '000000') <> ISNULL(@IdEer, '000000') OR ISNULL(m.IdStatoFisico, '0') <> ISNULL(@IdStatoFisico, '0') OR ISNULL(r.IdMateriale, '00') <> ISNULL(@IdMateriale, '00') OR ISNULL(m.IdAttivita, '00') <> ISNULL(@IdAttivitaRs, '00') OR ISNULL(r.Numero, -1) <> ISNULL(@RegistrazioneNumero, -1) OR ISNULL(r.[Data], @minData) <> ISNULL(@RegistrazioneData, @minData) OR ISNULL(m.IdUnitaMisura, '0') <> ISNULL(@IdUnitaMisura, '0') OR ISNULL(m.Quantita, 0) <> ISNULL(@Quantita, 0) OR ISNULL(r.QuantitaVerificata, 0) <> ISNULL(@QuantitaVerificata, 0) OR ISNULL(m.FormularioNumero, '') <> ISNULL(@FormularioNumero, '') OR ISNULL(m.DataInizioTrasporto, @minData) <> ISNULL(@DataInizioTrasporto, @minData) OR ISNULL(r.DataFineTrasporto, @minData) <> ISNULL(@DataFineTrasporto, @minData) )
+					AND
+						(
+						ISNULL(m.IdEer, '000000') <> ISNULL(@IdEer, '000000')
+						OR ISNULL(m.IdStatoFisico, '0') <> ISNULL(@IdStatoFisico, '0')
+						OR ISNULL(r.IdMateriale, '00') <> ISNULL(@IdMateriale, '00')
+						OR ISNULL(m.IdAttivita, '00') <> ISNULL(@IdAttivitaRs, '00')
+						OR ISNULL(r.Numero, -1) <> ISNULL(@RegistrazioneNumero, -1)
+						OR ISNULL(r.[Data], @minData) <> ISNULL(@RegistrazioneData, @minData)
+						OR ISNULL(m.IdUnitaMisura, '0') <> ISNULL(@IdUnitaMisura, '0')
+						OR ISNULL(m.Quantita, 0) <> ISNULL(@Quantita, 0)
+						OR ISNULL(r.QuantitaVerificata, 0) <> ISNULL(@QuantitaVerificata, 0)
+						OR ISNULL(m.FormularioNumero, '') <> ISNULL(@FormularioNumero, '')
+						OR ISNULL(m.DataInizioTrasporto, @minData) <> ISNULL(@DataInizioTrasporto, @minData)
+						OR ISNULL(r.DataFineTrasporto, @minData) <> ISNULL(@DataFineTrasporto, @minData)
+						)
 			)
 				SET @aggiornaLog = 1;
 			ELSE IF EXISTS (
 				SELECT 1
 				FROM
 					dbo.tblRifiutiMovimenti m
-				LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp1 ON m.Id = mp1.Id AND mp1.Pos = 0
-				LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id
-				LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt1 ON m.Id = mt1.Id AND mt1.Pos = 0
-				LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi1 ON m.Id = mi1.Id AND mi1.Pos = 0
+					LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp1 ON m.Id = mp1.Id AND mp1.Pos = 0
+					LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id
+					LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt1 ON m.Id = mt1.Id AND mt1.Pos = 0
+					LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi1 ON m.Id = mi1.Id AND mi1.Pos = 0
 				WHERE
 					m.Id = @idMovimento
-					AND ( ISNULL(mp1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneProduttoreDetentore, @idSediciZeri) OR ISNULL(md.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneDestinatario, @idSediciZeri) OR ISNULL(mt1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneTrasportatore1, @idSediciZeri) OR ISNULL(mi1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneIntermediario1, @idSediciZeri) )
+					AND
+						(
+						ISNULL(mp1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneProduttoreDetentore, @idSediciZeri)
+						OR ISNULL(md.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneDestinatario, @idSediciZeri)
+						OR ISNULL(mt1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneTrasportatore1, @idSediciZeri)
+						OR ISNULL(mi1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneIntermediario1, @idSediciZeri)
+						)
 			)
 				SET @aggiornaLog = 1;
 		END
@@ -586,7 +629,7 @@ BEGIN
 					(SELECT ISNULL(MAX(r.Numero), 0)
 					 FROM
 						 dbo.tblRifiutiRegistrazioni r
-					 INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+						 INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 					 WHERE
 						 r.Lock < 2
 						 AND m.IdRegistro = @idRegistro
@@ -599,7 +642,7 @@ BEGIN
 				SELECT 1
 				FROM
 					dbo.tblRifiutiRegistrazioni r
-				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 				WHERE
 					r.Lock < 2
 					AND m.IdRegistro = @idRegistro
@@ -612,7 +655,7 @@ BEGIN
 				SELECT 1
 				FROM
 					dbo.tblRifiutiRegistrazioni r
-				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 				WHERE
 					r.Lock < 2
 					AND m.IdRegistro = @idRegistro
@@ -630,23 +673,45 @@ BEGIN
 				SET Numero = Numero + 1 + IIF(@lock = 2 AND @RegistrazioneAuto = 1 AND @isLibero1 = 0, 1, 0)
 				FROM
 					dbo.tblRifiutiRegistrazioni r
-				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 				WHERE
 					r.Lock < 2
 					AND m.IdRegistro = @idRegistro
 					AND r.DataStampa IS NULL
-					AND 
+					AND
 						(
-						r.[Data] > @RegistrazioneData 
-						OR 
+						r.[Data] > @RegistrazioneData
+						OR
 							(
-							r.[Data] = @RegistrazioneData 
+							r.[Data] = @RegistrazioneData
 							AND r.Numero > @RegistrazioneNumero
 							)
 						)
 					AND r.[Data] >= @annoInizio
 					AND r.[Data] < @annoFine
-					AND ( (@lock < 2 AND @isLibero2 = 0) OR (@lock = 2 AND @RegistrazioneAuto = 1 AND (@isLibero1 = 0 OR @isLibero2 = 0)) OR (@lock = 2 AND @RegistrazioneAuto = 0 AND @isLibero1 = 0) );
+					AND
+						(
+							(
+							@lock < 2
+							AND @isLibero2 = 0
+							)
+						OR
+							(
+							@lock = 2
+							AND @RegistrazioneAuto = 1
+							AND
+								(
+								@isLibero1 = 0
+								OR @isLibero2 = 0
+								)
+							)
+						OR
+							(
+							@lock = 2
+							AND @RegistrazioneAuto = 0
+							AND @isLibero1 = 0
+							)
+						);
 			END
 
 			-- Produttori
@@ -760,14 +825,14 @@ BEGIN
 						QuantitaResidua = m2.Quantita - ISNULL(a.Quantita, 0)
 					FROM
 						dbo.tblRifiutiRegistrazioniRelazioni l
-					INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
-					INNER JOIN dbo.tblRifiutiMovimenti m2 ON r.IdMovimento = m2.Id
-					LEFT JOIN (
+						INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
+						INNER JOIN dbo.tblRifiutiMovimenti m2 ON r.IdMovimento = m2.Id
+						LEFT JOIN (
 							SELECT lq.Id, Quantita = SUM(lq.Quantita)
 							FROM
 								dbo.tblRifiutiRegistrazioniRelazioni lq
-							INNER JOIN dbo.tblRifiutiRegistrazioni pq ON lq.IdParent = pq.Id
-							INNER JOIN dbo.tblRifiutiMovimenti mpq ON pq.IdMovimento = mpq.Id
+								INNER JOIN dbo.tblRifiutiRegistrazioni pq ON lq.IdParent = pq.Id
+								INNER JOIN dbo.tblRifiutiMovimenti mpq ON pq.IdMovimento = mpq.Id
 							WHERE
 								pq.Lock < 2
 								AND mpq.Quantita > 0
@@ -847,13 +912,13 @@ BEGIN
 				SELECT @idMovimentoAuto, c.Id
 				FROM
 					dbo.tblRifiutiClassiPericolo c
-				INNER JOIN STRING_SPLIT(@ClassiPericolo, ';') v ON c.Id = v.value;
+					INNER JOIN STRING_SPLIT(@ClassiPericolo, ';') v ON c.Id = v.value;
 
 				INSERT dbo.tblRifiutiRegistrazioniEtichette (Id, IdEtichetta)
 				SELECT TOP 3 @idRegistrazioneAuto, e.Id
 				FROM
 					dbo.tblEtichette e
-				INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value;
+					INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value;
 
 				SET @RegistrazioneNumero = @RegistrazioneNumero + 1;
 			END
@@ -866,7 +931,7 @@ BEGIN
 			SELECT @idMovimento, c.Id
 			FROM
 				dbo.tblRifiutiClassiPericolo c
-			INNER JOIN STRING_SPLIT(@ClassiPericolo, ';') v ON c.Id = v.value;
+				INNER JOIN STRING_SPLIT(@ClassiPericolo, ';') v ON c.Id = v.value;
 
 			-- Etichette
 			DELETE dbo.tblRifiutiRegistrazioniEtichette
@@ -876,7 +941,7 @@ BEGIN
 			SELECT TOP 3 @Id, e.Id
 			FROM
 				dbo.tblEtichette e
-			INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value;
+				INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value;
 
 			-- Aggiornamento log storico movimento (snapshot stato corrente prima degli UPDATE)
 			-- @dataLogMin = NULL se <= 10 record: il DELETE non elimina nulla (comportamento corretto)
@@ -901,12 +966,12 @@ BEGIN
 					r.Numero, r.[Data], m.FormularioNumero, m.DataInizioTrasporto, r.DataFineTrasporto
 				FROM
 					dbo.tblRifiutiMovimenti m
-				LEFT JOIN dbo.tblRifiutiRegistrazioni r ON m.Id = r.IdMovimento
-				LEFT JOIN dbo.tblRifiutiFormulari f ON m.Id = f.IdMovimento
-				LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp ON m.Id = mp.Id AND mp.Pos = 0
-				LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id AND md.Pos = 0
-				LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt ON m.Id = mt.Id AND mt.Pos = 0
-				LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi ON m.Id = mi.Id AND mi.Pos = 0
+					LEFT JOIN dbo.tblRifiutiRegistrazioni r ON m.Id = r.IdMovimento
+					LEFT JOIN dbo.tblRifiutiFormulari f ON m.Id = f.IdMovimento
+					LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp ON m.Id = mp.Id AND mp.Pos = 0
+					LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id AND md.Pos = 0
+					LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt ON m.Id = mt.Id AND mt.Pos = 0
+					LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi ON m.Id = mi.Id AND mi.Pos = 0
 				WHERE m.Id = @idMovimento;
 			END
 
@@ -976,14 +1041,14 @@ BEGIN
 				Note = @UtenteNote
 			FROM
 				dbo.tblRifiutiMovimenti m
-			LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp ON m.Id = mp.Id AND mp.Pos = 0
-			LEFT JOIN dbo.tblRifiutiAutorizzazioni ap ON mp.IdAutorizzazione = ap.Id
-			LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id AND md.Pos = 0
-			LEFT JOIN dbo.tblRifiutiAutorizzazioni ad ON md.IdAutorizzazione = ad.Id
-			LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt ON m.Id = mt.Id AND mt.Pos = 0
-			LEFT JOIN dbo.tblRifiutiAutorizzazioni ar ON mt.IdAutorizzazione = ar.Id
-			LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi ON m.Id = mi.Id AND mi.Pos = 0
-			LEFT JOIN dbo.tblRifiutiAutorizzazioni ai ON mi.IdAutorizzazione = ai.Id
+				LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp ON m.Id = mp.Id AND mp.Pos = 0
+				LEFT JOIN dbo.tblRifiutiAutorizzazioni ap ON mp.IdAutorizzazione = ap.Id
+				LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id AND md.Pos = 0
+				LEFT JOIN dbo.tblRifiutiAutorizzazioni ad ON md.IdAutorizzazione = ad.Id
+				LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt ON m.Id = mt.Id AND mt.Pos = 0
+				LEFT JOIN dbo.tblRifiutiAutorizzazioni ar ON mt.IdAutorizzazione = ar.Id
+				LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi ON m.Id = mi.Id AND mi.Pos = 0
+				LEFT JOIN dbo.tblRifiutiAutorizzazioni ai ON mi.IdAutorizzazione = ai.Id
 			WHERE m.Id = @idMovimento;
 
 		COMMIT TRANSACTION;

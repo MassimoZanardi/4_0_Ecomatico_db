@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspTipi_upd]
+CREATE OR ALTER PROCEDURE [dbo].[uspTipi_upd]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@IdModulo CHAR(3) = NULL,

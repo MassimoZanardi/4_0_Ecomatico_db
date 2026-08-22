@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspSessione_get_FunzionePermesso]
+CREATE OR ALTER PROCEDURE [dbo].[uspSessione_get_FunzionePermesso]
 	@Id CHAR(16),
 	@IdFunzione CHAR(3),
 	@Permesso INT = NULL OUTPUT

@@ -1,4 +1,4 @@
-CREATE FUNCTION [dbo].[ufnOsepe_get_NonCondiviseByDominio_List] (
+CREATE OR ALTER FUNCTION [dbo].[ufnOsepe_get_NonCondiviseByDominio_List] (
 	@IdDominio CHAR(16))
 RETURNS TABLE
 WITH SCHEMABINDING

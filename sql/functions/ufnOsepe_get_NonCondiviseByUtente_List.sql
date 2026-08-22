@@ -1,6 +1,6 @@
 
 
-CREATE FUNCTION [dbo].[ufnOsepe_get_NonCondiviseByUtente_List] (
+CREATE OR ALTER FUNCTION [dbo].[ufnOsepe_get_NonCondiviseByUtente_List] (
 	@IdUtente CHAR(16))
 RETURNS @result TABLE (
 	Id CHAR(16) NOT NULL,

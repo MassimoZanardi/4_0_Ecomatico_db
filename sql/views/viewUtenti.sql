@@ -1,6 +1,6 @@
 
 
-CREATE VIEW [dbo].[viewUtenti]
+CREATE OR ALTER VIEW [dbo].[viewUtenti]
 AS
 SELECT
 	u.Id,

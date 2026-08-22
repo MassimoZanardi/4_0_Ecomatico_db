@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspEventi_get_IntervalliRicerca_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspEventi_get_IntervalliRicerca_SelectList]
 	@IdSelected CHAR(2) = NULL
 AS
 BEGIN

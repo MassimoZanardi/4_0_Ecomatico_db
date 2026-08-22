@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspSedi_get_Tipi_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspSedi_get_Tipi_SelectList]
 	@SediAssociate BIT = 0,
 	@IdSelected CHAR(1) = NULL
 AS

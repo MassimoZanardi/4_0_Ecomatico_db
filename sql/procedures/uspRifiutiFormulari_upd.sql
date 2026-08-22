@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiFormulari_upd]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_upd]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@IdEer CHAR(6) = NULL,

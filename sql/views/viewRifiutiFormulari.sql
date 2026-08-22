@@ -6,7 +6,7 @@
 
 -- select * from viewRifiutiFormulari
 
-CREATE VIEW [dbo].[viewRifiutiFormulari]
+CREATE OR ALTER VIEW [dbo].[viewRifiutiFormulari]
 
 AS
 

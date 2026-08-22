@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspScadenze_del_All]
+CREATE OR ALTER PROCEDURE [dbo].[uspScadenze_del_All]
 	@Conferma VARCHAR(50) = NULL
 AS
 BEGIN

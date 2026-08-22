@@ -1,6 +1,6 @@
 
 
-CREATE VIEW [dbo].[viewRifiutiRegistrazioniRelazioni]
+CREATE OR ALTER VIEW [dbo].[viewRifiutiRegistrazioniRelazioni]
 
 AS
 

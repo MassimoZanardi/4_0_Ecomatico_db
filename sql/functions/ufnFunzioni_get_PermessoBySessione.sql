@@ -1,5 +1,5 @@
 -- Step 3: ripristina lo SCHEMABINDING sul chiamante (versione finale CRLF-corretta)
-CREATE FUNCTION [dbo].[ufnFunzioni_get_PermessoBySessione]
+CREATE OR ALTER FUNCTION [dbo].[ufnFunzioni_get_PermessoBySessione]
 (
 	@IdFunzione CHAR(3),
 	@IdSessione CHAR(16)

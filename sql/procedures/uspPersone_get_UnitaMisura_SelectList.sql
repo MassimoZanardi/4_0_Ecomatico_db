@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspPersone_get_UnitaMisura_SelectList]
+CREATE OR ALTER PROCEDURE [dbo].[uspPersone_get_UnitaMisura_SelectList]
 	@IdSelected CHAR(2) = NULL
 AS
 BEGIN

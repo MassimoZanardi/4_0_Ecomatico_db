@@ -1,4 +1,4 @@
-CREATE VIEW [dbo].[viewEventi]
+CREATE OR ALTER VIEW [dbo].[viewEventi]
 WITH SCHEMABINDING
 AS
 SELECT

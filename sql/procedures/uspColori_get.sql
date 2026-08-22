@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspColori_get]
+CREATE OR ALTER PROCEDURE [dbo].[uspColori_get]
 	@Id CHAR(1) = NULL
 AS
 BEGIN

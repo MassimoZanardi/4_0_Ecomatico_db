@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspId_get]
+CREATE OR ALTER PROCEDURE [dbo].[uspId_get]
 	@Conferma BIT = 0,
 	@IdSessione CHAR(16) = NULL,
 	@NoLog BIT = 0,

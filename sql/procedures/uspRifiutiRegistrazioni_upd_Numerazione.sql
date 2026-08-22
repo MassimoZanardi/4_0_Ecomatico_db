@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd_Numerazione]
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd_Numerazione]
 	@IdSessione CHAR(16),
 	@DalNumero INT,
 	@AlNumero INT,

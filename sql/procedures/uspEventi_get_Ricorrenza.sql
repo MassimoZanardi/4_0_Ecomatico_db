@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[uspEventi_get_Ricorrenza]
+CREATE OR ALTER PROCEDURE [dbo].[uspEventi_get_Ricorrenza]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Data SMALLDATETIME = NULL

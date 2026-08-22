@@ -1,4 +1,4 @@
-CREATE FUNCTION [dbo].[ufnModuli_get_IsAttivoByUtente]
+CREATE OR ALTER FUNCTION [dbo].[ufnModuli_get_IsAttivoByUtente]
 (
 	@Id CHAR(3),
 	@IdUtente CHAR(16)

@@ -1,26 +1,28 @@
-CREATE   PROCEDURE [dbo].[uspRifiutiModelli_ins]
-	@IdSessione   CHAR(16) = NULL,
-	@IdOperazione CHAR(1)  = NULL
+CREATE PROCEDURE [dbo].[uspRifiutiModelli_ins]
+	@IdSessione CHAR(16) = NULL,
+	@IdOperazione CHAR(1) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON
 	BEGIN TRY
 
-		DECLARE @returnId      CHAR(16)      = NULL;
-		DECLARE @returnValue   INT           = 0;
+		DECLARE @returnId CHAR(16) = NULL;
+		DECLARE @returnValue INT = 0;
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
-		SET @IdSessione   = NULLIF(LTRIM(RTRIM(@IdSessione)),   '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdOperazione = NULLIF(LTRIM(RTRIM(@IdOperazione)), '');
 
 		IF @IdSessione IS NULL
 		BEGIN
-			SET @returnValue = -1; SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
 		IF @IdOperazione IS NULL
 		BEGIN
-			SET @returnValue = -1; SET @returnMessage = 'Il parametro @IdOperazione non può essere vuoto';
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdOperazione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
 
@@ -29,24 +31,34 @@ BEGIN
 		EXEC dbo.uspSessione_get_FunzionePermesso @Id = @IdSessione, @IdFunzione = 'RMD', @Permesso = @permesso OUTPUT;
 		IF 2 > @permesso
 		BEGIN
-			SET @returnValue = -1; SET @returnMessage = 'Non si dispone dei diritti necessari';
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
 			GOTO BRANCH_END;
 		END
 
 		DECLARE @idRegistro CHAR(16);
-		SELECT @idRegistro = IdRegistro FROM dbo.tblSessioni WHERE Id = @IdSessione;
+		SELECT @idRegistro = IdRegistro
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
 
 		-- Se non è stato selezionato il registro
 		IF @idRegistro IS NULL
 		BEGIN
-			SET @returnValue = -1; SET @returnMessage = 'Selezionare il registro';
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare il registro';
 			GOTO BRANCH_END;
 		END
 
 		-- Limita il numero max di Modelli
-		IF 50 <= (SELECT COUNT(*) FROM dbo.tblRifiutiModelli WHERE IdRegistro = @idRegistro AND Lock = 0)
+		IF 50 <= (SELECT COUNT(*)
+		FROM dbo.tblRifiutiModelli
+		WHERE
+			IdRegistro = @idRegistro
+			AND Lock = 0
+		)
 		BEGIN
-			SET @returnValue = -1; SET @returnMessage = 'È stato raggiunto il limite massimo di modelli inseribili';
+			SET @returnValue = -1;
+			SET @returnMessage = 'È stato raggiunto il limite massimo di modelli inseribili';
 			GOTO BRANCH_END;
 		END
 

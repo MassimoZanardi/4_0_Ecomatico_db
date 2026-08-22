@@ -6,7 +6,7 @@
 CREATE VIEW [dbo].[viewOsepe]
 AS
 
-SELECT 
+SELECT
 	n.Id,
 	n.Tipo,
 	IdAziendaInterna = COALESCE(s.IdAziendaInterna, p.IdSede, o.IdSede),
@@ -15,5 +15,5 @@ SELECT
 FROM
 	tblOsepe n LEFT OUTER JOIN
 	tblSedi s ON n.Id = s.Id LEFT OUTER JOIN
-	tblPersone p ON n.Id = p.Id  LEFT OUTER JOIN
+	tblPersone p ON n.Id = p.Id LEFT OUTER JOIN
 	tblOggetti o ON n.Id = o.Id

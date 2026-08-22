@@ -8,7 +8,7 @@ SELECT
 	RegistrazioneLock = r.Lock,
 	IdFormulario = f.Id,
 	FormularioLock = f.Lock,
-	mt.IdAutorizzazione,	
+	mt.IdAutorizzazione,
 	IdTipo = mt.IdTipo,
 	TargaMotrice = mt.TargaMotrice,
 	TargaRimorchio = mt.TargaRimorchio,
@@ -26,4 +26,4 @@ FROM
 	tblRifiutiMovimentitrasportatori mt ON m.Id = mt.Id LEFT OUTER JOIN
 	tblRifiutiAutorizzazioni a ON mt.IdAutorizzazione = a.Id LEFT OUTER JOIN
 	tblSedi s ON a.IdSede = s.Id
-	
+

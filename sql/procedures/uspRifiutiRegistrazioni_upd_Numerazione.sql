@@ -1,4 +1,4 @@
-CREATE   PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd_Numerazione]
+CREATE PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd_Numerazione]
 	@IdSessione CHAR(16),
 	@DalNumero INT,
 	@AlNumero INT,
@@ -19,7 +19,8 @@ DECLARE @permesso TINYINT
 EXEC dbo.uspSessione_get_FunzionePermesso @Id = @IdSessione, @IdFunzione = 'RRG', @Permesso = @permesso OUTPUT
 IF 2 > @permesso
 BEGIN
-	SET @returnValue = -1; SET @returnMessage = 'Non si dispone dei diritti necessari'
+	SET @returnValue = -1;
+	SET @returnMessage = 'Non si dispone dei diritti necessari'
 	GOTO BRANCH_END
 END
 
@@ -29,7 +30,7 @@ SELECT
 FROM
 	dbo.tblRifiutiRegistrazioni r
 	INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-	INNER JOIN dbo.tblSessioni         e ON m.IdRegistro  = e.IdRegistro
+	INNER JOIN dbo.tblSessioni e ON m.IdRegistro = e.IdRegistro
 WHERE
 	e.Id = @IdSessione
 	AND r.Lock < 2
@@ -39,14 +40,16 @@ WHERE
 -- Se non c'è nulla da rinumerare
 IF @totaleDaRinumerare = 0
 BEGIN
-	SET @returnValue = -1; SET @returnMessage = 'Non ci sono registrazioni nell''intervallo indicato'
+	SET @returnValue = -1;
+	SET @returnMessage = 'Non ci sono registrazioni nell''intervallo indicato'
 	GOTO BRANCH_END
 END
 
 -- Se la numerazione finale supera 999.999
 IF @PrimoNumero + @totaleDaRinumerare > 999999
 BEGIN
-	SET @returnValue = -1; SET @returnMessage = 'La rinumerazione non può assegnare numeri maggiori di 999.999'
+	SET @returnValue = -1;
+	SET @returnMessage = 'La rinumerazione non può assegnare numeri maggiori di 999.999'
 	GOTO BRANCH_END
 END
 
@@ -54,22 +57,23 @@ END
 IF EXISTS (SELECT 1
 	FROM
 		dbo.tblRifiutiRegistrazioni r
-		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-		INNER JOIN dbo.tblSessioni         e ON m.IdRegistro  = e.IdRegistro
+	INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+	INNER JOIN dbo.tblSessioni e ON m.IdRegistro = e.IdRegistro
 	WHERE
 		e.Id = @IdSessione
 		AND r.Lock < 2
 		AND YEAR(r.[Data]) = @Anno
 		AND r.Numero NOT BETWEEN @DalNumero AND @AlNumero
-		AND r.Numero BETWEEN @PrimoNumero AND @PrimoNumero + @totaleDaRinumerare)
+		AND r.Numero BETWEEN @PrimoNumero AND @PrimoNumero + @totaleDaRinumerare
+)
 BEGIN
-	SET @returnValue = -1; SET @returnMessage = 'La nuova numerazione è in conflitto con quella di altre registrazioni'
+	SET @returnValue = -1;
+	SET @returnMessage = 'La nuova numerazione è in conflitto con quella di altre registrazioni'
 	GOTO BRANCH_END
 END
 
 UPDATE r
-SET
-	Numero = t.NumeroBase + @PrimoNumero - 1
+SET Numero = t.NumeroBase + @PrimoNumero - 1
 FROM
 	dbo.tblRifiutiRegistrazioni r INNER JOIN
 	(SELECT
@@ -77,8 +81,8 @@ FROM
 		NumeroBase = ROW_NUMBER() OVER (ORDER BY r.[Data], r.Numero)
 	FROM
 		dbo.tblRifiutiRegistrazioni r
-		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-		INNER JOIN dbo.tblSessioni         e ON m.IdRegistro  = e.IdRegistro
+	INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+	INNER JOIN dbo.tblSessioni e ON m.IdRegistro = e.IdRegistro
 	WHERE
 		e.Id = @IdSessione
 		AND r.Lock < 2

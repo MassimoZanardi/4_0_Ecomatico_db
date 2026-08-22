@@ -1,18 +1,18 @@
-CREATE   PROCEDURE [dbo].[uspRifiutiProvenienze_get_SelectList]
+CREATE PROCEDURE [dbo].[uspRifiutiProvenienze_get_SelectList]
 	@IdSelected CHAR(1) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
 	BEGIN TRY
 
-		DECLARE @returnValue   INT           = 0;
+		DECLARE @returnValue INT = 0;
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
 		SET @IdSelected = NULLIF(LTRIM(RTRIM(@IdSelected)), '');
 
 		SELECT
 			Id,
-			[Text]   = Nome,
+			[Text] = Nome,
 			Selected = CAST(IIF(Id = @IdSelected, 1, 0) AS BIT)
 		FROM
 			dbo.tblRifiutiProvenienze

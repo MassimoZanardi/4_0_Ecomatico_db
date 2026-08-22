@@ -1,88 +1,113 @@
-CREATE   PROCEDURE [dbo].[uspUtenti_del_SedeInterna]
-    @Id         CHAR(16) = NULL,
-    @IdSede     CHAR(16) = NULL,
-    @IdSessione CHAR(16) = NULL
+CREATE PROCEDURE [dbo].[uspUtenti_del_SedeInterna]
+	@Id CHAR(16) = NULL,
+	@IdSede CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
 AS
 BEGIN
-    SET NOCOUNT, XACT_ABORT ON;
-    BEGIN TRY
-        DECLARE @returnValue   INT           = 0;
-        DECLARE @returnMessage NVARCHAR(200) = NULL;
-        SET @Id         = NULLIF(LTRIM(RTRIM(@Id)), '');
-        SET @IdSede     = NULLIF(LTRIM(RTRIM(@IdSede)), '');
-        SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
-        IF @Id IS NULL
-        BEGIN
-            SET @returnValue = -1; SET @returnMessage = 'Il parametro @Id non può essere vuoto';
-            GOTO BRANCH_END;
-        END
-        IF @IdSede IS NULL
-        BEGIN
-            SET @returnValue = -1; SET @returnMessage = 'Il parametro @IdSede non può essere vuoto';
-            GOTO BRANCH_END;
-        END
-        IF @IdSessione IS NULL
-        BEGIN
-            SET @returnValue = -1; SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
-            GOTO BRANCH_END;
-        END
-        -- Controllo permesso sulla funzione (UTE = Gestione Utenti)
-        DECLARE @permesso TINYINT;
-        EXEC dbo.uspSessione_get_FunzionePermesso
-            @Id         = @IdSessione,
-            @IdFunzione = 'UTE',
-            @Permesso   = @permesso OUTPUT;
-        IF 2 > @permesso
-        BEGIN
-            SET @returnValue = -1; SET @returnMessage = 'Non si dispone dei diritti necessari';
-            GOTO BRANCH_END;
-        END
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSede IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSede non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		-- Controllo permesso sulla funzione (UTE = Gestione Utenti)
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'UTE',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
 
-        DECLARE @idDominioSessione CHAR(16);
-        SELECT @idDominioSessione = a.IdDominio
-        FROM   dbo.tblSessioni s INNER JOIN dbo.tblUtenti a ON a.Id = s.IdUtente
-        WHERE  s.Id = @IdSessione;
+		DECLARE @idDominioSessione CHAR(16);
+		SELECT @idDominioSessione = a.IdDominio
+		FROM dbo.tblSessioni s INNER JOIN dbo.tblUtenti a ON a.Id = s.IdUtente
+		WHERE s.Id = @IdSessione;
 
-        -- Titolarità: Admin dello stesso Dominio dell'utente target, oppure Admin di un Dominio Master.
-        -- Il bypass Master è intenzionale (stesso schema di uspSedi_*): un Master-admin deve poter
-        -- gestire utenti di qualsiasi dominio, non solo del proprio.
-        IF NOT EXISTS (SELECT 1 FROM dbo.tblUtenti WHERE Id = @Id AND IdDominio = @idDominioSessione)
-        AND NOT EXISTS (SELECT 1 FROM dbo.tblDomini WHERE Id = @idDominioSessione AND [Master] = 1)
-        BEGIN
-            SET @returnValue = -1; SET @returnMessage = 'Non si dispone dei diritti necessari';
-            GOTO BRANCH_END;
-        END
+		-- Titolarità: Admin dello stesso Dominio dell'utente target, oppure Admin di un Dominio Master.
+		-- Il bypass Master è intenzionale (stesso schema di uspSedi_*): un Master-admin deve poter
+		-- gestire utenti di qualsiasi dominio, non solo del proprio.
+		IF NOT EXISTS (SELECT 1
+		FROM dbo.tblUtenti
+		WHERE
+			Id = @Id
+			AND IdDominio = @idDominioSessione
+		)
+		AND NOT EXISTS (SELECT 1
+		FROM dbo.tblDomini
+		WHERE
+			Id = @idDominioSessione
+			AND [Master] = 1
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
 
-        -- Titolarità sede: la sede interna deve appartenere allo stesso Dominio dell'utente target
-        IF NOT EXISTS (
-            SELECT 1
-            FROM   dbo.tblSedi s
-                   INNER JOIN dbo.tblSediInterne si ON s.IdAziendaInterna = si.Id
-            WHERE  s.Id = @IdSede AND si.IdDominio = @idDominioSessione
-        )
-        AND NOT EXISTS (SELECT 1 FROM dbo.tblDomini WHERE Id = @idDominioSessione AND [Master] = 1)
-        BEGIN
-            SET @returnValue = -1; SET @returnMessage = 'Non si dispone dei diritti necessari';
-            GOTO BRANCH_END;
-        END
+		-- Titolarità sede: la sede interna deve appartenere allo stesso Dominio dell'utente target
+		IF NOT EXISTS (
+			SELECT 1
+			FROM dbo.tblSedi s
+			INNER JOIN dbo.tblSediInterne si ON s.IdAziendaInterna = si.Id
+			WHERE
+				s.Id = @IdSede
+				AND si.IdDominio = @idDominioSessione
+		)
+		AND NOT EXISTS (SELECT 1
+		FROM dbo.tblDomini
+		WHERE
+			Id = @idDominioSessione
+			AND [Master] = 1
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
 
-        BEGIN TRANSACTION;
-            DELETE dbo.tblUtentiSediInterne
-            WHERE  Id = @Id AND IdSede = @IdSede;
-        COMMIT TRANSACTION;
+		BEGIN TRANSACTION;
+			DELETE dbo.tblUtentiSediInterne
+			WHERE
+				Id = @Id
+				AND IdSede = @IdSede;
+		COMMIT TRANSACTION;
 
-        -- Log FUORI dalla transazione
-        EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'U';
-        SELECT @returnValue AS ReturnValue;
-    END TRY
-    BEGIN CATCH
-        THROW;  -- XACT_ABORT ON garantisce il rollback automatico
-    END CATCH
-    BRANCH_END:
-    SET NOCOUNT, XACT_ABORT OFF;
-    IF @returnValue < 0
-    BEGIN
-        SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
-        THROW 50001, @returnMessage, 1;
-    END
+		-- Log FUORI dalla transazione
+		EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'U';
+		SELECT @returnValue AS ReturnValue;
+	END TRY
+	BEGIN CATCH
+		THROW; -- XACT_ABORT ON garantisce il rollback automatico
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
 END;

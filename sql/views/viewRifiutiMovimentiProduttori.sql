@@ -23,4 +23,4 @@ FROM
 	tblRifiutiMovimentiProduttori mp ON m.Id = mp.Id LEFT OUTER JOIN
 	tblRifiutiAutorizzazioni a ON mp.IdAutorizzazione = a.Id LEFT OUTER JOIN
 	tblSedi s ON a.IdSede = s.Id
-	
+

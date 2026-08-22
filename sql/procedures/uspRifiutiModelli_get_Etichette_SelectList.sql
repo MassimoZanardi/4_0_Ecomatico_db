@@ -1,25 +1,27 @@
-CREATE   PROCEDURE [dbo].[uspRifiutiModelli_get_Etichette_SelectList]
-	@Id         CHAR(16) = NULL,
+CREATE PROCEDURE [dbo].[uspRifiutiModelli_get_Etichette_SelectList]
+	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
 	BEGIN TRY
 
-		DECLARE @returnValue   INT           = 0;
+		DECLARE @returnValue INT = 0;
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
-		SET @Id         = NULLIF(LTRIM(RTRIM(@Id)),         '');
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 
 		IF @Id IS NULL
 		BEGIN
-			SET @returnValue = -1; SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
 			GOTO BRANCH_END;
 		END
 		IF @IdSessione IS NULL
 		BEGIN
-			SET @returnValue = -1; SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
 
@@ -27,7 +29,8 @@ BEGIN
 		EXEC dbo.uspSessione_get_FunzionePermesso @Id = @IdSessione, @IdFunzione = 'RMD', @Permesso = @permesso OUTPUT;
 		IF 1 > @permesso
 		BEGIN
-			SET @returnValue = -1; SET @returnMessage = 'Non si dispone dei diritti necessari';
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
 			GOTO BRANCH_END;
 		END
 
@@ -38,12 +41,12 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiModelli m
-				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
-			WHERE m.Id = @Id
-		)
+			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+			WHERE m.Id = @Id)
 		BEGIN
-			SET @returnValue = -1; SET @returnMessage = 'Non si dispone dei diritti necessari';
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
 			GOTO BRANCH_END;
 		END
 
@@ -57,18 +60,15 @@ BEGIN
 					e.Visualizzazione
 				FROM
 					dbo.tblEtichette e
-					INNER JOIN dbo.tblColori c ON e.IdColore = c.Id
-				WHERE
-					t.Id = e.Id
-				FOR JSON PATH),
+				INNER JOIN dbo.tblColori c ON e.IdColore = c.Id
+				WHERE t.Id = e.Id FOR JSON PATH),
 			Selected = CAST(IIF(e.IdEtichetta IS NULL, 0, 1) AS BIT)
 		FROM
 			dbo.tblEtichette t
-			LEFT OUTER JOIN (
+		LEFT OUTER JOIN (
 				SELECT IdEtichetta
-				FROM   dbo.tblRifiutiModelliEtichette
-				WHERE  Id = @Id
-			) e ON t.Id = e.IdEtichetta
+				FROM dbo.tblRifiutiModelliEtichette
+				WHERE Id = @Id) e ON t.Id = e.IdEtichetta
 		WHERE
 			-- Filtro sede corretto: tblRifiutiModelli non ha una colonna IdSede propria,
 			-- prima veniva usata una subquery che referenziava una colonna inesistente;
@@ -80,7 +80,7 @@ BEGIN
 				SELECT g.IdSede
 				FROM
 					dbo.tblRifiutiModelli m
-					INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
 				WHERE m.Id = @Id
 			)
 			AND t.IdModulo = 'RIF'

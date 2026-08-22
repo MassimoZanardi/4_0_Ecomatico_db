@@ -1,25 +1,27 @@
-CREATE   PROCEDURE [dbo].[uspRifiutiModelli_get]
-	@Id         CHAR(16) = NULL,
+CREATE PROCEDURE [dbo].[uspRifiutiModelli_get]
+	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
 	BEGIN TRY
 
-		DECLARE @returnValue   INT           = 0;
+		DECLARE @returnValue INT = 0;
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
-		SET @Id         = NULLIF(LTRIM(RTRIM(@Id)),         '');
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 
 		IF @Id IS NULL
 		BEGIN
-			SET @returnValue = -1; SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
 			GOTO BRANCH_END;
 		END
 		IF @IdSessione IS NULL
 		BEGIN
-			SET @returnValue = -1; SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
 
@@ -28,7 +30,8 @@ BEGIN
 		EXEC dbo.uspSessione_get_FunzionePermesso @Id = @IdSessione, @IdFunzione = 'RMD', @Permesso = @permesso OUTPUT;
 		IF 1 > @permesso
 		BEGIN
-			SET @returnValue = -1; SET @returnMessage = 'Non si dispone dei diritti necessari';
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
 			GOTO BRANCH_END;
 		END
 
@@ -39,12 +42,12 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiModelli m
-				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
-			WHERE m.Id = @Id
-		)
+			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+			WHERE m.Id = @Id)
 		BEGIN
-			SET @returnValue = -1; SET @returnMessage = 'Non si dispone dei diritti necessari';
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
 			GOTO BRANCH_END;
 		END
 
@@ -75,8 +78,8 @@ BEGIN
 			m.Lock
 		FROM
 			dbo.tblRifiutiModelli m
-			LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
-			LEFT JOIN dbo.tblRifiutiOperazioniRegistro t ON o.Id = t.Id
+		LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+		LEFT JOIN dbo.tblRifiutiOperazioniRegistro t ON o.Id = t.Id
 		WHERE
 			m.Id = @Id
 			AND m.Lock <= 2;

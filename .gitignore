@@ -1,0 +1,15 @@
+# File dati/log di SQL Server: mai versionarli (binari, enormi, cambiano ad ogni transazione)
+*.mdf
+*.MDF
+*.ldf
+*.LDF
+*.ndf
+*.NDF
+*.bak
+*.BAK
+*.trn
+*.TRN
+
+# Backup temporanei di editor
+*~
+*.tmp

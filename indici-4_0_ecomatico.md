@@ -1,0 +1,316 @@
+# Audit indici — 4_0_ecomatico
+
+Metodologia e stato di avanzamento dell'audit indici sul database `4_0_ecomatico` (istanza `.\SQLSERVER`), condotto dopo la chiusura della revisione stored procedure (vedi `context-4_0_ecomatico.md`). Questo file è la controparte "indici" di quel documento: stessa logica — leggibile senza dover rileggere l'intera cronologia della sessione.
+
+Standard di coding, schema facts e convenzioni generali del progetto sono in `context-4_0_ecomatico.md` e in `CLAUDE.md` — non ripetuti qui.
+
+---
+
+## 1. Obiettivo e perimetro
+
+Verificare lo stato di salute degli indici del database applicativo (`dbo.tbl*`), in particolare sulle tabelle del dominio Rifiuti (`tblRifiuti*`, le più scritte/lette dal modulo transazionale) e sulle tabelle anagrafiche/infrastrutturali toccate dalla revisione SP appena chiusa. Non tocca le tabelle di sistema/diagramma né database diversi da `4_0_ecomatico`.
+
+**Fatto chiave che condiziona tutta la metodologia**: `4_0_ecomatico` è un database di **solo sviluppo/test** — non esiste un ambiente di produzione con volumi di dati reali (confermato dall'utente il 2026-08-14). Tutte le tabelle del dominio Rifiuti hanno tra 0 e poche centinaia di righe.
+
+Non è un audit "una tantum": ogni fix (statistiche, indice nuovo/rimosso, rebuild) va proposto, mai applicato senza conferma esplicita dell'utente — stessa disciplina già seguita per le stored procedure.
+
+---
+
+## 2. Metodologia generale
+
+**Le DMV runtime (missing index, usage stats, frammentazione) sono strutturalmente inaffidabili in questo ambiente** — non solo "poco significative": `sys.dm_db_missing_index_*` riflette solo i piani compilati dall'ultimo restart, senza traffico applicativo reale resta vuota o quasi; `sys.dm_db_index_usage_stats` si azzera a ogni restart e richiede un ciclo d'uso reale; la frammentazione/le statistiche non hanno senso su tabelle da poche decine di righe (vedi §4.1, verificato l'2026-08-14). Vanno **riservate a un momento successivo**, se/quando emergeranno volumi di dati reali (produzione o un dataset di test realistico).
+
+**Metodo primario in questo ambiente: analisi statica del carico di lavoro.** Dato che l'intero corpo di stored procedure del database è stato appena rivisto modulo per modulo (vedi `context-4_0_ecomatico.md`), i pattern di accesso reali alle tabelle sono noti con precisione — non ipotizzati: `JOIN ON`/`WHERE`/`ORDER BY` effettivi nel codice T-SQL, non piani di query stimati. Il procedimento per ogni tabella (o gruppo di tabelle di uno stesso modulo):
+
+1. **Estrarre gli indici esistenti** sulla tabella (chiave + `INCLUDE` + eventuale `filter_definition`) — query §4.4 filtrata sulla tabella.
+2. **Estrarre i pattern di predicato reali** dalle SP che referenziano quella tabella: `JOIN`/`WHERE`/`ORDER BY` — via ricerca testuale su `sys.sql_modules` (§4.0) + lettura mirata delle SP più significative (già note dalla revisione: catena titolarità `IdSede`/`Lock`, relazioni padre/figlio, paging in `_get_List`, filtri `_SelectList`).
+3. **Confrontare**: per ogni combinazione ricorrente di colonne di filtro/join (in particolare quelle usate nel check di titolarità aggiunto sistematicamente durante la revisione SP — quello è oggi il predicato più frequente su quasi ogni tabella `IdSede`-scoped), verificare se esiste un indice che la copre come prefisso sinistro. Segnalare sia i gap (indice mancante) sia le ridondanze (indici già coperti da un altro più ampio).
+4. **Presentare i risultati grezzi + l'analisi da DBA** prima di proporre qualunque modifica — cosa cambierebbe, perché, con quale beneficio atteso *quando* i volumi cresceranno (un indice ha senso oggi anche con 5 righe, se il pattern di accesso è quello reale dell'applicazione: il costo di mantenerlo è basso, il beneficio si materializza con la crescita dei dati).
+5. **Proporre l'azione** (`CREATE`/`DROP`/`ALTER INDEX`) con la query pronta, **non eseguirla** senza conferma esplicita.
+6. **Aggiornare la sezione 6** (Stato avanzamento) dopo ogni tabella/gruppo chiuso.
+
+Le query DMV runtime (§4.1–§4.3, §4.5 sotto) restano documentate e pronte all'uso per quando torneranno utili, ma non sono il metodo guida per questa fase.
+
+---
+
+## 3. Soglie di decisione standard
+
+| Controllo | Soglia | Azione tipica |
+|---|---|---|
+| Frammentazione indice | `avg_fragmentation_in_percent` 5–30% e `page_count` > 1000 | `ALTER INDEX ... REORGANIZE` |
+| Frammentazione indice | `avg_fragmentation_in_percent` > 30% e `page_count` > 1000 | `ALTER INDEX ... REBUILD` (valutare `ONLINE = ON` se Enterprise/2019+, altrimenti finestra di manutenzione) |
+| Frammentazione indice | `page_count` < 1000 | Ignorare (rumore, il costo del rebuild supera il beneficio) |
+| Statistiche obsolete | `modification_counter` / `rows` > 20% (tabelle piccole) o formula standard `sqrt(1000 * rows)` (tabelle grandi, soglia dinamica introdotta da SQL 2016+ trace flag 2371, comunque attivo di default se database in compatibility level ≥130) | `UPDATE STATISTICS ... WITH FULLSCAN` (tabelle piccole/medie) o `WITH SAMPLE` (tabelle molto grandi) |
+| Indice mancante | `avg_user_impact` alto (>70) e `user_seeks`/`user_scans` non trascurabili, `ImprovementMeasure` tra i più alti del batch | Proporre `CREATE INDEX`, mai crearlo alla cieca: verificare sempre che non esista già un indice quasi-equivalente (vedi duplicati) |
+| Indice inutilizzato | `user_seeks + user_scans + user_lookups` = 0 su una finestra di uptime significativa, `user_updates` > 0 (costa in scrittura senza mai essere letto) | Proporre `DROP INDEX`, mai su PK/UNIQUE senza verifica esplicita del motivo (constraint applicativo, non solo performance) |
+| Indici duplicati/ridondanti | Stesse colonne chiave (stesso ordine) con `INCLUDE` diversi, o un indice le cui colonne chiave sono un prefisso esatto di un altro sulla stessa tabella | Proporre consolidamento (drop del sottoinsieme ridondante), mai automatico — verificare `INCLUDE` e filtri (`WHERE`) prima di assumere ridondanza |
+
+Queste soglie sono un punto di partenza da DBA, non regole rigide: ogni proposta di modifica va motivata caso per caso con i numeri reali della tabella (dimensione, pattern di accesso OLTP vs report), non applicata meccanicamente solo perché supera una soglia.
+
+---
+
+## 4. Query diagnostiche
+
+### 4.0 Analisi statica — SP che referenziano una tabella + indici esistenti
+
+Prima query per ogni tabella oggetto di analisi: elenco delle SP che la referenziano (per poi leggerne il testo mirato) e, in un colpo solo, gli indici esistenti con le colonne chiave/incluse.
+
+```sql
+-- SP che referenziano la tabella (adattare @tabella)
+DECLARE @tabella SYSNAME = 'tblRifiutiRegistrazioni';
+
+SELECT DISTINCT o.name AS StoredProcedure
+FROM sys.sql_modules m
+INNER JOIN sys.objects o ON m.object_id = o.object_id
+WHERE o.type = 'P'
+  AND m.definition LIKE '%' + @tabella + '%'
+ORDER BY o.name;
+```
+
+```sql
+-- Indici esistenti sulla tabella (stessa forma di §4.4, filtrata)
+SELECT
+    i.name AS Indice,
+    i.is_unique,
+    i.filter_definition,
+    STUFF((
+        SELECT ', ' + c.name + CASE WHEN ic.is_descending_key = 1 THEN ' DESC' ELSE '' END
+        FROM sys.index_columns ic
+        INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+        WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.is_included_column = 0
+        ORDER BY ic.key_ordinal
+        FOR XML PATH('')
+    ), 1, 2, '') AS ColonneChiave,
+    STUFF((
+        SELECT ', ' + c.name
+        FROM sys.index_columns ic
+        INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+        WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.is_included_column = 1
+        FOR XML PATH('')
+    ), 1, 2, '') AS ColonneIncluse
+FROM sys.indexes i
+WHERE i.object_id = OBJECT_ID('dbo.tblRifiutiRegistrazioni')  -- adattare
+  AND i.type > 0
+ORDER BY i.type, ColonneChiave;
+```
+
+Il passo successivo (lettura dei `JOIN`/`WHERE`/`ORDER BY` reali nelle SP elencate) è manuale/mirato — via `OBJECT_DEFINITION`/lettura diretta delle SP più significative per quella tabella, non ulteriormente automatizzabile in una query generica.
+
+### 4.1 Statistiche obsolete
+
+```sql
+SELECT
+    t.name                                       AS Tabella,
+    s.name                                       AS Statistica,
+    STATS_DATE(s.object_id, s.stats_id)          AS UltimoAggiornamento,
+    sp.rows                                      AS RigheTabella,
+    sp.modification_counter                      AS RigheModificate,
+    CASE WHEN sp.rows > 0
+         THEN CAST(100.0 * sp.modification_counter / sp.rows AS DECIMAL(5,2))
+         ELSE NULL
+    END                                           AS PercentualeModifiche
+FROM sys.tables t
+INNER JOIN sys.stats s ON t.object_id = s.object_id
+CROSS APPLY sys.dm_db_stats_properties(s.object_id, s.stats_id) sp
+WHERE t.name LIKE 'tblRifiuti%'
+ORDER BY PercentualeModifiche DESC;
+```
+
+Estendibile ad altri prefissi (`tblSedi%`, `tblUtenti%`, ecc.) semplicemente cambiando il `LIKE`, o rimuovendo il filtro per un giro completo del database.
+
+### 4.2 Indici mancanti (missing index DMV)
+
+```sql
+SELECT
+    OBJECT_NAME(mid.object_id)                    AS Tabella,
+    mid.equality_columns,
+    mid.inequality_columns,
+    mid.included_columns,
+    migs.user_seeks,
+    migs.user_scans,
+    migs.avg_total_user_cost,
+    migs.avg_user_impact,
+    (migs.user_seeks + migs.user_scans)
+        * migs.avg_total_user_cost
+        * (migs.avg_user_impact / 100.0)          AS ImprovementMeasure
+FROM sys.dm_db_missing_index_details mid
+INNER JOIN sys.dm_db_missing_index_groups mig
+    ON mid.index_handle = mig.index_handle
+INNER JOIN sys.dm_db_missing_index_group_stats migs
+    ON mig.index_group_handle = migs.group_handle
+WHERE mid.database_id = DB_ID()
+ORDER BY ImprovementMeasure DESC;
+```
+
+Nota: questa DMV riflette solo i piani di query già compilati/eseguiti dall'ultimo restart — non è un'analisi statica dello schema, va incrociata con l'uso reale dell'applicazione.
+
+### 4.3 Indici esistenti + utilizzo
+
+```sql
+SELECT
+    OBJECT_NAME(i.object_id)   AS Tabella,
+    i.name                     AS Indice,
+    i.type_desc,
+    i.is_unique,
+    i.is_primary_key,
+    us.user_seeks,
+    us.user_scans,
+    us.user_lookups,
+    us.user_updates,
+    us.last_user_seek,
+    us.last_user_scan
+FROM sys.indexes i
+LEFT JOIN sys.dm_db_index_usage_stats us
+    ON i.object_id = us.object_id
+   AND i.index_id  = us.index_id
+   AND us.database_id = DB_ID()
+WHERE i.object_id IN (SELECT object_id FROM sys.tables WHERE is_ms_shipped = 0)
+  AND i.type > 0  -- esclude heap (type 0)
+ORDER BY Tabella, ISNULL(us.user_seeks, 0) + ISNULL(us.user_scans, 0) + ISNULL(us.user_lookups, 0) ASC;
+```
+
+Righe con `user_seeks`/`user_scans`/`user_lookups` tutti NULL o 0 e `user_updates` > 0 sono candidate a "indice inutilizzato" (vedi soglia in §3) — ma verificare sempre l'uptime del server prima di proporre il `DROP`.
+
+### 4.4 Indici duplicati/ridondanti (colonne chiave)
+
+```sql
+SELECT
+    OBJECT_NAME(i.object_id) AS Tabella,
+    i.name                   AS Indice,
+    i.is_unique,
+    i.filter_definition,
+    STUFF((
+        SELECT ', ' + c.name + CASE WHEN ic.is_descending_key = 1 THEN ' DESC' ELSE '' END
+        FROM sys.index_columns ic
+        INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+        WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.is_included_column = 0
+        ORDER BY ic.key_ordinal
+        FOR XML PATH('')
+    ), 1, 2, '') AS ColonneChiave,
+    STUFF((
+        SELECT ', ' + c.name
+        FROM sys.index_columns ic
+        INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+        WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.is_included_column = 1
+        FOR XML PATH('')
+    ), 1, 2, '') AS ColonneIncluse
+FROM sys.indexes i
+WHERE i.object_id IN (SELECT object_id FROM sys.tables WHERE is_ms_shipped = 0)
+  AND i.type > 0
+ORDER BY Tabella, ColonneChiave;
+```
+
+Da leggere a occhio per tabella: cercare stesso `ColonneChiave` (o uno prefisso esatto dell'altro) con `ColonneIncluse`/`filter_definition` diversi.
+
+### 4.5 Frammentazione
+
+```sql
+SELECT
+    OBJECT_NAME(ips.object_id)          AS Tabella,
+    i.name                              AS Indice,
+    ips.index_type_desc,
+    ips.avg_fragmentation_in_percent,
+    ips.page_count,
+    ips.record_count
+FROM sys.dm_db_index_physical_stats(DB_ID(), NULL, NULL, NULL, 'LIMITED') ips
+INNER JOIN sys.indexes i
+    ON ips.object_id = i.object_id AND ips.index_id = i.index_id
+WHERE ips.page_count > 100
+ORDER BY ips.avg_fragmentation_in_percent DESC;
+```
+
+`'LIMITED'` è sufficiente per uno screening iniziale (economico); se una tabella specifica risulta borderline, rieseguire su quella singola con `'DETAILED'` prima di decidere REBUILD vs REORGANIZE.
+
+---
+
+## 5. Comandi operativi (esecuzione)
+
+Stessa disciplina già stabilita per le stored procedure — vedi `context-4_0_ecomatico.md` §"Checklist di deploy" per il razionale completo (`-f 65001` per gli accenti, `-o <file>` + `Read` per evitare troncamenti):
+
+```powershell
+sqlcmd -S ".\SQLSERVER" -d "4_0_ecomatico" -E -f 65001 -y 0 -i <query.sql> -o <output.txt>
+```
+
+**Nota tool**: la sessione ha usato finora `sqlcmd` locale via PowerShell/Bash, non l'MCP `mssql` (scartato in una sessione precedente per via dei prompt di autenticazione Azure che genera). Se in questa fase si preferisce l'MCP, confermarlo esplicitamente — altrimenti resta `sqlcmd` come da convenzione stabilita.
+
+**Nota operativa — tabelle con indici filtrati (`WHERE ...`)**: richiedono `SET QUOTED_IDENTIFIER ON;` esplicito nella sessione non solo per il `CREATE INDEX` stesso, ma per **qualunque DML successivo** (`DELETE`/`UPDATE`/`INSERT`) sulla tabella — altrimenti errore `Msg 1934`, la sessione `sqlcmd` di default ha `QUOTED_IDENTIFIER OFF`. Includerlo sempre come primo statement (con `GO` separato) negli script che toccano tabelle con indici filtrati, anche solo per query di pulizia/test manuali (scoperto prima durante la creazione di `IX_RifiutiModelli_IdRegistro_Lock`, poi di nuovo durante uno script di cleanup dati di test su `tblAree`, che ha un indice filtrato `IX_Aree_IdDominio_Lock` — 2026-08-14).
+
+### Naming convention (dedotta dal database esistente, 2026-08-14)
+
+Analizzati tutti i 30 indici non-clustered "reali" del database (esclusi PK clustered, statistiche auto-generate `_WA_Sys%`, indice di sistema di `sysdiagrams`).
+
+**Regola di base, rispettata al 100% nei 23 indici `IX_*`:**
+`IX_<Tabella senza prefisso "tbl">_<ColonneChiave in ordine>` — i satelliti mantengono il nome tabella completo, mai abbreviato (es. `tblRifiutiFormulariEtichette` → `IX_RifiutiFormulariEtichette_IdEtichetta`).
+
+**Colonna di filtro (`WHERE Lock<2`/`Lock=0` ecc.) — qui la codebase esistente NON è coerente**: compare in coda (`IX_RifiutiAutorizzazioni_IdSede_IdRuolo_Lock`), in testa (`IX_RifiutiRegistrazioni_Lock_Data`), in mezzo (`IX_RifiutiRegistrazioni_IdMovimento_Lock_Data_Numero`), oppure omessa pur essendo l'indice filtrato (`IX_RifiutiFormulari_IdMovimento`). Un caso (`IX_Aree_Lock`) è francamente fuorviante: il nome dice "Lock" ma la vera colonna chiave è `IdDominio`.
+
+**Convenzione adottata per i nuovi indici proposti in questa revisione**: `IX_<Tabella>_<ColonneChiave>[_Lock]` — colonna di filtro sempre in coda, mai in testa o in mezzo. Non si tocca retroattivamente il nome degli indici esistenti (nessun beneficio funzionale, puramente cosmetico, fuori perimetro di questa revisione).
+
+**Indici univoci**: nessun precedente applicativo (l'unico `UK_` è di sistema, generato da SSMS Database Diagram). Se ne servisse uno: `UQ_<Tabella>_<Colonne>` — da confermare al primo caso reale.
+
+**Rename eseguito 2026-08-14 (su richiesta esplicita dell'utente, deviazione dal "non toccare retroattivamente" iniziale)**: tutti i 14 indici non conformi rinominati allo standard `IX_<Tabella>_<ColonneChiave>[_Lock]`, verificato preventivamente che nessuna SP li referenziasse via index hint esplicito (`WITH (INDEX(...))`) — nessun hint trovato, rename innocuo per l'optimizer. Il database è ora **100% conforme** alla convenzione.
+
+| Tabella | Nome precedente | Nuovo nome |
+|---|---|---|
+| `tblAree` | `IX_Aree_Lock` | `IX_Aree_IdDominio_Lock` |
+| `tblRifiutiFormulari` | `IX_RifiutiFormulari_IdMovimento` | `IX_RifiutiFormulari_IdMovimento_Lock` |
+| `tblRifiutiFormulari` | `IX_RifiutiFormulari_Lock_DataEmissione` | `IX_RifiutiFormulari_DataEmissione_Lock` |
+| `tblRifiutiRegistrazioni` | `IX_RifiutiRegistrazioni_IdMovimento_Lock_Data_Numero` | `IX_RifiutiRegistrazioni_IdMovimento_Data_Numero_Lock` |
+| `tblRifiutiRegistrazioni` | `IX_RifiutiRegistrazioni_Lock_Data` | `IX_RifiutiRegistrazioni_Data_Lock` |
+| `tblSedi` | `IX_Sedi_InternaEsterna_Lock_IdAziendaInterna` | `IX_Sedi_InternaEsterna_IdAziendaInterna_Lock` |
+| `tblCalendari` | `idxIdSede` | `IX_Calendari_IdSede` |
+| `tblComuni` | `idx_IdProvincia` | `IX_Comuni_IdProvincia` |
+| `tblIndirizzi` | `idx_IdComune` | `IX_Indirizzi_IdComune` |
+| `tblIndirizzi` | `idx_IdNazione` | `IX_Indirizzi_IdNazione` |
+| `tblSediInterne` | `idxIdDominio` | `IX_SediInterne_IdDominio` |
+| `tblUtentiLogin` | `idxId` | `IX_UtentiLogin_Id` |
+| `tblUtentiPassword` | `idxId` | `IX_UtentiPassword_Id` |
+| `tblUtentiPassword` | `idxtblUtentiPassword_Id_Data` | `IX_UtentiPassword_Id_Data` |
+
+Nota bene per il resto della revisione: qualunque riferimento nella cronologia della sessione (o in query/appunti precedenti) ai vecchi nomi `IX_RifiutiRegistrazioni_Lock_Data`/`IX_RifiutiRegistrazioni_IdMovimento_Lock_Data_Numero` (citati così nell'analisi del punto 2, §6) va inteso come i nuovi nomi `IX_RifiutiRegistrazioni_Data_Lock`/`IX_RifiutiRegistrazioni_IdMovimento_Data_Numero_Lock` — stesso indice, solo rinominato, nessun cambio di struttura/comportamento.
+
+---
+
+## 6. Ordine di lavoro e stato avanzamento
+
+Ultimo aggiornamento: 2026-08-14.
+
+**Pivot metodologico 2026-08-14**: dopo aver verificato che le statistiche sono irrilevanti su questi volumi (punto 1 originale, chiuso senza azione — vedi nota), l'utente ha confermato che `4_0_ecomatico` è l'unico ambiente esistente (nessuna produzione). L'ordine di lavoro è stato quindi convertito da "audit runtime via DMV" ad **analisi statica del carico di lavoro per tabella/gruppo di tabelle**, stesso ordine di priorità già usato per la revisione SP (dominio Rifiuti core → anagrafiche/infrastrutturali). Le query DMV restano in §4.1–§4.3/§4.5 per un giro successivo, se/quando emergeranno volumi reali.
+
+**Decisione 2026-08-14 — qualità query (non-sargability ecc.)**: durante il punto 2 è emerso un predicato non-sargable (`YEAR(r.Data)=@Anno` in `upd_Numerazione`). Deciso con l'utente di **non aprire una passata dedicata** di revisione qualità su tutte le 284 SP (sforzo paragonabile alla revisione SP appena chiusa, e con questi volumi di dati l'impatto è comunque nullo oggi) — questi pattern vengono annotati come sottoprodotto dell'analisi indici tabella per tabella già in corso, senza fronte separato.
+
+**Decisione 2026-08-14 — soglia per modifiche strutturali invasive**: l'utente ha chiarito che, non esistendo un ambiente di produzione, il costo operativo di un cambio invasivo (drop/recreate di una PK, riordino chiave, ecc.) non è più un freno — **da qui in avanti propongo anche modifiche strutturali (non solo indici secondari) ogni volta che c'è un beneficio di performance reale**, non necessariamente solo `CREATE`/`DROP INDEX`. Resta comunque valido il criterio di **non proporre un cambio quando il beneficio è oggettivamente nullo** (es. riordino della PK clustered sulle tabelle satellite `tblRifiutiMovimenti{Produttori,Trasportatori,Destinatari,Intermediari}`, scartato al punto 3 non per prudenza ma perché il fan-out per `Id` è vincolato a ≤3 righe dalla logica applicativa — stesso costo di lettura a qualunque scala, nessun guadagno possibile riordinando la chiave).
+
+### Ordine di lavoro (nuovo, per tabella/gruppo)
+
+**Dominio Rifiuti — core:**
+1. `tblRifiutiRegistrazioni` (+ `tblRifiutiRegistrazioniRelazioni`, satelliti Etichette/Esiti)
+2. `tblRifiutiMovimenti` (+ satelliti Produttori/Trasportatori/Destinatari/Intermediari/ClassiPericolo/Log)
+3. `tblRifiutiFormulari` (+ Etichette)
+4. `tblRifiutiAutorizzazioni` (+ satelliti Conducenti/Eer/Targhe/Attivita)
+5. `tblRifiutiRegistri`
+6. `tblRifiutiModelli` (+ satelliti ClassiPericolo/Etichette)
+
+**Anagrafiche/infrastrutturali (toccate dalla revisione SP):**
+7. `tblSedi` (+ `tblSediInterne`/`tblSediEsterne`)
+8. `tblUtenti`
+9. `tblScadenze`/`tblServizi`/`tblServiziAssegnati` (+ `tblEventi`/`tblCalendari`, catena titolarità condivisa)
+10. `tblDomini`, `tblTipi`, `tblAree`, `tblEtichette` (moduli non ancora rivisti come SP ma rilevanti per gli indici, vedi `context-4_0_ecomatico.md` §"Moduli NON ancora rivisti")
+
+### Stato avanzamento
+
+| # | Punto | Stato | Note |
+|---|---|---|---|
+| 1 | Statistiche obsolete `tblRifiuti*` (DMV) | ✅ Completato | Volumi troppo piccoli (0-839 righe) perché le statistiche siano un problema reale. Nessuna azione. 2 statistiche con `STATS_DATE` NULL (`IX_RifiutiRegistrazioniEtichette_IdEtichetta`, `IX_RifiutiFormulariEtichette_IdEtichetta`) — innocuo, non approfondito. |
+| 2 | `tblRifiutiRegistrazioni` + satelliti | ✅ Completato | Nessuna azione: indici esistenti già ben allineati ai pattern reali letti dalle 9 SP di lettura principali (vedi tabella di analisi in conversazione). Nessun indice mancante, nessuna ridondanza. Nota soft (non indicizzazione): `upd_Numerazione` usa `YEAR(r.Data)=@Anno` non-sargable — da rivalutare in una futura passata qualità SP. |
+| 3 | `tblRifiutiMovimenti` + satelliti | ✅ Completato | `IX_RifiutiMovimenti_IdRegistro`: covering index ben progettato, nessuna azione. Satelliti (Produttori/Trasportatori/Destinatari/Intermediari/ClassiPericolo): solo PK clustered, fan-out per Id limitato a poche righe dalla logica applicativa (≤3) — nessuna azione anche a piena scala. **`IX_RifiutiMovimentiLog_Id_Data` rimosso (DROP eseguito 2026-08-14)**: chiave ridondante con la PK clustered (backward scan), `INCLUDE` copriva 16/19 colonne senza che nessuna query reale ne avesse bisogno (l'unica query nel codebase seleziona solo `Data`). Verificato: nessun trigger/funzione coinvolti, solo 3 SP (`uspRifiutiFormulari_upd`, `uspRifiutiRegistrazioni_upd`, `uspRifiutiMovimenti_del_All`). |
+| 4 | `tblRifiutiFormulari` + Etichette | ✅ Completato | Nessuna azione: stessa struttura a due indici di `tblRifiutiRegistrazioni` (punto 2), pattern reali tutti coperti (catena Sessione→Registro→Movimento→Formulario, filtro Etichette). Nota: `IX_RifiutiFormulari_DataEmissione_Lock` (e il suo gemello `IX_RifiutiRegistrazioni_Data_Lock` al punto 2) non hanno un percorso d'uso "certo" nelle SP lette, ma restano piani alternativi legittimi per range-query dirette su Data — non abbastanza certezza per un DROP come nel caso del Log (punto 3), lasciati. |
+| 5 | `tblRifiutiAutorizzazioni` + satelliti | ✅ Completato | Nessuna azione: `IX_RifiutiAutorizzazioni_IdSede_IdRuolo_Lock` combacia quasi perfettamente col pattern dominante (`#sediUtente`/sedi azienda → autorizzazioni per IdSede+IdRuolo, `Lock<2`/`Lock=0`). Tutti i satelliti (Conducenti/Eer/Targhe/TargheEerEsclusi/Attivita) interrogati sempre via `Id` (leftmost PK) o combacianti con l'ordine esatto della PK composita — nessun indice secondario necessario, fan-out per riga limitato dalla logica applicativa. |
+| 6 | `tblRifiutiRegistri` | ✅ Completato | **`IX_RifiutiRegistri_IdSede` creato (2026-08-14)** — finding più significativo dell'audit finora: tabella con 44 SP referenzianti (snodo centrale titolarità dell'intero dominio Rifiuti) e zero indici non-clustered. Il join inverso `g.IdSede = i.Id` (verifica titolarità via `ufnSedi_get_SediInterneBySessione_List`) è il pattern più ripetuto di tutto l'audit, prima serviva solo da scan completo. Costo di mantenimento nullo: `IdSede` è immutabile dopo `_ins`. |
+| 7 | `tblRifiutiModelli` + satelliti | ✅ Completato | Satelliti (ClassiPericolo/Etichette): nessuna azione, stesso pattern degli altri satelliti. **Bug di titolarità reale trovato e corretto** (non un finding di indicizzazione): `get_SelectList` scopava i Modelli per Tipo di registro invece che per Registro specifico, leak cross-azienda — confermato dall'utente, fix deployato, dettaglio in memoria persistente (`project_review_uspRifiutiModelli.md`, riaperta). **`IX_RifiutiModelli_IdRegistro_Lock` creato** (filtrato `Lock<2`): `IdRegistro` è il pattern dominante sia in `get_List` che nel `get_SelectList` appena corretto, tabella senza alcun indice secondario prima. |
+| 8 | `tblSedi`/`tblSediInterne`/`tblSediEsterne` | ✅ Completato | Nessuna azione: fan-in più alto dell'audit (71 SP) ma già ben indicizzato. Verificato anche il percorso critico condiviso da ogni titolarità check del DB (`ufnSedi_get_SediInterneByUtente_List` e derivate) — tutti e 3 i rami coperti (`IX_SediInterne_IdDominio`, `IX_Sedi_IdParent_Lock`, PK di `tblUtentiSediInterne`). `IX_Sedi_IdParent_Lock` è un match esatto anche nell'`INCLUDE` per `get_SediAssociate_List`. |
+| 9 | `tblUtenti` | ✅ Completato | **3 indici creati (2026-08-14)**: tabella con solo PK su `Id`, ma il percorso di autenticazione (login/reset password) cerca sempre per `Email`/`TokenReset`/`IdDominio`, mai per `Id`. `IX_Utenti_Email` (no filtro: `get_Start` non filtra `Lock`), `IX_Utenti_TokenReset` (filtrato `WHERE TokenReset IS NOT NULL`, dato sparso), `IX_Utenti_IdDominio_Lock` (filtrato `Lock<2`). Non proposto `UNIQUE` su `Email`: il `TOP 1 ORDER BY Id` difensivo in `get_LoginByEmail` suggerisce email duplicate tollerate/possibili — vincolo di integrità dati fuori perimetro senza verifica dedicata. |
+| 10 | `tblScadenze`/`tblServizi`/`tblEventi`/`tblCalendari` | ✅ Completato | La maggior parte del gruppo già ben indicizzata (`IX_Eventi_IdCalendario_IdTipo_Lock`, `IX_Scadenze_IdEvento`, `IX_Servizi_IdEvento`, `IX_Calendari_IdSede`, verificati contro i pattern reali di `uspCalendari_*`/`uspScadenze_get_CalendarioMese_List`). **`IX_EventiUtenti_IdUtente` creato (2026-08-14)**: `ufnEventi_get_Assegnati_List` (dietro `uspServiziAssegnati_get_List`, la vista "miei servizi assegnati" dei tecnici) filtrava `IdUtente` — colonna non-leftmost della PK `(Id, IdUtente)`, nessun seek possibile prima. |
+| 11 | `tblDomini`/`tblTipi`/`tblAree`/`tblEtichette` | ✅ Completato | `tblAree` già coperta da `IX_Aree_IdDominio_Lock`. `tblDomini`: nessuna azione, cardinalità intrinsecamente piccola (tabella tenant). **`IX_Etichette_IdSede_IdModulo_Lock` e `IX_Tipi_IdSede_IdModulo_Lock` creati (2026-08-14)**: pattern `IdSede+IdModulo+Lock=0` ripetuto identico in almeno 6 moduli diversi (`get_Etichette_SelectList` di Formulari/Modelli/Registrazioni/Scadenze/Servizi + le SP proprie di Etichette/Tipi) — secondo finding più diffuso dell'audit dopo `tblRifiutiRegistri`. |
+
+Legenda: 🔲 Non iniziato · 🔄 In corso · ✅ Completato (con eventuale nota su modifiche applicate/rimandate).

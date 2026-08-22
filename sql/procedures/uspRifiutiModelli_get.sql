@@ -70,16 +70,15 @@ BEGIN
 			IdImballo = ISNULL(m.IdImballo, '00'),
 			Note = ISNULL(m.Note, ''),
 			UtenteNote = ISNULL(m.UtenteNote, ''),
-			t.IsProduttore,
-			t.IsTrasportatore,
-			t.IsDestinatario,
-			t.IsIntermediario,
-			t.IsAttivitaRs,
+			o.IsProduttore,
+			o.IsTrasportatore,
+			o.IsDestinatario,
+			o.IsIntermediario,
+			o.IsAttivitaRs,
 			m.Lock
 		FROM
 			dbo.tblRifiutiModelli m
 			LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
-			LEFT JOIN dbo.tblRifiutiOperazioniRegistro t ON o.Id = t.Id
 		WHERE
 			m.Id = @Id
 			AND m.Lock <= 2;

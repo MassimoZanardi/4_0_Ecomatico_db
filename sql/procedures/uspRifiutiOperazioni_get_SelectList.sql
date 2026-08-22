@@ -36,7 +36,6 @@ BEGIN
 			INNER JOIN dbo.tblRifiutiOperazioniRegistriTipi ot ON o.Id = ot.Id
 			INNER JOIN dbo.tblRifiutiRegistri r ON ot.IdTipo = r.IdTipo
 			INNER JOIN dbo.tblSessioni e ON r.Id = e.IdRegistro
-			LEFT JOIN dbo.tblRifiutiOperazioniRegistro og ON o.Id = og.Id
 		WHERE
 			e.Id = @IdSessione
 			AND
@@ -47,7 +46,7 @@ BEGIN
 			AND
 				(
 				@IsFormulario IS NULL
-				OR ISNULL(og.IsFormulario, 0) = @IsFormulario
+				OR ISNULL(o.IsFormulario, 0) = @IsFormulario
 				)
 		ORDER BY Pos
 		OPTION (RECOMPILE);

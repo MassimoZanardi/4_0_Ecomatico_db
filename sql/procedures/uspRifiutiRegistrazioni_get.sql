@@ -116,7 +116,7 @@ BEGIN
 
 			IdDocumentoTrasportoTipo = ISNULL(r.IdTrasportoTransfrontalieroTipo, 'F'),
 			IsFormularioNumero = CAST(CASE
-				WHEN ox.IsIntegrazioneFir = 1 AND r.Lock = 2 THEN 1
+				WHEN o.IsIntegrazioneFir = 1 AND r.Lock = 2 THEN 1
 				ELSE IIF(m.FormularioNumero IS NULL, 0, 1)
 			END AS BIT),
 			FormularioNumero = ISNULL(m.FormularioNumero, ''),
@@ -137,7 +137,7 @@ BEGIN
 			IsRelazionabile = CAST(IIF(EXISTS(SELECT 1
 			FROM dbo.tblRifiutiOperazioniRelazioni
 			WHERE Id = m.IdOperazione), 1, 0) AS BIT),
-			IsRegistrazioneAuto = CAST(IIF(ox.OperazioneAuto IS NULL, 0, 1) AS BIT),
+			IsRegistrazioneAuto = CAST(IIF(o.OperazioneAuto IS NULL, 0, 1) AS BIT),
 			IsVeicoloFuoriUso = ISNULL(r.VeicoloFuoriUso, 0),
 
 			IdRaee = ISNULL(r.IdRaee, '0'),
@@ -159,16 +159,16 @@ BEGIN
 			IdMateriale = ISNULL(r.IdMateriale, '00'),
 			MaterialeDescrizione = ISNULL(r.MaterialeDescrizione, ''),
 
-			IsIntegrazioneFir = ISNULL(ox.IsIntegrazioneFir, 0),
-			IsProduttore = ISNULL(ox.IsProduttore, 0),
-			IsTrasportatore = ISNULL(ox.IsTrasportatore, 0),
-			IsDestinatario = ISNULL(ox.IsDestinatario, 0),
-			IsIntermediario = ISNULL(ox.IsIntermediario, 0),
-			IsAttivitaRs = ISNULL(ox.IsAttivitaRs, 0),
-			IsEsito = ISNULL(ox.IsEsito, 0),
-			IsAttivitaProvenienza = ISNULL(ox.IsAttivitaProvenienza, 0),
-			IsMateriale = ISNULL(ox.IsMateriale, 0),
-			IsStoccaggioIstantaneo = ISNULL(ox.IsStoccaggioIstantaneo, 0),
+			IsIntegrazioneFir = ISNULL(o.IsIntegrazioneFir, 0),
+			IsProduttore = ISNULL(o.IsProduttore, 0),
+			IsTrasportatore = ISNULL(o.IsTrasportatore, 0),
+			IsDestinatario = ISNULL(o.IsDestinatario, 0),
+			IsIntermediario = ISNULL(o.IsIntermediario, 0),
+			IsAttivitaRs = ISNULL(o.IsAttivitaRs, 0),
+			IsEsito = ISNULL(o.IsEsito, 0),
+			IsAttivitaProvenienza = ISNULL(o.IsAttivitaProvenienza, 0),
+			IsMateriale = ISNULL(o.IsMateriale, 0),
+			IsStoccaggioIstantaneo = ISNULL(o.IsStoccaggioIstantaneo, 0),
 
 			Lock = r.Lock
 		FROM
@@ -177,7 +177,6 @@ BEGIN
 			LEFT JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
 			LEFT JOIN dbo.tblRifiutiFormulari f ON m.Id = f.IdMovimento AND f.Lock < 2
 			LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
-			LEFT JOIN dbo.tblRifiutiOperazioniRegistro ox ON o.Id = ox.Id
 			-- Produttori
 			LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp ON m.Id = mp.Id AND mp.Pos = 0
 			-- Destinatari

@@ -15,8 +15,28 @@ CREATE TABLE [dbo].[tblRifiutiOperazioni](
 	[DestinatarioSede] [bit] NULL,
 	[IntermediarioSede] [bit] NULL,
 	[Pos] [tinyint] NULL,
+	[OperazioneAuto] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IsFormulario] [bit] NULL,
+	[IsIntegrazioneFir] [bit] NULL,
+	[IsProduttore] [bit] NULL,
+	[IsTrasportatore] [bit] NULL,
+	[IsDestinatario] [bit] NULL,
+	[IsIntermediario] [bit] NULL,
+	[IsAttivitaRs] [bit] NULL,
+	[IsEsito] [bit] NULL,
+	[IsAttivitaProvenienza] [bit] NULL,
+	[IsMateriale] [bit] NULL,
+	[IsStoccaggioIstantaneo] [bit] NULL,
  CONSTRAINT [PK_tblRifiutiOperazioni] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
+
+GO
+
+ALTER TABLE [dbo].[tblRifiutiOperazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiOperazioni_tblRifiutiOperazioni] FOREIGN KEY([OperazioneAuto])
+REFERENCES [dbo].[tblRifiutiOperazioni] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiOperazioni] CHECK CONSTRAINT [FK_tblRifiutiOperazioni_tblRifiutiOperazioni]

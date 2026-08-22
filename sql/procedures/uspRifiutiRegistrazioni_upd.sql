@@ -131,15 +131,15 @@ BEGIN
 			@lock = r.Lock,
 			@operazione = r.Operazione,
 			@idOperazione = m.IdOperazione,
-			@isIntegrazioneFir = og.IsIntegrazioneFir,
+			@isIntegrazioneFir = o.IsIntegrazioneFir,
 			@isFormularioAssociato = CAST(IIF(f.IdMovimento IS NOT NULL AND f.Lock < 2, 1, 0) AS BIT),
-			@isEsito = og.IsEsito,
-			@isMateriale = og.IsMateriale,
-			@isProduttore = og.IsProduttore,
-			@isTrasportatore = og.IsTrasportatore,
-			@isDestinatario = og.IsDestinatario,
-			@isIntermediario = og.IsIntermediario,
-			@isAttivitaRs = og.IsAttivitaRs,
+			@isEsito = o.IsEsito,
+			@isMateriale = o.IsMateriale,
+			@isProduttore = o.IsProduttore,
+			@isTrasportatore = o.IsTrasportatore,
+			@isDestinatario = o.IsDestinatario,
+			@isIntermediario = o.IsIntermediario,
+			@isAttivitaRs = o.IsAttivitaRs,
 			@totaleQuantitaAssegnata = CASE
 				WHEN @NessunaRegistrazioneAssociata = 1 THEN 0
 				ELSE
@@ -157,7 +157,7 @@ BEGIN
 		FROM
 			dbo.tblRifiutiRegistrazioni r
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-			LEFT JOIN dbo.tblRifiutiOperazioniRegistro og ON m.IdOperazione = og.Id
+			LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 			LEFT JOIN dbo.tblRifiutiFormulari f ON m.Id = f.IdMovimento
 		WHERE r.Id = @Id;
 
@@ -181,7 +181,7 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Normalizza @isMateriale: NULL (nessuna riga in tblRifiutiOperazioniRegistro) equivale a "non materiale"
+		-- Normalizza @isMateriale: NULL (nessuna corrispondenza in tblRifiutiOperazioni) equivale a "non materiale"
 		SET @isMateriale = ISNULL(@isMateriale, 0);
 
 		-- Normalizzazione parametri

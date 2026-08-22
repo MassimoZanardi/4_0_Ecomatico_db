@@ -50,22 +50,14 @@ BEGIN
 			FROM
 				dbo.tblRifiutiModelli r
 				INNER JOIN dbo.tblRifiutiOperazioni o ON r.IdOperazione = o.Id
+				LEFT JOIN dbo.tblRifiutiOperazioniRegistro og ON o.Id = og.Id
 			WHERE
 				r.IdRegistro = @idRegistro
 				AND o.IsRentri = ISNULL(@IsRentri, o.IsRentri)
 				AND
 					(
 					@IsFormulario IS NULL
-					OR
-						(
-						@IsFormulario = 0
-						AND NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiOperazioniFormulario WHERE Id = o.Id)
-						)
-					OR
-						(
-						@IsFormulario = 1
-						AND EXISTS (SELECT 1 FROM dbo.tblRifiutiOperazioniFormulario WHERE Id = o.Id)
-						)
+					OR ISNULL(og.IsFormulario, 0) = @IsFormulario
 					)
 				AND r.Lock = 0
 				AND

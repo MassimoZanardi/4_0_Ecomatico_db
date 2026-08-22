@@ -14,8 +14,8 @@ RETURN
 		s.Disabilitata
 	FROM
 		dbo.tblUtenti u
-	INNER JOIN dbo.tblSediInterne i ON u.IdDominio = i.IdDominio
-	INNER JOIN dbo.tblSedi s ON i.Id = s.Id
+		INNER JOIN dbo.tblSediInterne i ON u.IdDominio = i.IdDominio
+		INNER JOIN dbo.tblSedi s ON i.Id = s.Id
 	WHERE
 		u.Id = @IdUtente
 		AND u.IdRuolo = 'AD' -- AD = Amministratore
@@ -31,8 +31,8 @@ RETURN
 		s.Disabilitata
 	FROM
 		dbo.tblUtenti u
-	INNER JOIN dbo.tblSediInterne i ON u.IdDominio = i.IdDominio
-	INNER JOIN dbo.tblSedi s ON i.Id = s.IdParent
+		INNER JOIN dbo.tblSediInterne i ON u.IdDominio = i.IdDominio
+		INNER JOIN dbo.tblSedi s ON i.Id = s.IdParent
 	WHERE
 		u.Id = @IdUtente
 		AND u.IdRuolo = 'AD' -- AD = Amministratore
@@ -48,8 +48,8 @@ RETURN
 		s.Disabilitata
 	FROM
 		dbo.tblUtentiSediInterne u
-	INNER JOIN dbo.tblSedi s ON u.IdSede = s.Id
-	INNER JOIN dbo.tblSediInterne i ON s.IdAziendaInterna = i.Id
+		INNER JOIN dbo.tblSedi s ON u.IdSede = s.Id
+		INNER JOIN dbo.tblSediInterne i ON s.IdAziendaInterna = i.Id
 	WHERE
 		u.Id = @IdUtente
 		AND s.Lock = 0

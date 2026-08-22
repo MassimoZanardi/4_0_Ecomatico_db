@@ -53,8 +53,8 @@ BEGIN
 			t.Pos
 		FROM
 			dbo.tblTipiProprieta t
-		INNER JOIN dbo.tblProprieta p ON t.IdProprieta = p.Id
-		INNER JOIN dbo.tblTipiDati d ON p.IdTipoDato = d.Id
+			INNER JOIN dbo.tblProprieta p ON t.IdProprieta = p.Id
+			INNER JOIN dbo.tblTipiDati d ON p.IdTipoDato = d.Id
 		WHERE
 			t.Id = @Id
 			AND t.Lock = 0

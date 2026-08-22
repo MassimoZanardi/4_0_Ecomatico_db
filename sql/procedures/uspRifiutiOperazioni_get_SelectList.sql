@@ -33,9 +33,9 @@ BEGIN
 			o.Pos
 		FROM
 			dbo.tblRifiutiOperazioni o
-		INNER JOIN dbo.tblRifiutiOperazioniRegistriTipi ot ON o.Id = ot.Id
-		INNER JOIN dbo.tblRifiutiRegistri r ON ot.IdTipo = r.IdTipo
-		INNER JOIN dbo.tblSessioni e ON r.Id = e.IdRegistro
+			INNER JOIN dbo.tblRifiutiOperazioniRegistriTipi ot ON o.Id = ot.Id
+			INNER JOIN dbo.tblRifiutiRegistri r ON ot.IdTipo = r.IdTipo
+			INNER JOIN dbo.tblSessioni e ON r.Id = e.IdRegistro
 		WHERE
 			e.Id = @IdSessione
 			AND (@IsRentri IS NULL OR o.IsRentri = @IsRentri)

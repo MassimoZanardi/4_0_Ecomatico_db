@@ -59,8 +59,8 @@ BEGIN
 				Ruolo = r.Ruolo
 			FROM
 				dbo.tblPersone s
-			INNER JOIN dbo.tblSessioni e ON s.IdSede = e.IdAzienda
-			OUTER APPLY (
+				INNER JOIN dbo.tblSessioni e ON s.IdSede = e.IdAzienda
+				OUTER APPLY (
 					SELECT TOP 1 r.Id, Ruolo = r.Nome
 					FROM dbo.tblPersoneRuoli pr
 					INNER JOIN dbo.tblRuoli r ON pr.IdRuolo = r.Id
@@ -91,7 +91,7 @@ BEGIN
 				Ruolo = r.Ruolo
 			FROM
 				dbo.tblPersone s
-			OUTER APPLY (
+				OUTER APPLY (
 					SELECT TOP 1 r.Id, Ruolo = r.Nome
 					FROM dbo.tblPersoneRuoli pr
 					INNER JOIN dbo.tblRuoli r ON pr.IdRuolo = r.Id

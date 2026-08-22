@@ -42,7 +42,7 @@ BEGIN
 				(SELECT s.IdRegistro
 				 FROM
 					 dbo.tblSessioni s
-				 INNER JOIN dbo.tblRifiutiRegistri r ON s.IdRegistro = r.Id
+					 INNER JOIN dbo.tblRifiutiRegistri r ON s.IdRegistro = r.Id
 				 WHERE
 					 s.Id = @IdSessione
 					 AND r.Lock = 0
@@ -68,8 +68,8 @@ BEGIN
 				Pos = 1
 			FROM
 				dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i
-			INNER JOIN dbo.tblRifiutiRegistri r ON i.Id = r.IdSede
-			INNER JOIN dbo.tblSedi s ON r.IdSede = s.Id
+				INNER JOIN dbo.tblRifiutiRegistri r ON i.Id = r.IdSede
+				INNER JOIN dbo.tblSedi s ON r.IdSede = s.Id
 			WHERE
 				r.Lock = 0
 				AND (@Search IS NULL OR (r.Nome + ' - ' + s.Nome + ' ' + s.IndirizzoCompleto) LIKE '%' + @Search + '%')

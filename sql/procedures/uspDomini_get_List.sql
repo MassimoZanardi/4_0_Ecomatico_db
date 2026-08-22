@@ -64,13 +64,13 @@ BEGIN
 			RowsCount = COUNT(*) OVER ()
 		FROM
 			dbo.tblDomini d
-		OUTER APPLY (
+			OUTER APPLY (
 				SELECT TOP 1 u.Email
 				FROM dbo.tblUtenti u
 				WHERE
 					u.IdDominio = d.Id
 					AND u.[Master] = 1
-		) um
+			) um
 				OUTER APPLY (
 				SELECT TOP 1 e.[Data], u.Email
 				FROM dbo.tblUtentiLogin e

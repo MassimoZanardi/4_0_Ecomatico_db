@@ -58,9 +58,9 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiRegistrazioni r
-			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE r.Id = @Id)
 		BEGIN
 			SET @returnValue = -1;
@@ -99,8 +99,8 @@ BEGIN
 				@idOperazione = m.IdOperazione
 			FROM
 				dbo.tblRifiutiRegistrazioni r
-			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-			LEFT JOIN dbo.tblRifiutiFormulari f ON m.Id = f.IdMovimento
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				LEFT JOIN dbo.tblRifiutiFormulari f ON m.Id = f.IdMovimento
 			WHERE r.Id = @Id;
 
 			BEGIN TRANSACTION;
@@ -149,7 +149,7 @@ BEGIN
 				@idFormulario = f.Id
 			FROM
 				dbo.tblRifiutiRegistrazioni r
-			LEFT JOIN dbo.tblRifiutiFormulari f ON r.IdMovimento = f.IdMovimento
+				LEFT JOIN dbo.tblRifiutiFormulari f ON r.IdMovimento = f.IdMovimento
 			WHERE r.Id = @Id;
 
 			BEGIN TRANSACTION;

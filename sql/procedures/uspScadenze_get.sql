@@ -93,9 +93,9 @@ BEGIN
 			e.Lock
 		FROM
 			dbo.tblScadenze s
-		INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
-		LEFT JOIN dbo.tblRicorrenze r ON e.Id = r.Id
-		LEFT JOIN dbo.tblRicorrenzeEccezioni z ON e.Id = z.IdEvento
+			INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
+			LEFT JOIN dbo.tblRicorrenze r ON e.Id = r.Id
+			LEFT JOIN dbo.tblRicorrenzeEccezioni z ON e.Id = z.IdEvento
 													 AND z.Lock <= 2
 		WHERE
 			s.Id = @Id

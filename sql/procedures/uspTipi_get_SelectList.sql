@@ -46,9 +46,9 @@ BEGIN
 			Pos = 2
 		FROM
 			dbo.tblSessioni x
-		INNER JOIN dbo.tblCalendari c ON x.IdCalendario = c.Id
-		INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
-		INNER JOIN dbo.tblTipi t ON s.IdAziendaInterna = t.IdSede
+			INNER JOIN dbo.tblCalendari c ON x.IdCalendario = c.Id
+			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
+			INNER JOIN dbo.tblTipi t ON s.IdAziendaInterna = t.IdSede
 		WHERE
 			x.Id = @IdSessione
 			AND t.IdModulo = @IdModulo

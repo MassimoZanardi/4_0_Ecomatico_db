@@ -16,10 +16,10 @@ RETURN
 		Area = MIN(a.Nome)
 	FROM
 		dbo.ufnSedi_get_AziendeInterneByUtente_List(@IdUtente) ui
-	INNER JOIN dbo.tblAreeSediInterne ai ON ui.Id = ai.IdSede
-	INNER JOIN dbo.tblAree a ON ai.Id = a.Id
-	INNER JOIN dbo.tblAreeOsepe ae ON a.Id = ae.Id
-	INNER JOIN dbo.tblOggetti s ON ae.IdOsepe = s.Id
+		INNER JOIN dbo.tblAreeSediInterne ai ON ui.Id = ai.IdSede
+		INNER JOIN dbo.tblAree a ON ai.Id = a.Id
+		INNER JOIN dbo.tblAreeOsepe ae ON a.Id = ae.Id
+		INNER JOIN dbo.tblOggetti s ON ae.IdOsepe = s.Id
 	WHERE
 		a.Lock = 0
 		AND s.Lock = 0

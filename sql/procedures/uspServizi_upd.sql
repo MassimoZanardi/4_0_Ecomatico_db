@@ -310,7 +310,7 @@ BEGIN
 			SELECT TOP 3 @IdEvento, e.Id
 			FROM
 				dbo.tblEtichette e
-			INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value
+				INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value
 			WHERE v.value <> '';
 
 			UPDATE e
@@ -325,9 +325,9 @@ BEGIN
 				Lock = 0
 			FROM
 				dbo.tblEventi e
-			INNER JOIN dbo.tblServizi s ON e.Id = s.IdEvento
-			LEFT JOIN dbo.tblTipi t ON s.IdTipo = t.Id
-			LEFT JOIN dbo.tblSedi r ON s.IdRichiedente = r.Id
+				INNER JOIN dbo.tblServizi s ON e.Id = s.IdEvento
+				LEFT JOIN dbo.tblTipi t ON s.IdTipo = t.Id
+				LEFT JOIN dbo.tblSedi r ON s.IdRichiedente = r.Id
 			WHERE
 				e.Id = @IdEvento
 				AND e.Lock <= 2;

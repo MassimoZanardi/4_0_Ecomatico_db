@@ -35,8 +35,8 @@ BEGIN
 				@InternaEsterna = 'E'
 			FROM
 				dbo.tblSessioni e
-			INNER JOIN dbo.tblRifiutiRegistri r ON e.IdRegistro = r.Id
-			INNER JOIN dbo.tblSedi s ON r.IdSede = s.Id
+				INNER JOIN dbo.tblRifiutiRegistri r ON e.IdRegistro = r.Id
+				INNER JOIN dbo.tblSedi s ON r.IdSede = s.Id
 			WHERE e.Id = @IdSessione;
 		END
 		ELSE

@@ -42,8 +42,8 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiModelli m
-			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE m.Id = @Id)
 		BEGIN
 			SET @returnValue = -1;
@@ -78,8 +78,8 @@ BEGIN
 			m.Lock
 		FROM
 			dbo.tblRifiutiModelli m
-		LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
-		LEFT JOIN dbo.tblRifiutiOperazioniRegistro t ON o.Id = t.Id
+			LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+			LEFT JOIN dbo.tblRifiutiOperazioniRegistro t ON o.Id = t.Id
 		WHERE
 			m.Id = @Id
 			AND m.Lock <= 2;

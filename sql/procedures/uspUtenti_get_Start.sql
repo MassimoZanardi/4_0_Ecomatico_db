@@ -20,7 +20,7 @@ BEGIN
 			rtn = IIF(d.Logo IS NULL, '', d.Codice)
 		FROM
 			dbo.tblUtenti u
-		INNER JOIN dbo.tblDomini d ON u.IdDominio = d.Id
+			INNER JOIN dbo.tblDomini d ON u.IdDominio = d.Id
 		WHERE u.Email = @Email
 		ORDER BY
 			IIF(d.Logo IS NULL, 1, 0); -- preferisce il dominio con logo

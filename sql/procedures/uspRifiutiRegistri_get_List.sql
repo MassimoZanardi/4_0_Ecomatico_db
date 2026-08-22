@@ -47,8 +47,8 @@ BEGIN
 			RowsCount = COUNT(*) OVER ()
 		FROM
 			dbo.tblRifiutiRegistri r
-		INNER JOIN dbo.tblRifiutiRegistriTipi t ON r.IdTipo = t.Id
-		INNER JOIN dbo.tblSessioni e ON r.IdSede = e.IdSede
+			INNER JOIN dbo.tblRifiutiRegistriTipi t ON r.IdTipo = t.Id
+			INNER JOIN dbo.tblSessioni e ON r.IdSede = e.IdSede
 		WHERE
 			e.Id = @IdSessione
 			AND r.Lock = 0

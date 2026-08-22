@@ -22,14 +22,14 @@ BEGIN
 			SET Lock = 0
 			FROM
 				dbo.tblRifiutiFormulari i
-			INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id
+				INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id
 			WHERE c.IdSessione = @IdSessione;
 
 			-- Aggiorna il Log
 			DELETE i
 			FROM
 				dbo.tblIdLog i
-			INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id
+				INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id
 			WHERE
 				c.IdSessione = @IdSessione
 				AND i.Operazione = 'D';

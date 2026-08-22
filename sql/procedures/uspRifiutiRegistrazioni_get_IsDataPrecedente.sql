@@ -49,7 +49,7 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiRegistri g
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE g.Id = @IdRegistro)
 		BEGIN
 			SET @returnValue = -1;

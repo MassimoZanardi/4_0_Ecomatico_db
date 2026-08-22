@@ -53,7 +53,7 @@ BEGIN
 				Pos = 2
 			FROM
 				dbo.tblSessioni e
-			INNER JOIN dbo.tblSedi s ON e.IdAzienda = s.IdAziendaInterna
+				INNER JOIN dbo.tblSedi s ON e.IdAzienda = s.IdAziendaInterna
 			WHERE
 				e.Id = @IdSessione
 				AND s.Lock = 0

@@ -70,8 +70,8 @@ BEGIN
 				s.IdUnitaMisura
 			FROM
 				dbo.tblServiziOsepe a
-			INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
-			INNER JOIN dbo.tblPersone s ON a.IdOsepe = s.Id
+				INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
+				INNER JOIN dbo.tblPersone s ON a.IdOsepe = s.Id
 			WHERE
 				a.Id = @Id
 				AND o.Tipo = 'P'
@@ -88,8 +88,8 @@ BEGIN
 				s.IdUnitaMisura
 			FROM
 				dbo.tblServiziOsepe a
-			INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
-			INNER JOIN dbo.tblOggetti s ON a.IdOsepe = s.Id
+				INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
+				INNER JOIN dbo.tblOggetti s ON a.IdOsepe = s.Id
 			WHERE
 				a.Id = @Id
 				AND o.Tipo = 'O'

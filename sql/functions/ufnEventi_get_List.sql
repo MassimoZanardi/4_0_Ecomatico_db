@@ -54,18 +54,18 @@ RETURN
 					nm.NumberMaxFinestra))
 		FROM
 			dbo.tblEventi e
-		INNER JOIN dbo.tblEventiStati t ON e.IdStato = t.Id
-		INNER JOIN dbo.tblCalendari c ON e.IdCalendario = c.Id
-		INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
+			INNER JOIN dbo.tblEventiStati t ON e.IdStato = t.Id
+			INNER JOIN dbo.tblCalendari c ON e.IdCalendario = c.Id
+			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
 			-- Ricorrenza: NULL per eventi singoli
-		LEFT JOIN dbo.tblRicorrenze r ON e.Id = r.Id
+			LEFT JOIN dbo.tblRicorrenze r ON e.Id = r.Id
 			-- Eccezione: cerca le eccezioni dell'evento originale (z.Id = evento originale)
-		LEFT JOIN dbo.tblRicorrenzeEccezioni z ON e.Id = z.Id
+			LEFT JOIN dbo.tblRicorrenzeEccezioni z ON e.Id = z.Id
 													AND z.Lock = 0
 			-- FIX NumberMax: calcola una sola volta il DATEDIFF nell'unita'
 			-- corretta, poi deriva da esso sia il NumberMax originale sia
 			-- quello di finestra
-		OUTER APPLY (
+			OUTER APPLY (
 				SELECT Diff = CASE r.IdIntervallo
 					WHEN 'DD' THEN DATEDIFF(DAY, e.[Data], @AllaData)
 					WHEN 'WK' THEN DATEDIFF(WEEK, e.[Data], @AllaData)
@@ -74,7 +74,7 @@ RETURN
 					ELSE 0
 				END
 			) d
-		OUTER APPLY (
+			OUTER APPLY (
 				SELECT
 					NumberMaxOriginale = IIF(r.Id IS NULL, 0,
 						dbo.ufnEventi_get_NumberMax(e.[Data], r.DataFine, r.IdIntervallo, r.Frequenza, r.Ripetizioni)),
@@ -183,7 +183,7 @@ RETURN
 			AND e.IdIntervallo = 'YY'
 	) t
 	-- Esclude le date per cui esiste un'eccezione di ricorrenza attiva
-			 LEFT JOIN dbo.tblRicorrenzeEccezioni x
+		LEFT JOIN dbo.tblRicorrenzeEccezioni x
 		ON t.Id = x.Id
 		AND t.[Data] = x.[Data]
 		AND x.Lock = 0

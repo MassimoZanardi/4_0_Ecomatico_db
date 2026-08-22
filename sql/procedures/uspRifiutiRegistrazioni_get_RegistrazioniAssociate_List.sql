@@ -44,9 +44,9 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiRegistrazioni r
-			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE r.Id = @IdParent)
 		BEGIN
 			SET @returnValue = -1;
@@ -75,24 +75,24 @@ BEGIN
 				l.Pos
 			FROM
 				dbo.tblRifiutiRegistrazioniRelazioni l
-			INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
-			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-			LEFT JOIN (
+				INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				LEFT JOIN (
 					-- Somma delle quantità associate (figlie) per ogni registrazione padre
 					SELECT
 						l2.Id,
 						Quantita = SUM(l2.Quantita)
 					FROM
 						dbo.tblRifiutiRegistrazioniRelazioni l2
-					INNER JOIN dbo.tblRifiutiRegistrazioni p ON l2.IdParent = p.Id
-					INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
+						INNER JOIN dbo.tblRifiutiRegistrazioni p ON l2.IdParent = p.Id
+						INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
 					WHERE
 						p.Lock < 2
 						AND mp.Quantita > 0
 					GROUP BY l2.Id
 				) a ON r.Id = a.Id
-					LEFT JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
-					LEFT JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
+						LEFT JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
+						LEFT JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
 			WHERE
 				l.IdParent = @IdParent
 				AND l.Quantita >= 0

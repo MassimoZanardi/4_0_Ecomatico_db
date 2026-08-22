@@ -68,13 +68,13 @@ BEGIN
 					e.Visualizzazione
 				FROM
 					dbo.tblEtichette e
-				INNER JOIN dbo.tblColori c2 ON e.IdColore = c2.Id
+					INNER JOIN dbo.tblColori c2 ON e.IdColore = c2.Id
 				WHERE a.Id = e.Id FOR JSON PATH),
 			RowsCount = COUNT(*) OVER ()
 		FROM
 			dbo.tblEtichette a
-		INNER JOIN dbo.tblSessioni e ON a.IdSede = e.IdSede
-		LEFT JOIN dbo.tblColori c ON a.IdColore = c.Id
+			INNER JOIN dbo.tblSessioni e ON a.IdSede = e.IdSede
+			LEFT JOIN dbo.tblColori c ON a.IdColore = c.Id
 		WHERE
 			e.Id = @IdSessione
 			AND a.IdModulo = @IdModulo

@@ -52,7 +52,7 @@ BEGIN
 		SELECT @idSede = c.IdSede
 		FROM
 			dbo.tblRifiutiRegistri c
-		INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
 		WHERE c.Id = @Id;
 
 		IF @idSede IS NULL

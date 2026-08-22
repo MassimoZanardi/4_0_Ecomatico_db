@@ -52,7 +52,7 @@ BEGIN
 			RowsCount = COUNT(*) OVER ()
 		FROM
 			dbo.tblTipi t
-		INNER JOIN dbo.tblSessioni e ON t.IdSede = e.IdAzienda
+			INNER JOIN dbo.tblSessioni e ON t.IdSede = e.IdAzienda
 		WHERE
 			e.Id = @IdSessione
 			AND t.IdModulo = @IdModulo

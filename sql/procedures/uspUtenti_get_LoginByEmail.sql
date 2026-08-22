@@ -41,7 +41,7 @@ BEGIN
 			AS BIT)
 		FROM
 			dbo.tblUtenti u
-		OUTER APPLY (
+			OUTER APPLY (
 				SELECT TOP 1 [Password], [Data], Temporanea
 				FROM dbo.tblUtentiPassword
 				WHERE Id = u.Id

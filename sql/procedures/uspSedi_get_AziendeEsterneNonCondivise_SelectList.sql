@@ -36,8 +36,8 @@ BEGIN
 				Pos = 2
 			FROM
 				dbo.tblSessioni e
-			CROSS APPLY dbo.ufnSedi_get_AziendeEsterneNonCondiviseByDominio_List(e.IdDominio) i
-			INNER JOIN dbo.tblSedi s ON i.Id = s.Id
+				CROSS APPLY dbo.ufnSedi_get_AziendeEsterneNonCondiviseByDominio_List(e.IdDominio) i
+				INNER JOIN dbo.tblSedi s ON i.Id = s.Id
 			WHERE
 				e.Id = @IdSessione
 				AND s.Disabilitata = 0

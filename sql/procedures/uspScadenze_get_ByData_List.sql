@@ -86,9 +86,9 @@ BEGIN
 				e.Eccezione
 			FROM
 				dbo.tblScadenze s
-			INNER JOIN dbo.ufnEventi_get_List(@DallaData, @AllaData, @IdCalendario, @IdTipo) e
+				INNER JOIN dbo.ufnEventi_get_List(@DallaData, @AllaData, @IdCalendario, @IdTipo) e
 					ON s.IdEvento = e.Id
-			LEFT JOIN dbo.tblScadenze s2 ON e.IdEccezione = s2.IdEvento
+				LEFT JOIN dbo.tblScadenze s2 ON e.IdEccezione = s2.IdEvento
 		)
 		SELECT
 			tbl.Id, tbl.StatoValore, tbl.StatoDescrizione,

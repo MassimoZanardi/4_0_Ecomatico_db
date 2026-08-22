@@ -32,7 +32,7 @@ BEGIN
 			Pos = 1
 		FROM
 			dbo.tblComuni c
-		INNER JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
+			INNER JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
 		WHERE c.IdProvincia = @IdProvincia
 		ORDER BY
 			Pos, Nome;

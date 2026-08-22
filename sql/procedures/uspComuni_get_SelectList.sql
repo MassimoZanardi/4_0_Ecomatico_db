@@ -31,7 +31,7 @@ BEGIN
 				Pos = 1
 			FROM
 				dbo.tblComuni c
-			LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
+				LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
 			WHERE
 				c.Id = @IdSelected
 				AND c.Id <> REPLICATE('0', 6) -- esclude il caso nessuna selezione
@@ -45,7 +45,7 @@ BEGIN
 				Pos = 2
 			FROM
 				dbo.tblComuni c
-			LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
+				LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
 			WHERE
 				c.Id <> @IdSelected
 				AND (@Search IS NULL OR c.Nome LIKE '%' + @Search + '%' OR p.Nome LIKE '%' + @Search + '%')

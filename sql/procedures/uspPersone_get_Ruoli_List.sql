@@ -67,7 +67,7 @@ BEGIN
 			p.DataFine
 		FROM
 			dbo.tblPersoneRuoli p
-		INNER JOIN dbo.tblRuoli r ON p.IdRuolo = r.Id
+			INNER JOIN dbo.tblRuoli r ON p.IdRuolo = r.Id
 		WHERE p.Id = @Id
 		ORDER BY
 			p.DataInizio DESC;

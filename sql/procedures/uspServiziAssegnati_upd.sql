@@ -167,9 +167,9 @@ BEGIN
 				Lock = 0
 			FROM
 				dbo.tblEventi e
-			INNER JOIN dbo.tblServizi s ON e.Id = s.IdEvento
-			LEFT JOIN dbo.tblTipi t ON s.IdTipo = t.Id
-			LEFT JOIN dbo.tblSedi r ON s.IdRichiedente = r.Id
+				INNER JOIN dbo.tblServizi s ON e.Id = s.IdEvento
+				LEFT JOIN dbo.tblTipi t ON s.IdTipo = t.Id
+				LEFT JOIN dbo.tblSedi r ON s.IdRichiedente = r.Id
 			WHERE
 				e.Id = @IdEvento
 				AND e.Lock <= 2;

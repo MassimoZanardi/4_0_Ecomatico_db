@@ -11,8 +11,8 @@ RETURN
 		i.IdDominio
 	FROM
 		dbo.tblUtenti u
-	INNER JOIN dbo.tblSediInterne i ON u.IdDominio = i.IdDominio
-	INNER JOIN dbo.tblSedi s ON i.Id = s.Id
+		INNER JOIN dbo.tblSediInterne i ON u.IdDominio = i.IdDominio
+		INNER JOIN dbo.tblSedi s ON i.Id = s.Id
 	WHERE
 		u.Id = @IdUtente
 		AND u.IdRuolo = 'AD' -- AD = Amministratore
@@ -25,9 +25,9 @@ RETURN
 		i.IdDominio
 	FROM
 		dbo.tblUtenti u
-	INNER JOIN dbo.tblUtentiSediInterne ui ON u.Id = ui.Id
-	INNER JOIN dbo.tblSedi s ON ui.IdSede = s.Id
-	INNER JOIN dbo.tblSediInterne i ON s.IdAziendaInterna = i.Id
+		INNER JOIN dbo.tblUtentiSediInterne ui ON u.Id = ui.Id
+		INNER JOIN dbo.tblSedi s ON ui.IdSede = s.Id
+		INNER JOIN dbo.tblSediInterne i ON s.IdAziendaInterna = i.Id
 	WHERE
 		u.Id = @IdUtente
 		AND u.IdRuolo <> 'AD'

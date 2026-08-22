@@ -22,8 +22,8 @@ FROM
 			Quantita = SUM(l.Quantita)
 		FROM
 			dbo.tblRifiutiRegistrazioniRelazioni l
-		INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
-		INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
+			INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
+			INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
 		WHERE
 			p.Lock < 2
 			AND mp.Quantita > 0

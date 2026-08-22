@@ -73,7 +73,7 @@ BEGIN
 				e.Id
 			FROM
 				STRING_SPLIT(@Eer, ';') s
-			INNER JOIN dbo.tblRifiutiEer e ON s.value = e.Id
+				INNER JOIN dbo.tblRifiutiEer e ON s.value = e.Id
 			WHERE
 				s.value <> ''
 				AND e.Id NOT IN (SELECT IdEer FROM dbo.tblRifiutiAutorizzazioniEer WHERE Id = @Id);

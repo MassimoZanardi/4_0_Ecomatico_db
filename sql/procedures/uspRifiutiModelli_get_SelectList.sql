@@ -49,7 +49,7 @@ BEGIN
 				Pos = 2
 			FROM
 				dbo.tblRifiutiModelli r
-			INNER JOIN dbo.tblRifiutiOperazioni o ON r.IdOperazione = o.Id
+				INNER JOIN dbo.tblRifiutiOperazioni o ON r.IdOperazione = o.Id
 			WHERE
 				r.IdRegistro = @idRegistro
 				AND o.IsRentri = ISNULL(@IsRentri, o.IsRentri)

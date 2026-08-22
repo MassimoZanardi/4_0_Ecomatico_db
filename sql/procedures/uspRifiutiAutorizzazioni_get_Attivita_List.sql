@@ -53,15 +53,15 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiAutorizzazioni a
-			INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
+				INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
 			WHERE a.Id = @Id)
 		AND NOT EXISTS (
 			SELECT 1
 			FROM
 				dbo.tblRifiutiAutorizzazioni a
-			INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
-			INNER JOIN dbo.ufnSedi_get_AziendeEsterneCondiviseByUtente_List(@idUtente) x ON s.Id = x.Id
+				INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+				INNER JOIN dbo.ufnSedi_get_AziendeEsterneCondiviseByUtente_List(@idUtente) x ON s.Id = x.Id
 			WHERE
 				a.Id = @Id
 				AND x.IdAziendaInterna <> @idAzienda
@@ -79,7 +79,7 @@ BEGIN
 			Description = c.Nome
 		FROM
 			dbo.tblRifiutiAttivitaRecuperoSmaltimento c
-		LEFT JOIN dbo.tblRifiutiAutorizzazioniAttivita a ON c.Id = a.IdAttivita AND a.Id = @Id
+			LEFT JOIN dbo.tblRifiutiAutorizzazioniAttivita a ON c.Id = a.IdAttivita AND a.Id = @Id
 		ORDER BY
 			c.Id;
 

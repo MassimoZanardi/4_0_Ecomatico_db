@@ -152,15 +152,15 @@ BEGIN
 			s.Lock
 		FROM
 			dbo.tblSedi s
-		LEFT JOIN dbo.tblSediIndirizzi si ON s.Id = si.Id
-		LEFT JOIN dbo.tblIndirizzi ind ON si.IdIndirizzo = ind.Id
-		LEFT JOIN dbo.tblSediRecapiti t0 ON s.Id = t0.Id AND t0.IdRecapito = 'T0'
-		LEFT JOIN dbo.tblSediRecapiti t1 ON s.Id = t1.Id AND t1.IdRecapito = 'T1'
-		LEFT JOIN dbo.tblSediRecapiti t2 ON s.Id = t2.Id AND t2.IdRecapito = 'T2'
-		LEFT JOIN dbo.tblSediRecapiti m0 ON s.Id = m0.Id AND m0.IdRecapito = 'M0'
-		LEFT JOIN dbo.tblSediRecapiti m1 ON s.Id = m1.Id AND m1.IdRecapito = 'M1'
-		LEFT JOIN dbo.tblSediRecapiti m2 ON s.Id = m2.Id AND m2.IdRecapito = 'M2'
-		OUTER APPLY (
+			LEFT JOIN dbo.tblSediIndirizzi si ON s.Id = si.Id
+			LEFT JOIN dbo.tblIndirizzi ind ON si.IdIndirizzo = ind.Id
+			LEFT JOIN dbo.tblSediRecapiti t0 ON s.Id = t0.Id AND t0.IdRecapito = 'T0'
+			LEFT JOIN dbo.tblSediRecapiti t1 ON s.Id = t1.Id AND t1.IdRecapito = 'T1'
+			LEFT JOIN dbo.tblSediRecapiti t2 ON s.Id = t2.Id AND t2.IdRecapito = 'T2'
+			LEFT JOIN dbo.tblSediRecapiti m0 ON s.Id = m0.Id AND m0.IdRecapito = 'M0'
+			LEFT JOIN dbo.tblSediRecapiti m1 ON s.Id = m1.Id AND m1.IdRecapito = 'M1'
+			LEFT JOIN dbo.tblSediRecapiti m2 ON s.Id = m2.Id AND m2.IdRecapito = 'M2'
+			OUTER APPLY (
 				SELECT TOP 1
 					ae.Id,
 					Area = a.Nome
@@ -169,7 +169,7 @@ BEGIN
 				WHERE
 					a.Lock = 0
 					AND (ae.IdOsepe = s.Id OR ae.IdOsepe = s.IdParent)
-		) c
+			) c
 		WHERE
 			s.Id = @Id
 			AND s.Lock <= 2;

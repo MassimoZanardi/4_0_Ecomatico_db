@@ -53,15 +53,15 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiAutorizzazioni a
-			INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
+				INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
 			WHERE a.Id = @Id)
 		AND NOT EXISTS (
 			SELECT 1
 			FROM
 				dbo.tblRifiutiAutorizzazioni a
-			INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
-			INNER JOIN dbo.ufnSedi_get_AziendeEsterneCondiviseByUtente_List(@idUtente) x ON s.Id = x.Id
+				INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+				INNER JOIN dbo.ufnSedi_get_AziendeEsterneCondiviseByUtente_List(@idUtente) x ON s.Id = x.Id
 			WHERE
 				a.Id = @Id
 				AND x.IdAziendaInterna <> @idAzienda
@@ -82,8 +82,8 @@ BEGIN
 			Description = e.Descrizione
 		FROM
 			dbo.tblRifiutiAutorizzazioniEer a
-		LEFT JOIN dbo.tblRifiutiEer e ON a.IdEer = e.Id
-		LEFT JOIN dbo.tblRifiutiAutorizzazioniTargheEerEsclusi t
+			LEFT JOIN dbo.tblRifiutiEer e ON a.IdEer = e.Id
+			LEFT JOIN dbo.tblRifiutiAutorizzazioniTargheEerEsclusi t
 				ON a.Id = t.Id AND e.Id = t.IdEer AND t.Targa = @Numero
 		WHERE a.Id = @Id
 		ORDER BY

@@ -49,7 +49,7 @@ BEGIN
 			m.Nome
 		FROM
 			dbo.tblDominiModuli d
-		INNER JOIN dbo.tblModuli m ON d.IdModulo = m.Id
+			INNER JOIN dbo.tblModuli m ON d.IdModulo = m.Id
 		WHERE
 			d.Id = @Id
 			AND m.Id NOT IN ('BAS', 'IMP')

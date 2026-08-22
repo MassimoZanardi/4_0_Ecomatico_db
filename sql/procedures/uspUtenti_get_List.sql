@@ -68,10 +68,10 @@ BEGIN
 			RowsCount = COUNT(*) OVER ()
 		FROM
 			dbo.tblUtenti u
-		INNER JOIN dbo.tblSessioni s ON u.IdDominio = s.IdDominio
-		INNER JOIN dbo.tblUtentiRuoli r ON u.IdRuolo = r.Id
-		INNER JOIN dbo.tblUtentiStati st ON u.IdStato = st.Id
-		OUTER APPLY (
+			INNER JOIN dbo.tblSessioni s ON u.IdDominio = s.IdDominio
+			INNER JOIN dbo.tblUtentiRuoli r ON u.IdRuolo = r.Id
+			INNER JOIN dbo.tblUtentiStati st ON u.IdStato = st.Id
+			OUTER APPLY (
 				SELECT TOP 1 l.[Data]
 				FROM dbo.tblUtentiLogin l
 				WHERE l.Id = u.Id

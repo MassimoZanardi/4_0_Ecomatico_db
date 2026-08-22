@@ -44,10 +44,10 @@ BEGIN
 		SELECT @RowsCount = COUNT(*)
 		FROM
 			dbo.tblRifiutiModelli m
-		INNER JOIN dbo.tblSessioni ses ON m.IdRegistro = ses.IdRegistro
-		LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
-		LEFT JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
-		LEFT JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
+			INNER JOIN dbo.tblSessioni ses ON m.IdRegistro = ses.IdRegistro
+			LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+			LEFT JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
+			LEFT JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
 		WHERE
 			ses.Id = @IdSessione
 			AND m.Lock = 0
@@ -67,10 +67,10 @@ BEGIN
 			m.Etichette
 		FROM
 			dbo.tblRifiutiModelli m
-		INNER JOIN dbo.tblSessioni ses ON m.IdRegistro = ses.IdRegistro
-		LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
-		LEFT JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
-		LEFT JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
+			INNER JOIN dbo.tblSessioni ses ON m.IdRegistro = ses.IdRegistro
+			LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+			LEFT JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
+			LEFT JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
 		WHERE
 			ses.Id = @IdSessione
 			AND m.Lock = 0

@@ -33,8 +33,8 @@ BEGIN
 					m.Pos
 				FROM
 					dbo.tblMenu m
-				INNER JOIN dbo.tblPagine p ON m.IdPagina = p.Id
-				INNER JOIN dbo.ufnFunzioni_get_ByUtente_List(@IdUtente) f
+					INNER JOIN dbo.tblPagine p ON m.IdPagina = p.Id
+					INNER JOIN dbo.ufnFunzioni_get_ByUtente_List(@IdUtente) f
 											  ON p.IdFunzione = f.Id
 			)
 			SELECT @Menu = (
@@ -56,7 +56,7 @@ BEGIN
 					)
 				FROM
 					dbo.tblMenu m
-				INNER JOIN dbo.tblPagineAree a ON m.IdArea = a.Id
+					INNER JOIN dbo.tblPagineAree a ON m.IdArea = a.Id
 				WHERE
 					EXISTS (SELECT 1 FROM cte s WHERE s.IdParent = m.Id)
 					AND (

@@ -57,8 +57,8 @@ END
 IF EXISTS (SELECT 1
 	FROM
 		dbo.tblRifiutiRegistrazioni r
-	INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-	INNER JOIN dbo.tblSessioni e ON m.IdRegistro = e.IdRegistro
+		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+		INNER JOIN dbo.tblSessioni e ON m.IdRegistro = e.IdRegistro
 	WHERE
 		e.Id = @IdSessione
 		AND r.Lock < 2
@@ -81,8 +81,8 @@ FROM
 		NumeroBase = ROW_NUMBER() OVER (ORDER BY r.[Data], r.Numero)
 	FROM
 		dbo.tblRifiutiRegistrazioni r
-	INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-	INNER JOIN dbo.tblSessioni e ON m.IdRegistro = e.IdRegistro
+		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+		INNER JOIN dbo.tblSessioni e ON m.IdRegistro = e.IdRegistro
 	WHERE
 		e.Id = @IdSessione
 		AND r.Lock < 2

@@ -240,7 +240,7 @@ BEGIN
 				e.Id
 			FROM
 				dbo.tblEtichette e
-			INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value
+				INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value
 			WHERE v.value <> '';
 
 			UPDATE e
@@ -255,8 +255,8 @@ BEGIN
 				Lock = 0
 			FROM
 				dbo.tblEventi e
-			INNER JOIN dbo.tblScadenze s ON e.Id = s.IdEvento
-			LEFT JOIN dbo.tblTipi t ON s.IdTipo = t.Id
+				INNER JOIN dbo.tblScadenze s ON e.Id = s.IdEvento
+				LEFT JOIN dbo.tblTipi t ON s.IdTipo = t.Id
 			WHERE
 				e.Id = @IdEvento
 				AND e.Lock <= 2;

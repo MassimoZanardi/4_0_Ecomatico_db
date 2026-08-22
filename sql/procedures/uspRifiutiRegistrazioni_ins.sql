@@ -65,7 +65,7 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiFormulari f
-			INNER JOIN dbo.tblRifiutiRegistrazioni r ON f.IdMovimento = r.IdMovimento
+				INNER JOIN dbo.tblRifiutiRegistrazioni r ON f.IdMovimento = r.IdMovimento
 			WHERE
 				f.Id = @IdFormulario
 				AND r.Lock < 2
@@ -80,9 +80,9 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiFormulari f
-			INNER JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id
-			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				INNER JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE f.Id = @IdFormulario)
 		BEGIN
 			SET @returnValue = -1;
@@ -94,8 +94,8 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiModelli m
-			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE m.Id = @IdModello)
 		BEGIN
 			SET @returnValue = -1;
@@ -190,7 +190,7 @@ BEGIN
 					SELECT @returnId, @idMovimento, o.Operazione, m.Note, 2
 					FROM
 						dbo.tblRifiutiModelli m
-					INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+						INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 					WHERE m.Id = @IdModello;
 
 					IF EXISTS (SELECT 1
@@ -215,7 +215,7 @@ BEGIN
 					@IdOperazione = m.IdOperazione
 				FROM
 					dbo.tblRifiutiFormulari f
-				LEFT JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id
+					LEFT JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id
 				WHERE f.Id = @IdFormulario;
 
 				IF @idMovimento IS NULL

@@ -55,15 +55,15 @@ BEGIN
 				s.Codice
 			FROM
 				dbo.tblOggetti s
-			INNER JOIN dbo.tblSessioni e ON s.IdSede = e.IdAzienda
-			OUTER APPLY (
+				INNER JOIN dbo.tblSessioni e ON s.IdSede = e.IdAzienda
+				OUTER APPLY (
 					SELECT TOP 1 a.Id, Area = a.Nome
 					FROM dbo.tblAreeOsepe ae
 					INNER JOIN dbo.tblAree a ON ae.Id = a.Id
 					WHERE
 						a.Lock = 0
 						AND ae.IdOsepe = s.Id
-			) c
+				) c
 			WHERE
 				e.Id = @IdSessione
 				AND s.Lock = 0
@@ -79,7 +79,7 @@ BEGIN
 				s.Codice
 			FROM
 				dbo.tblOggetti s
-			CROSS APPLY (
+				CROSS APPLY (
 					SELECT TOP 1 x.Id, x.IdArea, x.Area
 					FROM dbo.tblSessioni e
 					CROSS APPLY dbo.ufnOggetti_get_CondivisiByUtente_List(e.IdUtente) x
@@ -87,7 +87,7 @@ BEGIN
 						e.Id = @IdSessione
 						AND x.Id = s.Id
 						AND x.IdSede <> e.IdAzienda
-			) c
+				) c
 		)
 		SELECT
 			tbl.Id,

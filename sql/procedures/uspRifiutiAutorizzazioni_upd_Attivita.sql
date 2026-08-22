@@ -73,7 +73,7 @@ BEGIN
 					a.Id
 				FROM
 					STRING_SPLIT(@Attivita, ';') s
-				INNER JOIN dbo.tblRifiutiAttivitaRecuperoSmaltimento a ON s.value = a.Id
+					INNER JOIN dbo.tblRifiutiAttivitaRecuperoSmaltimento a ON s.value = a.Id
 				WHERE s.value <> '';
 
 		COMMIT TRANSACTION;

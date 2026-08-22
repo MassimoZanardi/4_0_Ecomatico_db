@@ -13,14 +13,14 @@ RETURN
 		s.Disabilitata
 	FROM
 		dbo.ufnSedi_get_AziendeInterneByUtente_List(@IdUtente) i
-	INNER JOIN dbo.tblPersone s ON i.Id = s.IdSede
+		INNER JOIN dbo.tblPersone s ON i.Id = s.IdSede
 	WHERE
 		s.Lock = 0
 		AND NOT EXISTS (
 			SELECT 1
 			FROM
 				dbo.tblAreeOsepe ae
-			INNER JOIN dbo.tblAree a ON ae.Id = a.Id
+				INNER JOIN dbo.tblAree a ON ae.Id = a.Id
 			WHERE a.Lock = 0 AND ae.IdOsepe = s.Id -- esclude persone condivise tramite area
 		)
 );

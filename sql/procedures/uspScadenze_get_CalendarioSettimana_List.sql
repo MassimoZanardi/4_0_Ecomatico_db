@@ -76,8 +76,8 @@ BEGIN
 			SELECT c.[Data], c.Giorno, c.Ora, s.Id, t.IdEvento, t.Scaduto, t.Eseguito, t.AvvisoTesto
 			FROM
 				cteCalendario c
-			LEFT JOIN #tEventi t ON t.[Data] BETWEEN c.[Data] AND c.DataFine
-			LEFT JOIN dbo.tblScadenze s ON t.IdEvento = s.IdEvento
+				LEFT JOIN #tEventi t ON t.[Data] BETWEEN c.[Data] AND c.DataFine
+				LEFT JOIN dbo.tblScadenze s ON t.IdEvento = s.IdEvento
 		)
 		SELECT
 			Riferimento = t0.Ora,

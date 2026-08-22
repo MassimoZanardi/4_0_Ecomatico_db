@@ -89,16 +89,16 @@ BEGIN
 				c.Condivisioni
 			FROM
 				dbo.tblAreeOsepe a
-			INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
-			INNER JOIN dbo.tblSedi s ON a.IdOsepe = s.Id
-			OUTER APPLY (
+				INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
+				INNER JOIN dbo.tblSedi s ON a.IdOsepe = s.Id
+				OUTER APPLY (
 					SELECT Condivisioni = COUNT(*)
 					FROM dbo.tblAreeOsepe ae
 					INNER JOIN dbo.tblAree ar ON ae.Id = ar.Id
 					WHERE
 						ae.IdOsepe = s.Id
 						AND ar.Lock = 0
-			) c
+				) c
 			WHERE
 				a.Id = @Id
 				AND o.Tipo = 'S'
@@ -114,16 +114,16 @@ BEGIN
 				c.Condivisioni
 			FROM
 				dbo.tblAreeOsepe a
-			INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
-			INNER JOIN dbo.tblPersone s ON a.IdOsepe = s.Id
-			OUTER APPLY (
+				INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
+				INNER JOIN dbo.tblPersone s ON a.IdOsepe = s.Id
+				OUTER APPLY (
 					SELECT Condivisioni = COUNT(*)
 					FROM dbo.tblAreeOsepe ae
 					INNER JOIN dbo.tblAree ar ON ae.Id = ar.Id
 					WHERE
 						ae.IdOsepe = s.Id
 						AND ar.Lock = 0
-			) c
+				) c
 			WHERE
 				a.Id = @Id
 				AND o.Tipo = 'P'
@@ -139,16 +139,16 @@ BEGIN
 				c.Condivisioni
 			FROM
 				dbo.tblAreeOsepe a
-			INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
-			INNER JOIN dbo.tblOggetti s ON a.IdOsepe = s.Id
-			OUTER APPLY (
+				INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
+				INNER JOIN dbo.tblOggetti s ON a.IdOsepe = s.Id
+				OUTER APPLY (
 					SELECT Condivisioni = COUNT(*)
 					FROM dbo.tblAreeOsepe ae
 					INNER JOIN dbo.tblAree ar ON ae.Id = ar.Id
 					WHERE
 						ae.IdOsepe = s.Id
 						AND ar.Lock = 0
-			) c
+				) c
 			WHERE
 				a.Id = @Id
 				AND o.Tipo = 'O'

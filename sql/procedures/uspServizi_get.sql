@@ -96,13 +96,13 @@ BEGIN
 			FirmaRichiedente = fr.Firma
 		FROM
 			dbo.tblServizi s
-		INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
-		LEFT JOIN dbo.tblRicorrenze r ON e.Id = r.Id
-		LEFT JOIN dbo.tblRicorrenzeEccezioni z ON e.Id = z.IdEvento
+			INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
+			LEFT JOIN dbo.tblRicorrenze r ON e.Id = r.Id
+			LEFT JOIN dbo.tblRicorrenzeEccezioni z ON e.Id = z.IdEvento
 													 AND z.Lock <= 2
-		LEFT JOIN dbo.tblEventiFirme er ON e.Id = er.Id
+			LEFT JOIN dbo.tblEventiFirme er ON e.Id = er.Id
 													 AND er.IdTipo = 'R'
-		LEFT JOIN dbo.tblFirme fr ON er.IdFirma = fr.Id
+			LEFT JOIN dbo.tblFirme fr ON er.IdFirma = fr.Id
 		WHERE
 			s.Id = @Id
 			AND e.Lock <= 2;

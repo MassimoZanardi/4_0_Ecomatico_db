@@ -64,17 +64,17 @@ BEGIN
 				s.Note
 			FROM
 				dbo.tblSedi s
-			INNER JOIN dbo.tblSediTipi t ON s.IdTipo = t.Id
-			INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
-			OUTER APPLY (
+				INNER JOIN dbo.tblSediTipi t ON s.IdTipo = t.Id
+				INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
+				OUTER APPLY (
 					SELECT TOP 1 a.Id, Area = a.Nome
 					FROM
 						dbo.tblAreeOsepe ae
-					INNER JOIN dbo.tblAree a ON ae.Id = a.Id
+						INNER JOIN dbo.tblAree a ON ae.Id = a.Id
 					WHERE
 						a.Lock = 0
 						AND ae.IdOsepe = s.Id
-			) c
+				) c
 			WHERE
 				e.Id = @IdSessione
 				AND s.InternaEsterna = 'E'
@@ -94,17 +94,17 @@ BEGIN
 				s.Note
 			FROM
 				dbo.tblSedi s
-			INNER JOIN dbo.tblSediTipi t ON s.IdTipo = t.Id
-			CROSS APPLY (
+				INNER JOIN dbo.tblSediTipi t ON s.IdTipo = t.Id
+				CROSS APPLY (
 					SELECT TOP 1 x.Id, x.IdArea, x.Area
 					FROM
 						dbo.tblSessioni e
-					CROSS APPLY dbo.ufnSedi_get_AziendeEsterneCondiviseByUtente_List(e.IdUtente) x
+						CROSS APPLY dbo.ufnSedi_get_AziendeEsterneCondiviseByUtente_List(e.IdUtente) x
 					WHERE
 						e.Id = @IdSessione
 						AND x.Id = s.Id
 						AND x.IdAziendaInterna <> e.IdAzienda
-			) c
+				) c
 		)
 		SELECT
 			tbl.Id, tbl.StatoValore, tbl.StatoDescrizione,

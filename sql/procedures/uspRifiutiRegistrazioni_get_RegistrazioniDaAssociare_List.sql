@@ -60,7 +60,7 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiRegistri g
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE g.Id = @IdRegistro)
 		BEGIN
 			SET @returnValue = -1;
@@ -98,23 +98,23 @@ BEGIN
 		INTO #cte
 		FROM
 			dbo.tblRifiutiRegistrazioni r
-		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-		INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
-		LEFT JOIN (
+			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+			LEFT JOIN (
 				SELECT
 					l.Id,
 					Quantita = SUM(l.Quantita)
 				FROM
 					dbo.tblRifiutiRegistrazioniRelazioni l
-				INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
-				INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
+					INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
 				WHERE
 					p.Lock < 2
 					AND mp.Quantita > 0
 				GROUP BY l.Id
 			) a ON r.Id = a.Id
-				LEFT JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
-				LEFT JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
+					LEFT JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
+					LEFT JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
 		WHERE
 			r.Lock = 0
 			AND m.IdRegistro = @IdRegistro

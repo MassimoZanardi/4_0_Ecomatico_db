@@ -38,7 +38,7 @@ BEGIN
 				Pos = 1
 			FROM
 				dbo.tblComuni c
-			LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
+				LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
 			WHERE c.Nome LIKE '%' + ISNULL(@Nome, '') + '%'
 			ORDER BY
 				c.Nome -- TOP 20 deterministico con ORDER BY

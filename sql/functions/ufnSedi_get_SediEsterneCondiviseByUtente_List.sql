@@ -14,9 +14,9 @@ RETURN
 			Area = a.Nome
 		FROM
 			@i ui
-		INNER JOIN dbo.tblAreeSediInterne ai ON ui.Id = ai.IdSede
-		INNER JOIN dbo.tblAree a ON ai.Id = a.Id
-		INNER JOIN dbo.tblAreeOsepe ae ON a.Id = ae.Id
+			INNER JOIN dbo.tblAreeSediInterne ai ON ui.Id = ai.IdSede
+			INNER JOIN dbo.tblAree a ON ai.Id = a.Id
+			INNER JOIN dbo.tblAreeOsepe ae ON a.Id = ae.Id
 		WHERE a.Lock = 0),
 	-- Deduplicazione: se lo stesso Osepe appartiene a più aree,
 	-- si tiene una sola riga per Id (la prima per IdArea)
@@ -40,7 +40,7 @@ RETURN
 		c.Area
 	FROM
 		cteDedup c
-	INNER JOIN dbo.tblSedi s ON c.Id = s.Id
+		INNER JOIN dbo.tblSedi s ON c.Id = s.Id
 	WHERE s.Lock = 0
 	UNION ALL -- mutualmente esclusivi: s.Id ≠ s.IdParent per definizione
 
@@ -55,5 +55,5 @@ RETURN
 		c.Area
 	FROM
 		cteDedup c
-	INNER JOIN dbo.tblSedi s ON c.Id = s.IdParent
+		INNER JOIN dbo.tblSedi s ON c.Id = s.IdParent
 	WHERE s.Lock = 0);

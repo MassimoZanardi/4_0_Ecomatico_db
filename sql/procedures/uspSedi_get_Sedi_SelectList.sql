@@ -25,14 +25,14 @@ BEGIN
 		-- Normalizza: NULL → nessuna selezione
 		SET @IdSelected = ISNULL(NULLIF(LTRIM(RTRIM(@IdSelected)), ''), @idSediciZeri);
 
-		/*
-        *   Imposta @idAziendaInterna in funzione del Contesto
-        *   0 = Dominio    → IdDominio    (solo da sessione su dominio Master) -- non implementato
-        *   1 = Azienda    → IdAzienda
-        *   2 = Sede       → IdSede
-        *   3 = Registro   → IdRegistro
-        *   4 = Magazzino  → IdMagazzino
-        *   5 = Calendario → IdCalendario
+		/*
+        *   Imposta @idAziendaInterna in funzione del Contesto
+        *   0 = Dominio    → IdDominio    (solo da sessione su dominio Master) -- non implementato
+        *   1 = Azienda    → IdAzienda
+        *   2 = Sede       → IdSede
+        *   3 = Registro   → IdRegistro
+        *   4 = Magazzino  → IdMagazzino
+        *   5 = Calendario → IdCalendario
         */
 		DECLARE @idAziendaInterna CHAR(16);
 		IF @Contesto = 1 -- Azienda
@@ -40,7 +40,7 @@ BEGIN
 			SELECT @idAziendaInterna = s.IdAziendaInterna
 			FROM
 				dbo.tblSessioni e
-			INNER JOIN dbo.tblSedi s ON e.IdAzienda = s.Id
+				INNER JOIN dbo.tblSedi s ON e.IdAzienda = s.Id
 			WHERE e.Id = @IdSessione;
 		END
 		ELSE IF @Contesto = 2 -- Sede
@@ -48,7 +48,7 @@ BEGIN
 			SELECT @idAziendaInterna = s.IdAziendaInterna
 			FROM
 				dbo.tblSessioni e
-			INNER JOIN dbo.tblSedi s ON e.IdSede = s.Id
+				INNER JOIN dbo.tblSedi s ON e.IdSede = s.Id
 			WHERE e.Id = @IdSessione;
 		END
 		ELSE IF @Contesto = 3 -- Registro
@@ -56,8 +56,8 @@ BEGIN
 			SELECT @idAziendaInterna = s.IdAziendaInterna
 			FROM
 				dbo.tblSessioni e
-			INNER JOIN dbo.tblRifiutiRegistri c ON e.IdRegistro = c.Id
-			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
+				INNER JOIN dbo.tblRifiutiRegistri c ON e.IdRegistro = c.Id
+				INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
 			WHERE e.Id = @IdSessione;
 		END
 		ELSE IF @Contesto = 4 -- Magazzino
@@ -65,8 +65,8 @@ BEGIN
 			SELECT @idAziendaInterna = s.IdAziendaInterna
 			FROM
 				dbo.tblSessioni e
-			INNER JOIN dbo.tblMagazzini c ON e.IdMagazzino = c.Id
-			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
+				INNER JOIN dbo.tblMagazzini c ON e.IdMagazzino = c.Id
+				INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
 			WHERE e.Id = @IdSessione;
 		END
 		ELSE IF @Contesto = 5 -- Calendario
@@ -74,8 +74,8 @@ BEGIN
 			SELECT @idAziendaInterna = s.IdAziendaInterna
 			FROM
 				dbo.tblSessioni e
-			INNER JOIN dbo.tblCalendari c ON e.IdCalendario = c.Id
-			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
+				INNER JOIN dbo.tblCalendari c ON e.IdCalendario = c.Id
+				INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
 			WHERE e.Id = @IdSessione;
 		END
 
@@ -106,8 +106,8 @@ BEGIN
 				Pos = 2
 			FROM
 				dbo.tblSessioni e
-			CROSS APPLY dbo.ufnSedi_get_SediByUtente_List(e.IdUtente) u
-			INNER JOIN dbo.tblSedi s ON u.Id = s.Id
+				CROSS APPLY dbo.ufnSedi_get_SediByUtente_List(e.IdUtente) u
+				INNER JOIN dbo.tblSedi s ON u.Id = s.Id
 			WHERE
 				e.Id = @IdSessione
 				AND ( (u.IdDominio = e.IdDominio AND u.Condivisa = 1) OR u.IdAziendaInterna = ISNULL(@idAziendaInterna, u.IdAziendaInterna) )

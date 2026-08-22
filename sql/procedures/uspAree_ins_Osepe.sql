@@ -79,9 +79,9 @@ BEGIN
 			END
 		FROM
 			dbo.tblOsepe o
-		LEFT JOIN dbo.tblSedi s ON o.Tipo = 'S' AND o.Id = s.Id
-		LEFT JOIN dbo.tblPersone p ON o.Tipo = 'P' AND o.Id = p.Id
-		LEFT JOIN dbo.tblOggetti g ON o.Tipo = 'O' AND o.Id = g.Id
+			LEFT JOIN dbo.tblSedi s ON o.Tipo = 'S' AND o.Id = s.Id
+			LEFT JOIN dbo.tblPersone p ON o.Tipo = 'P' AND o.Id = p.Id
+			LEFT JOIN dbo.tblOggetti g ON o.Tipo = 'O' AND o.Id = g.Id
 		WHERE o.Id = @IdOsepe;
 
 		IF NOT EXISTS (

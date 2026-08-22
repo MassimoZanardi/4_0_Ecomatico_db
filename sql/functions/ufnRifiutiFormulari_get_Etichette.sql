@@ -14,8 +14,8 @@ BEGIN
 			e.Visualizzazione
 		FROM
 			dbo.tblRifiutiFormulariEtichette t
-		INNER JOIN dbo.tblEtichette e ON t.IdEtichetta = e.Id
-		INNER JOIN dbo.tblColori c ON e.IdColore = c.Id
+			INNER JOIN dbo.tblEtichette e ON t.IdEtichetta = e.Id
+			INNER JOIN dbo.tblColori c ON e.IdColore = c.Id
 		WHERE
 			t.Id = @Id
 			AND e.Lock = 0

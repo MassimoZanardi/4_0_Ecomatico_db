@@ -67,15 +67,15 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiAutorizzazioni a
-			INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
+				INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
 			WHERE a.Id = @Id)
 		AND NOT EXISTS (
 			SELECT 1
 			FROM
 				dbo.tblRifiutiAutorizzazioni a
-			INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
-			INNER JOIN dbo.ufnSedi_get_AziendeEsterneCondiviseByUtente_List(@idUtente) x ON s.Id = x.Id
+				INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+				INNER JOIN dbo.ufnSedi_get_AziendeEsterneCondiviseByUtente_List(@idUtente) x ON s.Id = x.Id
 			WHERE
 				a.Id = @Id
 				AND x.IdAziendaInterna <> @idAzienda
@@ -118,19 +118,19 @@ BEGIN
 			a.Lock
 		FROM
 			dbo.tblRifiutiAutorizzazioni a
-		INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
-		INNER JOIN dbo.tblRifiutiRuoli r ON a.IdRuolo = r.Id
-		OUTER APPLY (
+			INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+			INNER JOIN dbo.tblRifiutiRuoli r ON a.IdRuolo = r.Id
+			OUTER APPLY (
 				SELECT TOP 1
 					ae.Id,
 					Area = ar.Nome
 				FROM
 					dbo.tblAreeOsepe ae
-				INNER JOIN dbo.tblAree ar ON ae.Id = ar.Id
+					INNER JOIN dbo.tblAree ar ON ae.Id = ar.Id
 				WHERE
 					ar.Lock = 0
 					AND (ae.IdOsepe = s.Id OR ae.IdOsepe = s.IdParent)
-		) c
+			) c
 		WHERE
 			a.Id = @Id
 			AND a.Lock <= 2;

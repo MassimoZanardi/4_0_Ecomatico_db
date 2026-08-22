@@ -68,7 +68,7 @@ BEGIN
 			Selected = CAST(IIF(sel.IdEtichetta IS NULL, 0, 1) AS BIT)
 		FROM
 			dbo.tblEtichette t
-		LEFT JOIN (
+			LEFT JOIN (
 				SELECT e.IdEtichetta
 				FROM dbo.tblServizi s
 				LEFT JOIN dbo.tblEventiEtichette e ON s.IdEvento = e.Id

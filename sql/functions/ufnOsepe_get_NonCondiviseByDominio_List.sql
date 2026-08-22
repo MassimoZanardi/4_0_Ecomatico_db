@@ -17,9 +17,9 @@ RETURN
 		ImpiegabileServizi = CAST(0 AS BIT) -- ✅ aggiunto per coerenza
 	FROM
 		dbo.tblSediInterne i
-	INNER JOIN dbo.tblSedi si ON i.Id = si.Id
-	INNER JOIN dbo.tblSediEsterne se ON si.Id = se.IdSedeInterna
-	INNER JOIN dbo.tblSedi s ON se.Id = s.Id
+		INNER JOIN dbo.tblSedi si ON i.Id = si.Id
+		INNER JOIN dbo.tblSediEsterne se ON si.Id = se.IdSedeInterna
+		INNER JOIN dbo.tblSedi s ON se.Id = s.Id
 	WHERE
 		i.IdDominio = @IdDominio -- ✅ filtro dominio
 		AND si.Lock = 0
@@ -38,8 +38,8 @@ RETURN
 		s.ImpiegabileServizi
 	FROM
 		dbo.tblSediInterne i
-	INNER JOIN dbo.tblSedi si ON i.Id = si.Id
-	INNER JOIN dbo.tblPersone s ON i.Id = s.IdSede
+		INNER JOIN dbo.tblSedi si ON i.Id = si.Id
+		INNER JOIN dbo.tblPersone s ON i.Id = s.IdSede
 	WHERE
 		i.IdDominio = @IdDominio -- ✅ aggiunto: mancava
 		AND si.Lock = 0
@@ -58,8 +58,8 @@ RETURN
 		s.ImpiegabileServizi
 	FROM
 		dbo.tblSediInterne i
-	INNER JOIN dbo.tblSedi si ON i.Id = si.Id
-	INNER JOIN dbo.tblOggetti s ON i.Id = s.IdSede
+		INNER JOIN dbo.tblSedi si ON i.Id = si.Id
+		INNER JOIN dbo.tblOggetti s ON i.Id = s.IdSede
 	WHERE
 		i.IdDominio = @IdDominio -- ✅ aggiunto: mancava
 		AND si.Lock = 0

@@ -9,8 +9,8 @@ BEGIN
 	IF EXISTS (SELECT 1
 		FROM
 			dbo.tblUtenti u
-		INNER JOIN dbo.tblDomini d ON u.IdDominio = d.Id
-		INNER JOIN dbo.tblSessioni s ON u.Id = s.IdUtente
+			INNER JOIN dbo.tblDomini d ON u.IdDominio = d.Id
+			INNER JOIN dbo.tblSessioni s ON u.Id = s.IdUtente
 		WHERE
 			s.Id = @IdSessione
 			AND d.[Master] = 1

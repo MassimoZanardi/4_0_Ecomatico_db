@@ -62,7 +62,7 @@ BEGIN
 			RowsCount = COUNT(*) OVER ()
 		FROM
 			dbo.tblCalendari a
-		INNER JOIN dbo.tblSessioni e ON a.IdSede = e.IdSede
+			INNER JOIN dbo.tblSessioni e ON a.IdSede = e.IdSede
 		WHERE
 			e.Id = @IdSessione
 			AND a.IdModulo = @IdModulo

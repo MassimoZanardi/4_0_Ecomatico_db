@@ -44,7 +44,7 @@ BEGIN
 			c.Id
 		FROM
 			dbo.tblComuni c
-		LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
+			LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
 		WHERE
 			c.Nome = @nomeBase
 			AND (@sigla IS NULL OR p.Sigla = @sigla)

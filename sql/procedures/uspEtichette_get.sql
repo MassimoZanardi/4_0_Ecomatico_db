@@ -86,7 +86,7 @@ BEGIN
 			e.Lock
 		FROM
 			dbo.tblEtichette e
-		LEFT JOIN dbo.tblColori c ON e.IdColore = c.Id
+			LEFT JOIN dbo.tblColori c ON e.IdColore = c.Id
 		WHERE e.Id = @Id;
 
 	END TRY

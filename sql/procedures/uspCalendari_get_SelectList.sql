@@ -83,9 +83,9 @@ BEGIN
 				Pos = 1
 			FROM
 				dbo.tblSessioni e
-			CROSS APPLY dbo.ufnSedi_get_SediInterneByUtente_List(e.IdUtente) i
-			INNER JOIN dbo.tblCalendari c ON i.Id = c.IdSede
-			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
+				CROSS APPLY dbo.ufnSedi_get_SediInterneByUtente_List(e.IdUtente) i
+				INNER JOIN dbo.tblCalendari c ON i.Id = c.IdSede
+				INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
 			WHERE
 				e.Id = @IdSessione
 				AND c.Id = @IdSelected
@@ -102,9 +102,9 @@ BEGIN
 				Pos = 2
 			FROM
 				dbo.tblSessioni e
-			CROSS APPLY dbo.ufnSedi_get_SediInterneByUtente_List(e.IdUtente) i
-			INNER JOIN dbo.tblCalendari c ON i.Id = c.IdSede
-			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
+				CROSS APPLY dbo.ufnSedi_get_SediInterneByUtente_List(e.IdUtente) i
+				INNER JOIN dbo.tblCalendari c ON i.Id = c.IdSede
+				INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
 			WHERE
 				e.Id = @IdSessione
 				AND c.IdModulo = @IdModulo

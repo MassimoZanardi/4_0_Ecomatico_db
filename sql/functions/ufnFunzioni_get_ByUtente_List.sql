@@ -15,8 +15,8 @@ RETURN
 		Permesso = 2
 	FROM
 		dbo.tblUtenti u
-	INNER JOIN dbo.tblDomini d ON u.IdDominio = d.Id
-	INNER JOIN dbo.tblFunzioni f ON f.Attiva = 1
+		INNER JOIN dbo.tblDomini d ON u.IdDominio = d.Id
+		INNER JOIN dbo.tblFunzioni f ON f.Attiva = 1
 	WHERE
 		u.Id = @IdUtente
 		AND u.IdRuolo = 'AD'
@@ -45,10 +45,10 @@ RETURN
 		END
 	FROM
 		dbo.tblUtenti u
-	INNER JOIN dbo.tblDomini d ON u.IdDominio = d.Id
-	INNER JOIN dbo.tblFunzioni f ON f.Attiva = 1
+		INNER JOIN dbo.tblDomini d ON u.IdDominio = d.Id
+		INNER JOIN dbo.tblFunzioni f ON f.Attiva = 1
 										   AND f.[Master] = 0
-	LEFT JOIN dbo.tblUtentiFunzioni uf ON u.Id = uf.Id
+		LEFT JOIN dbo.tblUtentiFunzioni uf ON u.Id = uf.Id
 										   AND uf.IdFunzione = f.Id
 	WHERE
 		u.Id = @IdUtente

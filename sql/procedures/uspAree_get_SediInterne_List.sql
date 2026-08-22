@@ -81,7 +81,7 @@ BEGIN
 			s.IndirizzoCompleto
 		FROM
 			dbo.tblAreeSediInterne a
-		INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+			INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
 		WHERE
 			a.Id = @Id
 			AND s.Lock = 0

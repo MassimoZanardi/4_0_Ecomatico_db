@@ -65,8 +65,8 @@ BEGIN
 			@idUtente = e.IdUtente
 		FROM
 			dbo.tblSessioni e
-		INNER JOIN dbo.tblRifiutiRegistri r ON e.IdRegistro = r.Id
-		INNER JOIN dbo.tblSedi s ON r.IdSede = s.Id
+			INNER JOIN dbo.tblRifiutiRegistri r ON e.IdRegistro = r.Id
+			INNER JOIN dbo.tblSedi s ON r.IdSede = s.Id
 		WHERE e.Id = @IdSessione;
 
 		-- Calcolo unico delle sedi visibili all'utente: evita di richiamare
@@ -97,7 +97,7 @@ BEGIN
 					Pos = 1
 				FROM
 					dbo.tblRifiutiAutorizzazioni a
-				INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+					INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
 				WHERE
 					a.Id = @IdSelected
 					AND a.Id <> @idSediciZeri
@@ -110,8 +110,8 @@ BEGIN
 					Pos = 2
 				FROM
 					#sediUtente u
-				INNER JOIN dbo.tblRifiutiAutorizzazioni a ON u.Id = a.IdSede
-				INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+					INNER JOIN dbo.tblRifiutiAutorizzazioni a ON u.Id = a.IdSede
+					INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
 				WHERE
 					( (@isSede = 1 AND a.IdSede = @idSede) OR (@isSede = 0 AND u.IdAziendaInterna = @idSede) OR (@isSede = 0 AND u.Condivisa = 1) )
 					AND a.Disabilitata = 0
@@ -146,7 +146,7 @@ BEGIN
 					Pos = 1
 				FROM
 					dbo.tblRifiutiAutorizzazioni a
-				INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+					INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
 				WHERE
 					a.Id = @IdSelected
 					AND a.Id <> @idSediciZeri
@@ -171,7 +171,7 @@ BEGIN
 					Pos = 2
 				FROM
 					#sediUtente u
-				INNER JOIN dbo.tblSedi s ON u.Id = s.Id
+					INNER JOIN dbo.tblSedi s ON u.Id = s.Id
 				WHERE
 					( (@isSede = 1 AND s.Id = @idSede) OR (@isSede = 0 AND s.IdAziendaInterna = @idSede) OR (@isSede = 0 AND u.Condivisa = 1) )
 					AND s.Id <> @IdSelected
@@ -187,8 +187,8 @@ BEGIN
 					Pos = 2
 				FROM
 					#sediUtente u
-				INNER JOIN dbo.tblRifiutiAutorizzazioni a ON u.Id = a.IdSede
-				INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+					INNER JOIN dbo.tblRifiutiAutorizzazioni a ON u.Id = a.IdSede
+					INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
 				WHERE
 					( (@isSede = 1 AND a.IdSede = @idSede) OR (@isSede = 0 AND u.IdAziendaInterna = @idSede) OR (@isSede = 0 AND u.Condivisa = 1) )
 					AND a.Disabilitata = 0

@@ -54,11 +54,11 @@ BEGIN
 			RowsCount = COUNT(*) OVER ()
 		FROM
 			dbo.tblSedi s
-		INNER JOIN dbo.tblSediInterne i ON s.Id = i.Id
-		INNER JOIN dbo.tblSessioni e ON i.IdDominio = e.IdDominio
-		INNER JOIN dbo.tblUtenti u ON e.IdUtente = u.Id
-		LEFT JOIN dbo.tblSediIndirizzi si ON s.Id = si.Id
-		LEFT JOIN dbo.tblIndirizzi ind ON si.IdIndirizzo = ind.Id
+			INNER JOIN dbo.tblSediInterne i ON s.Id = i.Id
+			INNER JOIN dbo.tblSessioni e ON i.IdDominio = e.IdDominio
+			INNER JOIN dbo.tblUtenti u ON e.IdUtente = u.Id
+			LEFT JOIN dbo.tblSediIndirizzi si ON s.Id = si.Id
+			LEFT JOIN dbo.tblIndirizzi ind ON si.IdIndirizzo = ind.Id
 		WHERE
 			e.Id = @IdSessione
 			AND u.IdRuolo = 'AD'

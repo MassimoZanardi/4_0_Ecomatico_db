@@ -17,8 +17,8 @@ BEGIN
 							ISNULL(e.Valore, ''))
 		FROM
 			dbo.tblTipiProprieta t
-		INNER JOIN dbo.tblProprieta p ON t.IdProprieta = p.Id
-		LEFT JOIN dbo.tblEventiProprieta e ON t.IdProprieta = e.IdProprieta
+			INNER JOIN dbo.tblProprieta p ON t.IdProprieta = p.Id
+			LEFT JOIN dbo.tblEventiProprieta e ON t.IdProprieta = e.IdProprieta
 											   AND e.Id = @Id
 		WHERE t.Id = @IdTipo
 		ORDER BY

@@ -43,9 +43,9 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiRegistrazioni r
-			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE r.Id = @IdParent)
 		BEGIN
 			SET @returnValue = -1;
@@ -96,9 +96,9 @@ BEGIN
 					QuantitaAssociata = l.Quantita
 				FROM
 					@tbl t
-				INNER JOIN dbo.tblRifiutiRegistrazioniRelazioni l ON t.Id = l.IdParent
-				INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
-				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioniRelazioni l ON t.Id = l.IdParent
+					INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 				WHERE r.Lock = 0) x
 			WHERE
 				x.Id NOT IN (SELECT Id FROM @tbl)
@@ -124,9 +124,9 @@ BEGIN
 					QuantitaAssociata = l.Quantita
 				FROM
 					@tbl t
-				INNER JOIN dbo.tblRifiutiRegistrazioniRelazioni l ON t.Id = l.Id
-				INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.IdParent = r.Id
-				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioniRelazioni l ON t.Id = l.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.IdParent = r.Id
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 				WHERE r.Lock = 0) x
 			WHERE
 				x.Id NOT IN (SELECT Id FROM @tbl)
@@ -143,7 +143,7 @@ BEGIN
 			RelazioneNumero = t.Relazione
 		FROM
 			@tbl t
-		LEFT JOIN dbo.tblRifiutiOperazioni o ON t.IdOperazione = o.Id
+			LEFT JOIN dbo.tblRifiutiOperazioni o ON t.IdOperazione = o.Id
 		WHERE t.Relazione IS NOT NULL
 		ORDER BY t.Pos;
 

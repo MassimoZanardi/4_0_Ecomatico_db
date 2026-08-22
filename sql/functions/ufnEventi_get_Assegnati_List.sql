@@ -21,12 +21,12 @@ RETURN
 		AvvisoData = DATEADD(MINUTE, e.AvvisoAnticipo * -1, e.[Data])
 	FROM
 		dbo.tblEventiUtenti u
-	INNER JOIN dbo.tblEventi e ON u.Id = e.Id
-	INNER JOIN dbo.tblEventiStati t ON e.IdStato = t.Id
+		INNER JOIN dbo.tblEventi e ON u.Id = e.Id
+		INNER JOIN dbo.tblEventiStati t ON e.IdStato = t.Id
 		-- Ricorrenza: NULL per eventi singoli
-	LEFT JOIN dbo.tblRicorrenze r ON e.Id = r.Id
+		LEFT JOIN dbo.tblRicorrenze r ON e.Id = r.Id
 		-- Eccezione di ricorrenza attiva
-	LEFT JOIN dbo.tblRicorrenzeEccezioni z ON e.Id = z.IdEvento
+		LEFT JOIN dbo.tblRicorrenzeEccezioni z ON e.Id = z.IdEvento
 											   AND z.Lock = 0
 	WHERE
 		u.IdUtente = @IdUtente

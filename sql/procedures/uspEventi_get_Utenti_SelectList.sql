@@ -71,7 +71,7 @@ BEGIN
 			Selected = CAST(IIF(e.IdUtente IS NULL, 0, 1) AS BIT)
 		FROM
 			dbo.tblUtenti u
-		LEFT JOIN dbo.tblEventiUtenti e ON u.Id = e.IdUtente AND e.Id = @Id
+			LEFT JOIN dbo.tblEventiUtenti e ON u.Id = e.IdUtente AND e.Id = @Id
 		WHERE
 			u.IdDominio = @idDominio
 			AND u.[Master] = 0

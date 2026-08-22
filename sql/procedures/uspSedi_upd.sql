@@ -253,12 +253,12 @@ BEGIN
 				IndirizzoCompleto = CASE WHEN i.IdNazione = '380' THEN ISNULL(i.Indirizzo + ISNULL(', ' + i.NumeroCivico, '') + ' - ', '') + ISNULL(i.Localita + ' - ', '') + ISNULL(i.CAP + ' ', '') + ISNULL(c.Nome + ' (' + p.Sigla + ')', '') ELSE ISNULL(i.Indirizzo + ISNULL(', ' + i.NumeroCivico, '') + ' - ', '') + ISNULL(i.CAP + ' ', '') + ISNULL(i.Localita + ' ', '') + ISNULL(n.Nome, '') END
 			FROM
 				dbo.tblSedi s
-			LEFT JOIN dbo.tblSedi sl ON s.IdParent = sl.Id
-			LEFT JOIN dbo.tblSediIndirizzi si ON s.Id = si.Id
-			LEFT JOIN dbo.tblIndirizzi i ON si.IdIndirizzo = i.Id
-			LEFT JOIN dbo.tblComuni c ON i.IdComune = c.Id
-			LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
-			LEFT JOIN dbo.tblNazioni n ON i.IdNazione = n.Id
+				LEFT JOIN dbo.tblSedi sl ON s.IdParent = sl.Id
+				LEFT JOIN dbo.tblSediIndirizzi si ON s.Id = si.Id
+				LEFT JOIN dbo.tblIndirizzi i ON si.IdIndirizzo = i.Id
+				LEFT JOIN dbo.tblComuni c ON i.IdComune = c.Id
+				LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
+				LEFT JOIN dbo.tblNazioni n ON i.IdNazione = n.Id
 			WHERE
 				s.Id = @Id
 				AND s.Lock <= 2;

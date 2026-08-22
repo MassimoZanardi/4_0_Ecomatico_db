@@ -75,8 +75,8 @@ BEGIN
 			SELECT c.[Data], c.Ora, s.Id, t.IdEvento, t.Scaduto, t.Eseguito, t.AvvisoTesto
 			FROM
 				cteCalendario c
-			LEFT JOIN #tEventi t ON t.[Data] BETWEEN c.[Data] AND c.DataMezza
-			LEFT JOIN dbo.tblServizi s ON t.IdEvento = s.IdEvento
+				LEFT JOIN #tEventi t ON t.[Data] BETWEEN c.[Data] AND c.DataMezza
+				LEFT JOIN dbo.tblServizi s ON t.IdEvento = s.IdEvento
 		)
 		SELECT
 			t0.Ora,

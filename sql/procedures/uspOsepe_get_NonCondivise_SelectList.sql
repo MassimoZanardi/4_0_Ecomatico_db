@@ -42,7 +42,7 @@ BEGIN
 				Pos = 1
 			FROM
 				dbo.tblSessioni e
-			CROSS APPLY dbo.ufnOsepe_get_NonCondiviseByDominio_List(e.IdDominio) i
+				CROSS APPLY dbo.ufnOsepe_get_NonCondiviseByDominio_List(e.IdDominio) i
 			WHERE
 				e.Id = @IdSessione
 				AND i.Id = @IdSelected
@@ -56,7 +56,7 @@ BEGIN
 				Pos = 2
 			FROM
 				dbo.tblSessioni e
-			CROSS APPLY dbo.ufnOsepe_get_NonCondiviseByDominio_List(e.IdDominio) i
+				CROSS APPLY dbo.ufnOsepe_get_NonCondiviseByDominio_List(e.IdDominio) i
 			WHERE
 				e.Id = @IdSessione
 				AND i.Id <> @IdSelected

@@ -57,13 +57,13 @@ BEGIN
 			Permesso = ISNULL(p.Nome, 'Accesso negato')
 		FROM
 			dbo.tblUtenti u
-		INNER JOIN dbo.tblDominiModuli d ON u.IdDominio = d.Id
-		INNER JOIN dbo.tblModuli m ON d.IDModulo = m.Id
-		INNER JOIN dbo.tblModuliFunzioni mf ON m.Id = mf.Id
-		INNER JOIN dbo.tblFunzioni f ON mf.IdFunzione = f.Id
-		LEFT JOIN dbo.tblUtentiFunzioni uf ON f.Id = uf.IdFunzione
+			INNER JOIN dbo.tblDominiModuli d ON u.IdDominio = d.Id
+			INNER JOIN dbo.tblModuli m ON d.IDModulo = m.Id
+			INNER JOIN dbo.tblModuliFunzioni mf ON m.Id = mf.Id
+			INNER JOIN dbo.tblFunzioni f ON mf.IdFunzione = f.Id
+			LEFT JOIN dbo.tblUtentiFunzioni uf ON f.Id = uf.IdFunzione
 											   AND uf.Id = @Id
-		LEFT JOIN dbo.tblPermessi p ON uf.IdPermesso = p.Id
+			LEFT JOIN dbo.tblPermessi p ON uf.IdPermesso = p.Id
 		WHERE
 			u.Id = @Id
 			AND f.[Master] = 0

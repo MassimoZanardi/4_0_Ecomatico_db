@@ -66,8 +66,8 @@ BEGIN
 				Tipo = 'Sede'
 			FROM
 				dbo.tblScadenzeOsepe a
-			INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
-			INNER JOIN dbo.tblSedi s ON a.IdOsepe = s.Id
+				INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
+				INNER JOIN dbo.tblSedi s ON a.IdOsepe = s.Id
 			WHERE
 				a.Id = @Id
 				AND o.Tipo = 'S'
@@ -82,8 +82,8 @@ BEGIN
 				Tipo = 'Persona'
 			FROM
 				dbo.tblScadenzeOsepe a
-			INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
-			INNER JOIN dbo.tblPersone s ON a.IdOsepe = s.Id
+				INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
+				INNER JOIN dbo.tblPersone s ON a.IdOsepe = s.Id
 			WHERE
 				a.Id = @Id
 				AND o.Tipo = 'P'
@@ -98,8 +98,8 @@ BEGIN
 				Tipo = 'Oggetto'
 			FROM
 				dbo.tblScadenzeOsepe a
-			INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
-			INNER JOIN dbo.tblOggetti s ON a.IdOsepe = s.Id
+				INNER JOIN dbo.tblOsepe o ON a.IdOsepe = o.Id
+				INNER JOIN dbo.tblOggetti s ON a.IdOsepe = s.Id
 			WHERE
 				a.Id = @Id
 				AND o.Tipo = 'O'

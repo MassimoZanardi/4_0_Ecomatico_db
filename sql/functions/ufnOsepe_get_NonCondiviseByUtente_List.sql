@@ -32,7 +32,7 @@ BEGIN
 		ImpiegabileServizi = CAST(0 AS BIT)
 	FROM
 		dbo.ufnSedi_get_SediEsterneNonCondiviseByUtente_List(@i) i
-	INNER JOIN dbo.tblSedi s ON i.Id = s.Id
+		INNER JOIN dbo.tblSedi s ON i.Id = s.Id
 	WHERE s.Lock = 0;
 
 	-- Ramo 2: persone non condivise
@@ -47,7 +47,7 @@ BEGIN
 		s.ImpiegabileServizi
 	FROM
 		dbo.ufnPersone_get_NonCondiviseByUtente_List(@IdUtente) i
-	INNER JOIN dbo.tblPersone s ON i.Id = s.Id
+		INNER JOIN dbo.tblPersone s ON i.Id = s.Id
 	WHERE s.Lock = 0;
 
 	-- Ramo 3: oggetti non condivisi
@@ -62,7 +62,7 @@ BEGIN
 		s.ImpiegabileServizi
 	FROM
 		dbo.ufnOggetti_get_NonCondivisiByUtente_List(@IdUtente) i
-	INNER JOIN dbo.tblOggetti s ON i.Id = s.Id
+		INNER JOIN dbo.tblOggetti s ON i.Id = s.Id
 	WHERE s.Lock = 0;
 
 	RETURN;

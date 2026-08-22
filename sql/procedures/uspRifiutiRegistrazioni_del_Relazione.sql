@@ -50,9 +50,9 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiRegistrazioni r
-			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE r.Id = @IdParent)
 		BEGIN
 			SET @returnValue = -1;

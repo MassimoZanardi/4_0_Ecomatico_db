@@ -68,9 +68,9 @@ BEGIN
 				Sede = s.NomeCompleto + ' - ' + s.IndirizzoCompleto
 			FROM
 				dbo.tblRifiutiAutorizzazioni a
-			INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
-			INNER JOIN dbo.tblRifiutiRuoli r ON a.IdRuolo = r.Id
-			INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
+				INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+				INNER JOIN dbo.tblRifiutiRuoli r ON a.IdRuolo = r.Id
+				INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
 			WHERE
 				e.Id = @IdSessione
 				AND a.Nessuna = 0
@@ -101,9 +101,9 @@ BEGIN
 				Sede = s.NomeCompleto + ' - ' + s.IndirizzoCompleto
 			FROM
 				dbo.tblSedi s
-			INNER JOIN dbo.tblRifiutiAutorizzazioni a ON s.Id = a.IdSede
-			INNER JOIN dbo.tblRifiutiRuoli r ON a.IdRuolo = r.Id
-			CROSS APPLY (
+				INNER JOIN dbo.tblRifiutiAutorizzazioni a ON s.Id = a.IdSede
+				INNER JOIN dbo.tblRifiutiRuoli r ON a.IdRuolo = r.Id
+				CROSS APPLY (
 					SELECT TOP 1 x.Id
 					FROM dbo.tblSessioni e
 					CROSS APPLY dbo.ufnSedi_get_AziendeEsterneCondiviseByUtente_List(e.IdUtente) x
@@ -111,7 +111,7 @@ BEGIN
 						e.Id = @IdSessione
 						AND x.Id = s.Id
 						AND x.IdAziendaInterna <> e.IdAzienda
-			) c
+				) c
 			WHERE
 				a.Disabilitata = 0
 				AND a.Nessuna = 0

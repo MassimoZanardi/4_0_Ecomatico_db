@@ -23,7 +23,7 @@ BEGIN
 			[Description] = c.Nome
 		FROM
 			dbo.tblRifiutiClassiPericolo c
-		LEFT JOIN dbo.tblRifiutiModelliClassiPericolo rc ON c.Id = rc.IdClasse AND rc.Id = @Id
+			LEFT JOIN dbo.tblRifiutiModelliClassiPericolo rc ON c.Id = rc.IdClasse AND rc.Id = @Id
 		ORDER BY
 			c.Id;
 

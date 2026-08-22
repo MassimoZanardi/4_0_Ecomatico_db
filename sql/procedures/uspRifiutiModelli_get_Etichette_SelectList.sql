@@ -41,8 +41,8 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiModelli m
-			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE m.Id = @Id)
 		BEGIN
 			SET @returnValue = -1;
@@ -60,12 +60,12 @@ BEGIN
 					e.Visualizzazione
 				FROM
 					dbo.tblEtichette e
-				INNER JOIN dbo.tblColori c ON e.IdColore = c.Id
+					INNER JOIN dbo.tblColori c ON e.IdColore = c.Id
 				WHERE t.Id = e.Id FOR JSON PATH),
 			Selected = CAST(IIF(e.IdEtichetta IS NULL, 0, 1) AS BIT)
 		FROM
 			dbo.tblEtichette t
-		LEFT OUTER JOIN (
+			LEFT OUTER JOIN (
 				SELECT IdEtichetta
 				FROM dbo.tblRifiutiModelliEtichette
 				WHERE Id = @Id) e ON t.Id = e.IdEtichetta
@@ -80,7 +80,7 @@ BEGIN
 				SELECT g.IdSede
 				FROM
 					dbo.tblRifiutiModelli m
-				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+					INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
 				WHERE m.Id = @Id
 			)
 			AND t.IdModulo = 'RIF'

@@ -93,7 +93,7 @@ BEGIN
 			p.Lock
 		FROM
 			dbo.tblPersone p
-		OUTER APPLY (
+			OUTER APPLY (
 				SELECT TOP 1
 					ae.Id,
 					Area = a.Nome
@@ -102,7 +102,7 @@ BEGIN
 				WHERE
 					a.Lock = 0
 					AND ae.IdOsepe = p.Id
-		) c
+			) c
 		WHERE
 			p.Id = @Id
 			AND p.Lock <= 2;

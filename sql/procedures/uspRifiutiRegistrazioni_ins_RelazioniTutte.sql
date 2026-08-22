@@ -64,7 +64,7 @@ BEGIN
 			SELECT COUNT(DISTINCT g.Id)
 			FROM
 				dbo.tblRifiutiRegistri g
-			INNER JOIN @sedi i ON g.IdSede = i.Id
+				INNER JOIN @sedi i ON g.IdSede = i.Id
 			WHERE g.Id = @IdRegistro) = 0
 		BEGIN
 			SET @returnValue = -1;
@@ -76,9 +76,9 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiRegistrazioni r
-			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-			INNER JOIN @sedi i ON g.IdSede = i.Id
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN @sedi i ON g.IdSede = i.Id
 			WHERE r.Id = @IdParent)
 		BEGIN
 			SET @returnValue = -1;
@@ -90,7 +90,7 @@ BEGIN
 		SELECT @pos = ISNULL(MAX(s.Pos), -1)
 		FROM
 			dbo.tblRifiutiRegistrazioniRelazioni s
-		INNER JOIN dbo.tblRifiutiRegistrazioni r ON s.Id = r.Id
+			INNER JOIN dbo.tblRifiutiRegistrazioni r ON s.Id = r.Id
 		WHERE
 			s.IdParent = @IdParent
 			AND r.Lock < 2;
@@ -106,7 +106,7 @@ BEGIN
 		SELECT @idOperazione = m.IdOperazione
 		FROM
 			dbo.tblRifiutiRegistrazioni r
-		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 		WHERE r.Id = @IdParent;
 
 		BEGIN TRANSACTION;
@@ -122,16 +122,16 @@ BEGIN
 				@pos + ROW_NUMBER() OVER (ORDER BY YEAR(r.[Data]), r.Numero)
 			FROM
 				dbo.tblRifiutiRegistrazioni r
-			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-			INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
-			LEFT JOIN (
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+				LEFT JOIN (
 					SELECT
 						l.Id,
 						Quantita = SUM(l.Quantita)
 					FROM
 						dbo.tblRifiutiRegistrazioniRelazioni l
-					INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
-					INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
+						INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
+						INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
 					WHERE
 						p.Lock < 2
 						AND mp.Quantita > 0

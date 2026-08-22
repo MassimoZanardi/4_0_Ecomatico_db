@@ -51,14 +51,14 @@ CREATE PROCEDURE [dbo].[uspRifiutiFormulari_upd]
 	@IdEtichette VARCHAR(50) = NULL
 AS
 
-/*
-REGOLE ASSOCIAZIONE REGISTRAZIONE <-> FORMULARI
-1. Da Registrazioni: se @IdDocumentoTrasportoTipo non è un Formulario lo rimuove da Formulari
-2. Da Registrazioni: sarà possibile eliminare una registrazione associata a un formulario. In questo caso, il formulario resterà presente e risulterà non associato ad alcuna registrazione.
-3. Da Formulari: sarà possibile creare un nuovo formulario anche senza associarlo a una registrazione.
-4. Da Formulari: sarà possibile generare una nuova registrazione a partire dal formulario. La registrazione verrà automaticamente associata al formulario stesso. Non sarà consentita l'associazione del
- formulario a registrazioni già esistenti.
-5. Da formulari: sarà possibile creare il formulario e contestualmente la registrazione. Non sarà possibile il contrario.
+/*
+REGOLE ASSOCIAZIONE REGISTRAZIONE <-> FORMULARI
+1. Da Registrazioni: se @IdDocumentoTrasportoTipo non è un Formulario lo rimuove da Formulari
+2. Da Registrazioni: sarà possibile eliminare una registrazione associata a un formulario. In questo caso, il formulario resterà presente e risulterà non associato ad alcuna registrazione.
+3. Da Formulari: sarà possibile creare un nuovo formulario anche senza associarlo a una registrazione.
+4. Da Formulari: sarà possibile generare una nuova registrazione a partire dal formulario. La registrazione verrà automaticamente associata al formulario stesso. Non sarà consentita l'associazione del
+ formulario a registrazioni già esistenti.
+5. Da formulari: sarà possibile creare il formulario e contestualmente la registrazione. Non sarà possibile il contrario.
 */
 
 BEGIN
@@ -112,9 +112,9 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiFormulari f
-			INNER JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id
-			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				INNER JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE f.Id = @Id)
 		BEGIN
 			SET @returnValue = -1;
@@ -166,8 +166,8 @@ BEGIN
 			END
 		FROM
 			dbo.tblRifiutiFormulari f
-		INNER JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id
-		LEFT JOIN dbo.tblRifiutiRegistrazioni r ON f.IdMovimento = r.IdMovimento AND r.Lock < 2
+			INNER JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id
+			LEFT JOIN dbo.tblRifiutiRegistrazioni r ON f.IdMovimento = r.IdMovimento AND r.Lock < 2
 		WHERE f.Id = @Id;
 
 		-- Verifica che il formulario esista
@@ -305,7 +305,7 @@ BEGIN
 			SELECT @totaleQuantitaAssegnata = ISNULL(SUM(lq.Quantita), 0)
 			FROM
 				dbo.tblRifiutiRegistrazioniRelazioni lq
-			INNER JOIN dbo.tblRifiutiRegistrazioni rq ON lq.Id = rq.Id
+				INNER JOIN dbo.tblRifiutiRegistrazioni rq ON lq.Id = rq.Id
 			WHERE
 				lq.IdParent = @idRegistrazione
 				AND lq.Quantita > 0
@@ -318,7 +318,7 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiFormulari f
-			INNER JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id
 			WHERE
 				f.IdMovimento <> @idMovimento
 				AND m.IdRegistro = @idRegistro
@@ -338,10 +338,10 @@ BEGIN
 				SELECT 1
 				FROM
 					dbo.tblRifiutiRegistrazioniRelazioni l
-				INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
-				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-				INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
-				INNER JOIN dbo.tblRifiutiMovimenti mp ON rp.IdMovimento = mp.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
+					INNER JOIN dbo.tblRifiutiMovimenti mp ON rp.IdMovimento = mp.Id
 				WHERE
 					(l.Id = @idRegistrazione OR l.IdParent = @idRegistrazione)
 					AND mp.IdOperazione <> 'M'
@@ -364,7 +364,7 @@ BEGIN
 				SELECT SUM(l.Quantita)
 				FROM
 					dbo.tblRifiutiRegistrazioniRelazioni l
-				INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
 				WHERE
 					l.Id = @idRegistrazione
 					AND l.Quantita > 0
@@ -412,10 +412,10 @@ BEGIN
 				SELECT 1
 				FROM
 					dbo.tblRifiutiMovimenti m
-				LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp1 ON m.Id = mp1.Id AND mp1.Pos = 0
-				LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id
-				LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt1 ON m.Id = mt1.Id AND mt1.Pos = 0
-				LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi1 ON m.Id = mi1.Id AND mi1.Pos = 0
+					LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp1 ON m.Id = mp1.Id AND mp1.Pos = 0
+					LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id
+					LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt1 ON m.Id = mt1.Id AND mt1.Pos = 0
+					LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi1 ON m.Id = mi1.Id AND mi1.Pos = 0
 				WHERE
 					m.Id = @idMovimento
 					AND ( ISNULL(mp1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneProduttoreDetentore, @idSediciZeri) OR ISNULL(md.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneDestinatario, @idSediciZeri) OR ISNULL(mt1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneTrasportatore1, @idSediciZeri) OR ISNULL(mi1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneIntermediario1, @idSediciZeri) )
@@ -566,7 +566,7 @@ BEGIN
 			SELECT @idMovimento, c.Id
 			FROM
 				dbo.tblRifiutiClassiPericolo c
-			INNER JOIN STRING_SPLIT(@ClassiPericolo, ';') v ON c.Id = v.value;
+				INNER JOIN STRING_SPLIT(@ClassiPericolo, ';') v ON c.Id = v.value;
 
 			-- Etichette formulario
 			DELETE dbo.tblRifiutiFormulariEtichette
@@ -576,7 +576,7 @@ BEGIN
 			SELECT TOP 3 @Id, e.Id
 			FROM
 				dbo.tblEtichette e
-			INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value;
+				INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value;
 
 			-- Aggiorna le quantità delle registrazioni in relazione carico/scarico
 			IF @Quantita = 0 OR @nessunaRegistrazioneAssociata = 1
@@ -600,14 +600,14 @@ BEGIN
 						QuantitaResidua = m2.Quantita - ISNULL(a.Quantita, 0)
 					FROM
 						dbo.tblRifiutiRegistrazioniRelazioni l
-					INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
-					INNER JOIN dbo.tblRifiutiMovimenti m2 ON r.IdMovimento = m2.Id
-					LEFT JOIN (
+						INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
+						INNER JOIN dbo.tblRifiutiMovimenti m2 ON r.IdMovimento = m2.Id
+						LEFT JOIN (
 							SELECT lq.Id, Quantita = SUM(lq.Quantita)
 							FROM
 								dbo.tblRifiutiRegistrazioniRelazioni lq
-							INNER JOIN dbo.tblRifiutiRegistrazioni pq ON lq.IdParent = pq.Id
-							INNER JOIN dbo.tblRifiutiMovimenti mpq ON pq.IdMovimento = mpq.Id
+								INNER JOIN dbo.tblRifiutiRegistrazioni pq ON lq.IdParent = pq.Id
+								INNER JOIN dbo.tblRifiutiMovimenti mpq ON pq.IdMovimento = mpq.Id
 							WHERE
 								pq.Lock < 2
 								AND mpq.Quantita > 0
@@ -677,11 +677,11 @@ BEGIN
 					r.Numero, r.[Data], m.FormularioNumero, m.DataInizioTrasporto, r.DataFineTrasporto
 				FROM
 					dbo.tblRifiutiMovimenti m
-				LEFT JOIN dbo.tblRifiutiRegistrazioni r ON m.Id = r.IdMovimento
-				LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp ON m.Id = mp.Id AND mp.Pos = 0
-				LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id AND md.Pos = 0
-				LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt ON m.Id = mt.Id AND mt.Pos = 0
-				LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi ON m.Id = mi.Id AND mi.Pos = 0
+					LEFT JOIN dbo.tblRifiutiRegistrazioni r ON m.Id = r.IdMovimento
+					LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp ON m.Id = mp.Id AND mp.Pos = 0
+					LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id AND md.Pos = 0
+					LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt ON m.Id = mt.Id AND mt.Pos = 0
+					LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi ON m.Id = mi.Id AND mi.Pos = 0
 				WHERE m.Id = @idMovimento;
 			END
 
@@ -733,14 +733,14 @@ BEGIN
 				Note = @UtenteNote
 			FROM
 				dbo.tblRifiutiMovimenti m
-			LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp ON m.Id = mp.Id AND mp.Pos = 0
-			LEFT JOIN dbo.tblRifiutiAutorizzazioni ap ON mp.IdAutorizzazione = ap.Id
-			LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id AND md.Pos = 0
-			LEFT JOIN dbo.tblRifiutiAutorizzazioni ad ON md.IdAutorizzazione = ad.Id
-			LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt ON m.Id = mt.Id AND mt.Pos = 0
-			LEFT JOIN dbo.tblRifiutiAutorizzazioni ar ON mt.IdAutorizzazione = ar.Id
-			LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi ON m.Id = mi.Id AND mi.Pos = 0
-			LEFT JOIN dbo.tblRifiutiAutorizzazioni ai ON mi.IdAutorizzazione = ai.Id
+				LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp ON m.Id = mp.Id AND mp.Pos = 0
+				LEFT JOIN dbo.tblRifiutiAutorizzazioni ap ON mp.IdAutorizzazione = ap.Id
+				LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id AND md.Pos = 0
+				LEFT JOIN dbo.tblRifiutiAutorizzazioni ad ON md.IdAutorizzazione = ad.Id
+				LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt ON m.Id = mt.Id AND mt.Pos = 0
+				LEFT JOIN dbo.tblRifiutiAutorizzazioni ar ON mt.IdAutorizzazione = ar.Id
+				LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi ON m.Id = mi.Id AND mi.Pos = 0
+				LEFT JOIN dbo.tblRifiutiAutorizzazioni ai ON mi.IdAutorizzazione = ai.Id
 			WHERE m.Id = @idMovimento;
 
 		COMMIT TRANSACTION;

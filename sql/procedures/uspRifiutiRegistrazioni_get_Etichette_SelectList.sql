@@ -43,9 +43,9 @@ BEGIN
 		SELECT @idSede = g.IdSede
 		FROM
 			dbo.tblRifiutiRegistrazioni r
-		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-		INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-		INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 		WHERE r.Id = @Id;
 
 		IF @idSede IS NULL
@@ -69,7 +69,7 @@ BEGIN
 			Selected = CAST(IIF(sel.IdEtichetta IS NULL, 0, 1) AS BIT)
 		FROM
 			dbo.tblEtichette t
-		LEFT JOIN (
+			LEFT JOIN (
 				SELECT IdEtichetta
 				FROM dbo.tblRifiutiRegistrazioniEtichette
 				WHERE Id = @Id) sel ON t.Id = sel.IdEtichetta

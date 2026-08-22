@@ -13,9 +13,9 @@ RETURN
 		s.Disabilitata
 	FROM
 		dbo.tblSediInterne i
-	INNER JOIN dbo.tblSedi si ON i.Id = si.Id
-	INNER JOIN dbo.tblSediEsterne se ON si.Id = se.IdSedeInterna
-	INNER JOIN dbo.tblSedi s ON se.Id = s.Id
+		INNER JOIN dbo.tblSedi si ON i.Id = si.Id
+		INNER JOIN dbo.tblSediEsterne se ON si.Id = se.IdSedeInterna
+		INNER JOIN dbo.tblSedi s ON se.Id = s.Id
 	WHERE
 		i.IdDominio = @IdDominio
 		AND si.Lock = 0

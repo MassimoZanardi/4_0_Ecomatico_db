@@ -13,5 +13,5 @@ RETURN
 		s.Disabilitata
 	FROM
 		dbo.tblSessioni e
-	CROSS APPLY dbo.ufnSedi_get_SediInterneByUtente_List(e.IdUtente) s
+		CROSS APPLY dbo.ufnSedi_get_SediInterneByUtente_List(e.IdUtente) s
 	WHERE e.Id = @IdSessione);

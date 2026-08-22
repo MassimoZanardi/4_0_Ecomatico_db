@@ -66,8 +66,8 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRifiutiModelli m
-			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE m.Id = @Id)
 		BEGIN
 			SET @returnValue = -1;
@@ -104,7 +104,7 @@ BEGIN
 				c.Id
 			FROM
 				dbo.tblRifiutiClassiPericolo c
-			INNER JOIN STRING_SPLIT(@ClassiPericolo, ';') v ON c.Id = v.value;
+				INNER JOIN STRING_SPLIT(@ClassiPericolo, ';') v ON c.Id = v.value;
 
 			-- Aggiorna le etichette
 			DELETE dbo.tblRifiutiModelliEtichette
@@ -117,7 +117,7 @@ BEGIN
 				e.Id
 			FROM
 				dbo.tblEtichette e
-			INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value;
+				INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value;
 
 			UPDATE dbo.tblRifiutiModelli
 			SET

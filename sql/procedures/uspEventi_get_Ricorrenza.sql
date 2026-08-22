@@ -43,15 +43,20 @@ BEGIN
 
 		SELECT
 			Ricorrenza = CASE
-				WHEN Ricorre = 1 AND @Data IS NULL THEN 1
-				WHEN Ricorre = 1 AND [Data] <> @Data THEN 1
-				WHEN Ricorre = 1 AND [Data] = @Data THEN 3
-				WHEN Eccezione = 1 THEN 2
+				WHEN r.Id IS NOT NULL AND @Data IS NULL THEN 1
+				WHEN r.Id IS NOT NULL AND e.[Data] <> @Data THEN 1
+				WHEN r.Id IS NOT NULL AND e.[Data] = @Data THEN 3
+				WHEN z.IdEvento IS NOT NULL THEN 2
 				ELSE 0
 			END
 		FROM
-			dbo.viewEventi
-		WHERE Id = @Id;
+			dbo.tblEventi e
+			INNER JOIN dbo.tblEventiStati t ON e.IdStato = t.Id
+			INNER JOIN dbo.tblCalendari c ON e.IdCalendario = c.Id
+			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
+			LEFT JOIN dbo.tblRicorrenze r ON e.Id = r.Id
+			LEFT JOIN dbo.tblRicorrenzeEccezioni z ON e.Id = z.IdEvento AND z.Lock = 0
+		WHERE e.Id = @Id;
 
 	END TRY
 	BEGIN CATCH

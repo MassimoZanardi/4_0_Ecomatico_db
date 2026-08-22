@@ -65,7 +65,11 @@ BEGIN
 							   ON e.Id = z.IdEvento AND z.Lock = 0
 					WHERE
 						s.Id = @Id
-						AND (r.Id IS NOT NULL OR z.IdEvento IS NOT NULL)
+						AND
+							(
+							r.Id IS NOT NULL
+							OR z.IdEvento IS NOT NULL
+							)
 				), 1, 0)
 			AS BIT);
 

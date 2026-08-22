@@ -41,7 +41,11 @@ BEGIN
 			WHERE
 				e.Id = @IdSessione
 				AND s.Disabilitata = 0
-				AND (@Search IS NULL OR s.NomeCompleto + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR s.NomeCompleto + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%'
+					)
 		)
 		SELECT TOP 50
 			Id,

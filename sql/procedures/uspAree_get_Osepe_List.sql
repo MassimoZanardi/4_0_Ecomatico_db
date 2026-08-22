@@ -103,7 +103,11 @@ BEGIN
 				a.Id = @Id
 				AND o.Tipo = 'S'
 				AND s.Lock = 0
-				AND (@Search IS NULL OR s.NomeCompleto + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR s.NomeCompleto + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%'
+					)
 			UNION ALL -- rami mutualmente esclusivi per tipo Osepe
 
 			-- Ramo 2: Persone
@@ -128,7 +132,11 @@ BEGIN
 				a.Id = @Id
 				AND o.Tipo = 'P'
 				AND s.Lock = 0
-				AND (@Search IS NULL OR s.NomeCompleto LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR s.NomeCompleto LIKE '%' + @Search + '%'
+					)
 			UNION ALL
 
 			-- Ramo 3: Oggetti
@@ -153,7 +161,11 @@ BEGIN
 				a.Id = @Id
 				AND o.Tipo = 'O'
 				AND s.Lock = 0
-				AND (@Search IS NULL OR s.Nome LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR s.Nome LIKE '%' + @Search + '%'
+					)
 		) t
 		ORDER BY t.Nome;
 

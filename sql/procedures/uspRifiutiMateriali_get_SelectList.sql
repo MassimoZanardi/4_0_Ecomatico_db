@@ -33,8 +33,15 @@ BEGIN
 			Pos = IIF(Nome = 'Altro', 3, 2)
 		FROM dbo.tblRifiutiMateriali
 		WHERE
-			(@IdSelected IS NULL OR Id <> @IdSelected)
-			AND (@Search IS NULL OR Nome LIKE '%' + @Search + '%')
+			(
+			@IdSelected IS NULL
+			OR Id <> @IdSelected
+			)
+			AND
+				(
+				@Search IS NULL
+				OR Nome LIKE '%' + @Search + '%'
+				)
 		ORDER BY Pos, [Text]
 		OPTION (RECOMPILE);
 

@@ -73,8 +73,17 @@ BEGIN
 				SELECT 1
 				FROM dbo.viewRifiutiMovimentiAutorizzazioni
 				WHERE
-					(RegistrazioneLock < 2 OR FormularioLock < 2)
-					AND ( IdAutorizzazioneProduttoreDetentore1 = @Id OR IdAutorizzazioneDestinatario = @Id OR IdAutorizzazioneTrasportatore1 = @Id OR IdAutorizzazioneIntermediario1 = @Id)
+					(
+					RegistrazioneLock < 2
+					OR FormularioLock < 2
+					)
+					AND
+						(
+						IdAutorizzazioneProduttoreDetentore1 = @Id
+						OR IdAutorizzazioneDestinatario = @Id
+						OR IdAutorizzazioneTrasportatore1 = @Id
+						OR IdAutorizzazioneIntermediario1 = @Id
+						)
 			)
 			BEGIN
 				SET @returnValue = -1;

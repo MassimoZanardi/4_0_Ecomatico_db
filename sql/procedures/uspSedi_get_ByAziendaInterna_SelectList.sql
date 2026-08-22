@@ -59,7 +59,11 @@ BEGIN
 				AND s.Lock = 0
 				AND s.Disabilitata = 0
 				AND s.Id <> @IdSelected
-				AND (@Search IS NULL OR s.NomeCompleto + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR s.NomeCompleto + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%'
+					)
 		)
 		SELECT TOP 50
 			Id,

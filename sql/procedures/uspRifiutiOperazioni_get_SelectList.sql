@@ -38,8 +38,25 @@ BEGIN
 			INNER JOIN dbo.tblSessioni e ON r.Id = e.IdRegistro
 		WHERE
 			e.Id = @IdSessione
-			AND (@IsRentri IS NULL OR o.IsRentri = @IsRentri)
-			AND ( @IsFormulario IS NULL OR (@IsFormulario = 0 AND NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiOperazioniFormulario WHERE Id = o.Id)) OR (@IsFormulario = 1 AND EXISTS (SELECT 1 FROM dbo.tblRifiutiOperazioniFormulario WHERE Id = o.Id)) )
+			AND
+				(
+				@IsRentri IS NULL
+				OR o.IsRentri = @IsRentri
+				)
+			AND
+				(
+				@IsFormulario IS NULL
+				OR
+					(
+					@IsFormulario = 0
+					AND NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiOperazioniFormulario WHERE Id = o.Id)
+					)
+				OR
+					(
+					@IsFormulario = 1
+					AND EXISTS (SELECT 1 FROM dbo.tblRifiutiOperazioniFormulario WHERE Id = o.Id)
+					)
+				)
 		ORDER BY Pos
 		OPTION (RECOMPILE);
 	END TRY

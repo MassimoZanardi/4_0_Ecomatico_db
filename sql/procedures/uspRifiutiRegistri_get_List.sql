@@ -52,7 +52,11 @@ BEGIN
 		WHERE
 			e.Id = @IdSessione
 			AND r.Lock = 0
-			AND (@Search IS NULL OR r.Nome LIKE '%' + @Search + '%')
+			AND
+				(
+				@Search IS NULL
+				OR r.Nome LIKE '%' + @Search + '%'
+				)
 		ORDER BY r.Nome
 		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY

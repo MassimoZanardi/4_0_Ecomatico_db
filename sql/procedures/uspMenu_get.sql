@@ -59,7 +59,8 @@ BEGIN
 					INNER JOIN dbo.tblPagineAree a ON m.IdArea = a.Id
 				WHERE
 					EXISTS (SELECT 1 FROM cte s WHERE s.IdParent = m.Id)
-					AND (
+					AND
+						(
 						-- Admin Master: accede a tutte le aree
 						EXISTS (
 							SELECT 1
@@ -77,7 +78,7 @@ BEGIN
 							WHERE dm.IdModulo = m.IdArea
 							  AND u.Id = @IdUtente
 						)
-					)
+						)
 				ORDER BY m.Pos
 				FOR JSON PATH, ROOT('Aree')
 			);

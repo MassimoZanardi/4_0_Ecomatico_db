@@ -38,7 +38,11 @@ BEGIN
 			FROM dbo.tblNazioni
 			WHERE
 				Id <> ISNULL(@IdSelected, '000')
-				AND (@Search IS NULL OR Nome LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR Nome LIKE '%' + @Search + '%'
+					)
 		)
 		SELECT TOP 50
 			Id,

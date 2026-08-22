@@ -67,7 +67,11 @@ BEGIN
 			e.Id = @IdSessione
 			AND a.IdModulo = @IdModulo
 			AND a.Lock = 0
-			AND (@Search IS NULL OR a.Nome LIKE '%' + @Search + '%')
+			AND
+				(
+				@Search IS NULL
+				OR a.Nome LIKE '%' + @Search + '%'
+				)
 		ORDER BY a.Nome
 		OFFSET @Offset ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY

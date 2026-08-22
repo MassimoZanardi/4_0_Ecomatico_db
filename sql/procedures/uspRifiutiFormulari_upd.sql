@@ -51,14 +51,14 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_upd]
 	@IdEtichette VARCHAR(50) = NULL
 AS
 
-/*
-REGOLE ASSOCIAZIONE REGISTRAZIONE <-> FORMULARI
-1. Da Registrazioni: se @IdDocumentoTrasportoTipo non è un Formulario lo rimuove da Formulari
-2. Da Registrazioni: sarà possibile eliminare una registrazione associata a un formulario. In questo caso, il formulario resterà presente e risulterà non associato ad alcuna registrazione.
-3. Da Formulari: sarà possibile creare un nuovo formulario anche senza associarlo a una registrazione.
-4. Da Formulari: sarà possibile generare una nuova registrazione a partire dal formulario. La registrazione verrà automaticamente associata al formulario stesso. Non sarà consentita l'associazione del
- formulario a registrazioni già esistenti.
-5. Da formulari: sarà possibile creare il formulario e contestualmente la registrazione. Non sarà possibile il contrario.
+/*
+REGOLE ASSOCIAZIONE REGISTRAZIONE <-> FORMULARI
+1. Da Registrazioni: se @IdDocumentoTrasportoTipo non è un Formulario lo rimuove da Formulari
+2. Da Registrazioni: sarà possibile eliminare una registrazione associata a un formulario. In questo caso, il formulario resterà presente e risulterà non associato ad alcuna registrazione.
+3. Da Formulari: sarà possibile creare un nuovo formulario anche senza associarlo a una registrazione.
+4. Da Formulari: sarà possibile generare una nuova registrazione a partire dal formulario. La registrazione verrà automaticamente associata al formulario stesso. Non sarà consentita l'associazione del
+ formulario a registrazioni già esistenti.
+5. Da formulari: sarà possibile creare il formulario e contestualmente la registrazione. Non sarà possibile il contrario.
 */
 
 BEGIN
@@ -343,9 +343,17 @@ BEGIN
 					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
 					INNER JOIN dbo.tblRifiutiMovimenti mp ON rp.IdMovimento = mp.Id
 				WHERE
-					(l.Id = @idRegistrazione OR l.IdParent = @idRegistrazione)
+					(
+					l.Id = @idRegistrazione
+					OR l.IdParent = @idRegistrazione
+					)
 					AND mp.IdOperazione <> 'M'
-					AND ( m.IdEer <> @IdEer OR m.IdStatoFisico <> @IdStatoFisico OR m.IdUnitaMisura <> @IdUnitaMisura )
+					AND
+						(
+						m.IdEer <> @IdEer
+						OR m.IdStatoFisico <> @IdStatoFisico
+						OR m.IdUnitaMisura <> @IdUnitaMisura
+						)
 					AND l.Quantita > 0
 					AND r.Lock < 2
 			)
@@ -405,7 +413,16 @@ BEGIN
 					dbo.tblRifiutiMovimenti m
 				WHERE
 					m.Id = @idMovimento
-					AND ( ISNULL(m.IdEer, '000000') <> ISNULL(@IdEer, '000000') OR ISNULL(m.IdStatoFisico, '0') <> ISNULL(@IdStatoFisico, '0') OR ISNULL(m.IdAttivita, '00') <> ISNULL(@IdAttivitaRs, '00') OR ISNULL(m.FormularioNumero, '') <> ISNULL(@FormularioNumero, '') OR ISNULL(m.IdUnitaMisura, '0') <> ISNULL(@IdUnitaMisura, '0') OR ISNULL(m.Quantita, 0) <> ISNULL(@Quantita, 0) OR ISNULL(m.DataInizioTrasporto, @minData) <> ISNULL(@DataInizioTrasporto, @minData) )
+					AND
+						(
+						ISNULL(m.IdEer, '000000') <> ISNULL(@IdEer, '000000')
+						OR ISNULL(m.IdStatoFisico, '0') <> ISNULL(@IdStatoFisico, '0')
+						OR ISNULL(m.IdAttivita, '00') <> ISNULL(@IdAttivitaRs, '00')
+						OR ISNULL(m.FormularioNumero, '') <> ISNULL(@FormularioNumero, '')
+						OR ISNULL(m.IdUnitaMisura, '0') <> ISNULL(@IdUnitaMisura, '0')
+						OR ISNULL(m.Quantita, 0) <> ISNULL(@Quantita, 0)
+						OR ISNULL(m.DataInizioTrasporto, @minData) <> ISNULL(@DataInizioTrasporto, @minData)
+						)
 			)
 				SET @aggiornaLog = 1;
 			ELSE IF EXISTS (
@@ -418,7 +435,13 @@ BEGIN
 					LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi1 ON m.Id = mi1.Id AND mi1.Pos = 0
 				WHERE
 					m.Id = @idMovimento
-					AND ( ISNULL(mp1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneProduttoreDetentore, @idSediciZeri) OR ISNULL(md.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneDestinatario, @idSediciZeri) OR ISNULL(mt1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneTrasportatore1, @idSediciZeri) OR ISNULL(mi1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneIntermediario1, @idSediciZeri) )
+					AND
+						(
+						ISNULL(mp1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneProduttoreDetentore, @idSediciZeri)
+						OR ISNULL(md.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneDestinatario, @idSediciZeri)
+						OR ISNULL(mt1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneTrasportatore1, @idSediciZeri)
+						OR ISNULL(mi1.IdAutorizzazione, @idSediciZeri) <> ISNULL(@IdAutorizzazioneIntermediario1, @idSediciZeri)
+						)
 			)
 				SET @aggiornaLog = 1;
 		END

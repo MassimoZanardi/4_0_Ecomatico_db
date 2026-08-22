@@ -74,7 +74,11 @@ BEGIN
 		WHERE
 			ses.Id = @IdSessione
 			AND m.Lock = 0
-			AND (@Search IS NULL OR m.Nome LIKE '%' + @Search + '%')
+			AND
+				(
+				@Search IS NULL
+				OR m.Nome LIKE '%' + @Search + '%'
+				)
 		ORDER BY m.Nome
 		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS FETCH NEXT @RowsPerPage ROWS ONLY
 		OPTION (RECOMPILE);

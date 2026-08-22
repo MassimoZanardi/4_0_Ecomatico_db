@@ -49,60 +49,60 @@ BEGIN
 		DECLARE @Offset INT = (@PageNumber - 1) * @RowsPerPage;
 
 		DECLARE @stmt NVARCHAR(MAX);
-		DECLARE @params NVARCHAR(4000) = N'
-            @RowsPerPage INT,
-            @Offset      INT,
-            @IdSessione  CHAR(16),
-            @DallaData   DATE,
-            @AllaData    DATE,
-            @Soggetto    VARCHAR(50),
-            @Eer         VARCHAR(50),
-            @Formulario  VARCHAR(50),
+		DECLARE @params NVARCHAR(4000) = N'
+            @RowsPerPage INT,
+            @Offset      INT,
+            @IdSessione  CHAR(16),
+            @DallaData   DATE,
+            @AllaData    DATE,
+            @Soggetto    VARCHAR(50),
+            @Eer         VARCHAR(50),
+            @Formulario  VARCHAR(50),
             @Etichetta   VARCHAR(50)';
 
 		-- FormularioNumero: spostato da tblRifiutiFormulari.Numero a tblRifiutiMovimenti.FormularioNumero
-		SET @stmt = N'
-        WITH tbl AS (
-            SELECT
-                Id                      = f.Id,
-                StatoValore             = CASE WHEN f.Lock = 1 THEN 2 WHEN r.Id IS NULL THEN 1 ELSE 0 END,
-                StatoDescrizione        = CASE WHEN f.Lock = 1 THEN ''Formulario non confermato'' WHEN r.Id IS NULL THEN ''Formulario non registrato'' ELSE ''OK'' END,
-                FormularioNumero        = m.FormularioNumero,
-                FormularioDataEmissione = ISNULL(f.DataEmissione, GETDATE()),
-                OperazioneNome          = op.Nome,
-                EerNome                 = c.Nome,
-                EerDescrizione          = c.Descrizione,
-                StatoFisicoCodice       = s.Codice,
-                StatoFisicoNome         = s.Nome,
-                AttivitaRsCodice        = a.Codice,
-                AttivitaRsNome          = a.Nome,
-                RegistrazioneNumero     = r.Numero,
-                RegistrazioneData       = r.[Data],
-                ProduttoreDetentoreSede = sp.NomeCompleto + '' - '' + sp.IndirizzoCompleto,
-                Trasportatore1Sede      = st.NomeCompleto + '' - '' + st.IndirizzoCompleto,
-                DestinatarioSede        = sd.NomeCompleto + '' - '' + sd.IndirizzoCompleto,
-                Intermediario1Sede      = si.NomeCompleto + '' - '' + si.IndirizzoCompleto,
-                f.Etichette,
-                RowsCount               = COUNT(*) OVER ()
-            FROM
-                dbo.tblRifiutiFormulari                      f
-                INNER JOIN dbo.tblRifiutiMovimenti           m  ON f.IdMovimento               = m.Id
-                INNER JOIN dbo.tblRifiutiRegistri            g  ON m.IdRegistro                = g.Id
-                INNER JOIN dbo.tblSessioni                   e  ON g.Id                        = e.IdRegistro
-                INNER JOIN dbo.tblRifiutiOperazioni          op ON m.IdOperazione              = op.Id
-                LEFT  JOIN dbo.tblRifiutiRegistrazioni       r  ON f.IdMovimento               = r.IdMovimento AND r.Lock < 2
-                LEFT  JOIN dbo.tblRifiutiEer                 c  ON m.IdEer                     = c.Id
-                LEFT  JOIN dbo.tblRifiutiStatiFisici         s  ON m.IdStatoFisico             = s.Id
-                LEFT  JOIN dbo.tblRifiutiAttivitaRecuperoSmaltimento
-                                                             a  ON m.IdAttivita                = a.Id
-                LEFT  JOIN dbo.tblSedi                       sp ON m.IdSedeProduttoreDetentore = sp.Id
-                LEFT  JOIN dbo.tblSedi                       st ON m.IdSedeTrasportatore1      = st.Id
-                LEFT  JOIN dbo.tblSedi                       sd ON m.IdSedeDestinatario        = sd.Id
-                LEFT  JOIN dbo.tblSedi                       si ON m.IdSedeIntermediario1      = si.Id
-            WHERE
-                e.Id    = @IdSessione
-                AND f.Lock < 2
-                AND (@DallaData IS NULL OR ISNULL(f.DataEmissione, GETDATE()) >= @DallaData)
+		SET @stmt = N'
+        WITH tbl AS (
+            SELECT
+                Id                      = f.Id,
+                StatoValore             = CASE WHEN f.Lock = 1 THEN 2 WHEN r.Id IS NULL THEN 1 ELSE 0 END,
+                StatoDescrizione        = CASE WHEN f.Lock = 1 THEN ''Formulario non confermato'' WHEN r.Id IS NULL THEN ''Formulario non registrato'' ELSE ''OK'' END,
+                FormularioNumero        = m.FormularioNumero,
+                FormularioDataEmissione = ISNULL(f.DataEmissione, GETDATE()),
+                OperazioneNome          = op.Nome,
+                EerNome                 = c.Nome,
+                EerDescrizione          = c.Descrizione,
+                StatoFisicoCodice       = s.Codice,
+                StatoFisicoNome         = s.Nome,
+                AttivitaRsCodice        = a.Codice,
+                AttivitaRsNome          = a.Nome,
+                RegistrazioneNumero     = r.Numero,
+                RegistrazioneData       = r.[Data],
+                ProduttoreDetentoreSede = sp.NomeCompleto + '' - '' + sp.IndirizzoCompleto,
+                Trasportatore1Sede      = st.NomeCompleto + '' - '' + st.IndirizzoCompleto,
+                DestinatarioSede        = sd.NomeCompleto + '' - '' + sd.IndirizzoCompleto,
+                Intermediario1Sede      = si.NomeCompleto + '' - '' + si.IndirizzoCompleto,
+                f.Etichette,
+                RowsCount               = COUNT(*) OVER ()
+            FROM
+                dbo.tblRifiutiFormulari                      f
+                INNER JOIN dbo.tblRifiutiMovimenti           m  ON f.IdMovimento               = m.Id
+                INNER JOIN dbo.tblRifiutiRegistri            g  ON m.IdRegistro                = g.Id
+                INNER JOIN dbo.tblSessioni                   e  ON g.Id                        = e.IdRegistro
+                INNER JOIN dbo.tblRifiutiOperazioni          op ON m.IdOperazione              = op.Id
+                LEFT  JOIN dbo.tblRifiutiRegistrazioni       r  ON f.IdMovimento               = r.IdMovimento AND r.Lock < 2
+                LEFT  JOIN dbo.tblRifiutiEer                 c  ON m.IdEer                     = c.Id
+                LEFT  JOIN dbo.tblRifiutiStatiFisici         s  ON m.IdStatoFisico             = s.Id
+                LEFT  JOIN dbo.tblRifiutiAttivitaRecuperoSmaltimento
+                                                             a  ON m.IdAttivita                = a.Id
+                LEFT  JOIN dbo.tblSedi                       sp ON m.IdSedeProduttoreDetentore = sp.Id
+                LEFT  JOIN dbo.tblSedi                       st ON m.IdSedeTrasportatore1      = st.Id
+                LEFT  JOIN dbo.tblSedi                       sd ON m.IdSedeDestinatario        = sd.Id
+                LEFT  JOIN dbo.tblSedi                       si ON m.IdSedeIntermediario1      = si.Id
+            WHERE
+                e.Id    = @IdSessione
+                AND f.Lock < 2
+                AND (@DallaData IS NULL OR ISNULL(f.DataEmissione, GETDATE()) >= @DallaData)
                 AND (@AllaData  IS NULL OR ISNULL(f.DataEmissione, GETDATE()) <= @AllaData)';
 
 		IF @Soggetto IS NOT NULL
@@ -151,24 +151,24 @@ BEGIN
 		IF @Formulario IS NOT NULL
 			SET @stmt = @stmt + N' AND m.FormularioNumero LIKE ''%'' + @Formulario + ''%''';
 
-		SET @stmt = @stmt + N'
-        )
-        SELECT
-            tbl.Id, tbl.StatoValore, tbl.StatoDescrizione,
-            tbl.FormularioNumero, tbl.FormularioDataEmissione,
-            tbl.OperazioneNome,
-            tbl.EerNome, tbl.EerDescrizione,
-            tbl.StatoFisicoCodice, tbl.StatoFisicoNome,
-            tbl.AttivitaRsCodice, tbl.AttivitaRsNome,
-            tbl.RegistrazioneNumero, tbl.RegistrazioneData,
-            tbl.ProduttoreDetentoreSede, tbl.Trasportatore1Sede,
-            tbl.DestinatarioSede, tbl.Intermediario1Sede,
-            tbl.Etichette,
-            tbl.RowsCount
-        FROM tbl
-        ORDER BY tbl.FormularioDataEmissione DESC, tbl.FormularioNumero DESC
-        OFFSET @Offset ROWS
-        FETCH NEXT @RowsPerPage ROWS ONLY
+		SET @stmt = @stmt + N'
+        )
+        SELECT
+            tbl.Id, tbl.StatoValore, tbl.StatoDescrizione,
+            tbl.FormularioNumero, tbl.FormularioDataEmissione,
+            tbl.OperazioneNome,
+            tbl.EerNome, tbl.EerDescrizione,
+            tbl.StatoFisicoCodice, tbl.StatoFisicoNome,
+            tbl.AttivitaRsCodice, tbl.AttivitaRsNome,
+            tbl.RegistrazioneNumero, tbl.RegistrazioneData,
+            tbl.ProduttoreDetentoreSede, tbl.Trasportatore1Sede,
+            tbl.DestinatarioSede, tbl.Intermediario1Sede,
+            tbl.Etichette,
+            tbl.RowsCount
+        FROM tbl
+        ORDER BY tbl.FormularioDataEmissione DESC, tbl.FormularioNumero DESC
+        OFFSET @Offset ROWS
+        FETCH NEXT @RowsPerPage ROWS ONLY
         OPTION (RECOMPILE);';
 
 		EXEC sp_executesql

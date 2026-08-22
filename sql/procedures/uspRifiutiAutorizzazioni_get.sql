@@ -129,7 +129,11 @@ BEGIN
 					INNER JOIN dbo.tblAree ar ON ae.Id = ar.Id
 				WHERE
 					ar.Lock = 0
-					AND (ae.IdOsepe = s.Id OR ae.IdOsepe = s.IdParent)
+					AND
+						(
+						ae.IdOsepe = s.Id
+						OR ae.IdOsepe = s.IdParent
+						)
 			) c
 		WHERE
 			a.Id = @Id

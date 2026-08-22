@@ -110,7 +110,11 @@ BEGIN
 				AND c.IdModulo = @IdModulo
 				AND c.Lock = 0
 				AND c.Id <> @IdSelected
-				AND (@Search IS NULL OR c.Nome + ' - ' + s.Nome + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR c.Nome + ' - ' + s.Nome + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%'
+					)
 		)
 		SELECT TOP 50
 			Id,

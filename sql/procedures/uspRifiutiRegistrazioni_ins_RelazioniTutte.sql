@@ -140,10 +140,30 @@ BEGIN
 			WHERE
 				r.Lock = 0
 				AND m.IdRegistro = @IdRegistro
-				AND (@idOperazione IN ('K', 'M') OR m.IdEer = @IdEer)
-				AND (@idOperazione IN ('K', 'M') OR m.IdStatoFisico = @IdStatoFisico)
-				AND (@idOperazione IN ('K', 'M') OR m.IdUnitaMisura = @IdUnitaMisura)
-				AND (r.[Data] < @Data OR (r.[Data] = @Data AND r.Numero < @Numero))
+				AND
+					(
+					@idOperazione IN ('K', 'M')
+					OR m.IdEer = @IdEer
+					)
+				AND
+					(
+					@idOperazione IN ('K', 'M')
+					OR m.IdStatoFisico = @IdStatoFisico
+					)
+				AND
+					(
+					@idOperazione IN ('K', 'M')
+					OR m.IdUnitaMisura = @IdUnitaMisura
+					)
+				AND
+					(
+					r.[Data] < @Data
+					OR
+						(
+						r.[Data] = @Data
+						AND r.Numero < @Numero
+						)
+					)
 				AND m.IdOperazione IN ( SELECT IdParent FROM dbo.tblRifiutiOperazioniRelazioni WHERE Id = @idOperazione )
 				AND m.Quantita - ISNULL(a.Quantita, 0) > 0 -- QuantitaResidua > 0
 				AND NOT EXISTS ( SELECT 1 FROM dbo.tblRifiutiRegistrazioniRelazioni x WHERE x.Id = r.Id AND x.IdParent = @IdParent )

@@ -277,14 +277,22 @@ BEGIN
 				WHERE
 					Id <> @Id
 					AND Lock = 0
-					AND (Id = @idParentGruppo OR IdParent = @idParentGruppo);
+					AND
+						(
+						Id = @idParentGruppo
+						OR IdParent = @idParentGruppo
+						);
 			ELSE IF NOT EXISTS (
 				SELECT 1
 				FROM dbo.tblSedi
 				WHERE
 					UnitaLocale = 1
 					AND Lock = 0
-					AND (Id = @idParentGruppo OR IdParent = @idParentGruppo)
+					AND
+						(
+						Id = @idParentGruppo
+						OR IdParent = @idParentGruppo
+						)
 			)
 				-- Il gruppo deve avere sempre almeno una sede con UnitaLocale=true: se nessuna lo è
 				-- più (l'unica sede true si sta spegnendo e nessun'altra la sostituisce nella stessa

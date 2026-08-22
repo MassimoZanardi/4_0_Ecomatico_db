@@ -62,7 +62,11 @@ BEGIN
 		WHERE
 			a.IdDominio = @idDominio
 			AND a.Lock = 0
-			AND (@Search IS NULL OR a.Nome LIKE '%' + @Search + '%')
+			AND
+				(
+				@Search IS NULL
+				OR a.Nome LIKE '%' + @Search + '%'
+				)
 		ORDER BY
 			a.Nome
 		OFFSET @Offset ROWS

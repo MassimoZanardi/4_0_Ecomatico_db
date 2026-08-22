@@ -33,7 +33,11 @@ BEGIN
 			AND TokenResetScade > GETDATE()
 			AND IdStato = @StatoAttivo
 			AND Lock = 0
-			AND (Scadenza IS NULL OR Scadenza >= CAST(GETDATE() AS DATE));
+			AND
+				(
+				Scadenza IS NULL
+				OR Scadenza >= CAST(GETDATE() AS DATE)
+				);
 		IF @IdUtente IS NULL
 		BEGIN
 			SET @returnValue = -1;

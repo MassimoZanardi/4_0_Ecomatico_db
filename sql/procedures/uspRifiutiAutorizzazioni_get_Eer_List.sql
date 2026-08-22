@@ -100,7 +100,12 @@ BEGIN
 				dbo.tblRifiutiEer
 			WHERE
 				Id NOT IN (SELECT IdEer FROM dbo.tblRifiutiAutorizzazioniEer WHERE Id = @Id)
-				AND (@Search IS NULL OR Nome LIKE '%' + @Search + '%' OR Descrizione LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR Nome LIKE '%' + @Search + '%'
+					OR Descrizione LIKE '%' + @Search + '%'
+					)
 			ORDER BY
 				Id;
 		END

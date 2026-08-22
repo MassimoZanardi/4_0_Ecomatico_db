@@ -119,8 +119,15 @@ BEGIN
 			RowsCount = COUNT(*) OVER ()
 		FROM tbl
 		WHERE
-			(@Nome IS NULL OR tbl.NomeCompleto LIKE '%' + @Nome + '%')
-			AND (@Ruolo IS NULL OR tbl.Id IN ( SELECT pr.Id FROM dbo.tblPersoneRuoli pr INNER JOIN dbo.tblRuoli r ON pr.IdRuolo = r.Id WHERE r.Nome LIKE '%' + @Ruolo + '%' ))
+			(
+			@Nome IS NULL
+			OR tbl.NomeCompleto LIKE '%' + @Nome + '%'
+			)
+			AND
+				(
+				@Ruolo IS NULL
+				OR tbl.Id IN ( SELECT pr.Id FROM dbo.tblPersoneRuoli pr INNER JOIN dbo.tblRuoli r ON pr.IdRuolo = r.Id WHERE r.Nome LIKE '%' + @Ruolo + '%' )
+				)
 		ORDER BY tbl.NomeCompleto
 		OFFSET @Offset ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY

@@ -85,7 +85,12 @@ BEGIN
 		WHERE
 			a.Id = @Id
 			AND s.Lock = 0
-			AND (@Search IS NULL OR s.NomeCompleto LIKE '%' + @Search + '%' OR s.IndirizzoCompleto LIKE '%' + @Search + '%')
+			AND
+				(
+				@Search IS NULL
+				OR s.NomeCompleto LIKE '%' + @Search + '%'
+				OR s.IndirizzoCompleto LIKE '%' + @Search + '%'
+				)
 		ORDER BY
 			s.NomeCompleto;
 

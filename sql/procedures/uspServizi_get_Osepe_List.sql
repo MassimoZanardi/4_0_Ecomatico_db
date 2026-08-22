@@ -76,7 +76,11 @@ BEGIN
 				a.Id = @Id
 				AND o.Tipo = 'P'
 				AND s.Lock = 0
-				AND (@Search IS NULL OR s.NomeCompleto LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR s.NomeCompleto LIKE '%' + @Search + '%'
+					)
 			UNION ALL -- rami mutualmente esclusivi per tipo Osepe
 
 			-- Ramo 2: Oggetti
@@ -94,7 +98,11 @@ BEGIN
 				a.Id = @Id
 				AND o.Tipo = 'O'
 				AND s.Lock = 0
-				AND (@Search IS NULL OR s.Nome LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR s.Nome LIKE '%' + @Search + '%'
+					)
 		) t
 		ORDER BY t.Nome;
 

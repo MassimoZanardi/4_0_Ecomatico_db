@@ -37,7 +37,11 @@ BEGIN
 			Email = @Email COLLATE Latin1_General_CI_AS
 			AND Lock = 0
 			AND IdStato = @StatoAttivo
-			AND (Scadenza IS NULL OR Scadenza >= CAST(GETDATE() AS DATE));
+			AND
+				(
+				Scadenza IS NULL
+				OR Scadenza >= CAST(GETDATE() AS DATE)
+				);
 
 		-- 0 = utente non trovato, scaduto o bloccato
 		-- 1 = token impostato correttamente

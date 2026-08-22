@@ -84,7 +84,11 @@ BEGIN
 			dbo.tblRifiutiAutorizzazioniTarghe
 		WHERE
 			Id = @Id
-			AND (@Search IS NULL OR Targa LIKE '%' + @Search + '%')
+			AND
+				(
+				@Search IS NULL
+				OR Targa LIKE '%' + @Search + '%'
+				)
 		ORDER BY Targa;
 
 	END TRY

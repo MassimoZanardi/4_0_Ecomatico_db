@@ -25,14 +25,14 @@ BEGIN
 		-- Normalizza: NULL → nessuna selezione
 		SET @IdSelected = ISNULL(NULLIF(LTRIM(RTRIM(@IdSelected)), ''), @idSediciZeri);
 
-		/*
-        *   Imposta @idAziendaInterna in funzione del Contesto
-        *   0 = Dominio    → IdDominio    (solo da sessione su dominio Master) -- non implementato
-        *   1 = Azienda    → IdAzienda
-        *   2 = Sede       → IdSede
-        *   3 = Registro   → IdRegistro
-        *   4 = Magazzino  → IdMagazzino
-        *   5 = Calendario → IdCalendario
+		/*
+        *   Imposta @idAziendaInterna in funzione del Contesto
+        *   0 = Dominio    → IdDominio    (solo da sessione su dominio Master) -- non implementato
+        *   1 = Azienda    → IdAzienda
+        *   2 = Sede       → IdSede
+        *   3 = Registro   → IdRegistro
+        *   4 = Magazzino  → IdMagazzino
+        *   5 = Calendario → IdCalendario
         */
 		DECLARE @idAziendaInterna CHAR(16);
 		IF @Contesto = 1 -- Azienda
@@ -110,10 +110,21 @@ BEGIN
 				INNER JOIN dbo.tblSedi s ON u.Id = s.Id
 			WHERE
 				e.Id = @IdSessione
-				AND ( (u.IdDominio = e.IdDominio AND u.Condivisa = 1) OR u.IdAziendaInterna = ISNULL(@idAziendaInterna, u.IdAziendaInterna) )
+				AND
+					(
+						(
+						u.IdDominio = e.IdDominio
+						AND u.Condivisa = 1
+						)
+					OR u.IdAziendaInterna = ISNULL(@idAziendaInterna, u.IdAziendaInterna)
+					)
 				AND u.Disabilitata = 0
 				AND s.Id <> @IdSelected
-				AND (@Search IS NULL OR s.NomeCompleto + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR s.NomeCompleto + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%'
+					)
 		)
 		SELECT TOP 50
 			Id,

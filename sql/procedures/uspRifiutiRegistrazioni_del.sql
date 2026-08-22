@@ -199,11 +199,19 @@ BEGIN
 				DELETE dbo.tblIdLog
 				WHERE
 					Id = @Id
-					OR (Id = @idMovimento AND @idFormulario IS NULL);
+					OR
+						(
+						Id = @idMovimento
+						AND @idFormulario IS NULL
+						);
 				DELETE dbo.tblId
 				WHERE
 					Id = @Id
-					OR (Id = @idMovimento AND @idFormulario IS NULL);
+					OR
+						(
+						Id = @idMovimento
+						AND @idFormulario IS NULL
+						);
 			COMMIT TRANSACTION;
 		END
 

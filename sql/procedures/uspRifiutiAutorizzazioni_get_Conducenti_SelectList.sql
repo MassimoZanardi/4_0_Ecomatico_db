@@ -84,7 +84,12 @@ BEGIN
 			dbo.tblRifiutiAutorizzazioniConducenti
 		WHERE
 			Id = @Id
-			AND (@Search IS NULL OR Nome LIKE '%' + @Search + '%' OR Cognome LIKE '%' + @Search + '%')
+			AND
+				(
+				@Search IS NULL
+				OR Nome LIKE '%' + @Search + '%'
+				OR Cognome LIKE '%' + @Search + '%'
+				)
 		ORDER BY Nome, Cognome;
 
 	END TRY

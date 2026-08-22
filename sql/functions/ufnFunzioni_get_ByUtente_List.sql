@@ -20,7 +20,11 @@ RETURN
 	WHERE
 		u.Id = @IdUtente
 		AND u.IdRuolo = 'AD'
-		AND (d.[Master] = 1 OR f.[Master] = 0)
+		AND
+			(
+			d.[Master] = 1
+			OR f.[Master] = 0
+			)
 		AND EXISTS ( SELECT 1 FROM dbo.tblModuliFunzioni mf INNER JOIN dbo.tblModuli m ON mf.Id = m.Id WHERE mf.IdFunzione = f.Id AND m.Attivo = 1 AND ( d.[Master] = 1 OR EXISTS ( SELECT 1 FROM dbo.tblDominiModuli dm WHERE dm.Id = d.Id AND dm.IdModulo = mf.Id ) ) )
 	UNION ALL
 
@@ -54,5 +58,13 @@ RETURN
 		u.Id = @IdUtente
 		AND u.IdRuolo = 'US'
 		AND d.[Master] = 0
-		AND ( EXISTS ( SELECT 1 FROM dbo.tblModuliFunzioni mf WHERE mf.IdFunzione = f.Id AND mf.Id = 'BAS' ) OR ( uf.Id IS NOT NULL AND EXISTS ( SELECT 1 FROM dbo.tblDominiModuli dm INNER JOIN dbo.tblModuliFunzioni mf ON dm.IdModulo = mf.Id INNER JOIN dbo.tblModuli m ON mf.Id = m.Id WHERE dm.Id = d.Id AND mf.IdFunzione = f.Id AND m.Attivo = 1 ) ) )
+		AND
+			(
+			EXISTS ( SELECT 1 FROM dbo.tblModuliFunzioni mf WHERE mf.IdFunzione = f.Id AND mf.Id = 'BAS' )
+			OR
+				(
+				uf.Id IS NOT NULL
+				AND EXISTS ( SELECT 1 FROM dbo.tblDominiModuli dm INNER JOIN dbo.tblModuliFunzioni mf ON dm.IdModulo = mf.Id INNER JOIN dbo.tblModuli m ON mf.Id = m.Id WHERE dm.Id = d.Id AND mf.IdFunzione = f.Id AND m.Attivo = 1 )
+				)
+			)
 );

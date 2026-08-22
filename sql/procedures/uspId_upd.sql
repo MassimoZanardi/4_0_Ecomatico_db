@@ -51,14 +51,15 @@ BEGIN
 				WHERE
 					Id = @Id
 					AND Operazione = 'U'
-					AND (
-					  -- Sovrascrive operazioni sullo stesso Id nel range di 30 secondi
+					AND
+						(
+						-- Sovrascrive operazioni sullo stesso Id nel range di 30 secondi
 					  [Data] BETWEEN DATEADD(SECOND, -30, @data) AND @data
-					  OR
+						OR
 					  -- Elimina i log oltre il decimo
 					  -- NULL <= NULL = FALSE: nessun effetto se @dataMin è NULL
 					  [Data] <= @dataMin
-				  );
+						);
 
 			INSERT INTO dbo.tblIdLog (Id, Operazione, [Data], IdUtente)
 			SELECT @Id, @Operazione, @data, IdUtente

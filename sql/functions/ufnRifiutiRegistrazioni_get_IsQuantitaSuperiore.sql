@@ -48,7 +48,36 @@ BEGIN
 		) qa
 	WHERE
 		r.Lock = 0
-		AND ( @NoParametri = 1 OR ( ( r.[Data] < @RegistrazioneData OR (r.[Data] = @RegistrazioneData AND r.Numero < @RegistrazioneNumero) ) AND (mp.IdOperazione IN ('K', 'M') OR m.IdEer = @IdEer) AND (mp.IdOperazione IN ('K', 'M') OR m.IdStatoFisico = @IdStatoFisico) AND (mp.IdOperazione IN ('K', 'M') OR m.IdUnitaMisura = @IdUnitaMisura) ) );
+		AND
+			(
+			@NoParametri = 1
+			OR
+				(
+					(
+					r.[Data] < @RegistrazioneData
+					OR
+						(
+						r.[Data] = @RegistrazioneData
+						AND r.Numero < @RegistrazioneNumero
+						)
+					)
+				AND
+					(
+					mp.IdOperazione IN ('K', 'M')
+					OR m.IdEer = @IdEer
+					)
+				AND
+					(
+					mp.IdOperazione IN ('K', 'M')
+					OR m.IdStatoFisico = @IdStatoFisico
+					)
+				AND
+					(
+					mp.IdOperazione IN ('K', 'M')
+					OR m.IdUnitaMisura = @IdUnitaMisura
+					)
+				)
+			);
 	RETURN CASE
 		WHEN @Quantita > ISNULL(@TotaleDisponibile, 0) THEN 1
 		ELSE 0

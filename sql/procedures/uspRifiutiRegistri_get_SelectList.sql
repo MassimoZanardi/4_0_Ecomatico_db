@@ -72,7 +72,11 @@ BEGIN
 				INNER JOIN dbo.tblSedi s ON r.IdSede = s.Id
 			WHERE
 				r.Lock = 0
-				AND (@Search IS NULL OR (r.Nome + ' - ' + s.Nome + ' ' + s.IndirizzoCompleto) LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR (r.Nome + ' - ' + s.Nome + ' ' + s.IndirizzoCompleto) LIKE '%' + @Search + '%'
+					)
 		) x
 		ORDER BY Pos, [Text]
 		OPTION (RECOMPILE);

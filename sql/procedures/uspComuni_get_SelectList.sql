@@ -48,7 +48,12 @@ BEGIN
 				LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
 			WHERE
 				c.Id <> @IdSelected
-				AND (@Search IS NULL OR c.Nome LIKE '%' + @Search + '%' OR p.Nome LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR c.Nome LIKE '%' + @Search + '%'
+					OR p.Nome LIKE '%' + @Search + '%'
+					)
 		)
 		SELECT TOP 10
 			Id,

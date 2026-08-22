@@ -58,7 +58,11 @@ BEGIN
 		WHERE
 			t.Id = @Id
 			AND t.Lock = 0
-			AND (@Search IS NULL OR t.Nome LIKE '%' + @Search + '%')
+			AND
+				(
+				@Search IS NULL
+				OR t.Nome LIKE '%' + @Search + '%'
+				)
 		ORDER BY
 			t.Pos;
 	END TRY

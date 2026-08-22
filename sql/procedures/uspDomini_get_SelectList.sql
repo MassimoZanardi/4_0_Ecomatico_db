@@ -65,7 +65,11 @@ BEGIN
 				@master = 1
 				AND Id <> @idSelected
 				AND Lock = 0
-				AND (@Search IS NULL OR Nome LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR Nome LIKE '%' + @Search + '%'
+					)
 		)
 		SELECT TOP 50
 			Id,

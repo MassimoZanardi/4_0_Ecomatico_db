@@ -83,7 +83,12 @@ BEGIN
 			) ua
 		WHERE
 			d.Lock = 0
-			AND (@Search IS NULL OR d.Nome LIKE '%' + @Search + '%' OR d.Riferimento LIKE '%' + @Search + '%')
+			AND
+				(
+				@Search IS NULL
+				OR d.Nome LIKE '%' + @Search + '%'
+				OR d.Riferimento LIKE '%' + @Search + '%'
+				)
 		ORDER BY d.Registrazione DESC
 		OFFSET @Offset ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY

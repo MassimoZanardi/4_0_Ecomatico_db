@@ -47,7 +47,11 @@ BEGIN
 			LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
 		WHERE
 			c.Nome = @nomeBase
-			AND (@sigla IS NULL OR p.Sigla = @sigla)
+			AND
+				(
+				@sigla IS NULL
+				OR p.Sigla = @sigla
+				)
 		ORDER BY
 			c.Nome, c.Id; -- deterministico anche se resta un'ambiguità (nessuna sigla fornita)
 

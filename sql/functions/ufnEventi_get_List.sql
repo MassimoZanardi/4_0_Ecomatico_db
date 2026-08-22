@@ -84,7 +84,11 @@ RETURN
 		WHERE
 			e.IdCalendario IN (SELECT Id FROM @IdCalendario)
 			AND e.IdTipo IN (SELECT Id FROM @IdTipo)
-			AND (r.DataFine IS NULL OR r.DataFine >= @DallaData)
+			AND
+				(
+				r.DataFine IS NULL
+				OR r.DataFine >= @DallaData
+				)
 			AND e.Lock = 0
 	)
 	SELECT

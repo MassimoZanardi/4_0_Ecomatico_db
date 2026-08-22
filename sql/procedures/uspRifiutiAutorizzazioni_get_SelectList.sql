@@ -113,14 +113,33 @@ BEGIN
 					INNER JOIN dbo.tblRifiutiAutorizzazioni a ON u.Id = a.IdSede
 					INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
 				WHERE
-					( (@isSede = 1 AND a.IdSede = @idSede) OR (@isSede = 0 AND u.IdAziendaInterna = @idSede) OR (@isSede = 0 AND u.Condivisa = 1) )
+					(
+						(
+						@isSede = 1
+						AND a.IdSede = @idSede
+						)
+					OR
+						(
+						@isSede = 0
+						AND u.IdAziendaInterna = @idSede
+						)
+					OR
+						(
+						@isSede = 0
+						AND u.Condivisa = 1
+						)
+					)
 					AND a.Disabilitata = 0
 					AND s.Disabilitata = 0
 					AND u.Disabilitata = 0
 					AND a.Id <> @IdSelected
 					AND a.IdRuolo = @IdRuolo
 					AND a.Lock < 2
-					AND (@Search IS NULL OR ISNULL(a.Numero + ' ', '') + s.NomeCompleto + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%')
+					AND
+						(
+						@Search IS NULL
+						OR ISNULL(a.Numero + ' ', '') + s.NomeCompleto + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%'
+						)
 			)
 			SELECT TOP 20 Id, [Text], Selected
 			FROM cte ORDER BY Pos, [Text]
@@ -173,11 +192,30 @@ BEGIN
 					#sediUtente u
 					INNER JOIN dbo.tblSedi s ON u.Id = s.Id
 				WHERE
-					( (@isSede = 1 AND s.Id = @idSede) OR (@isSede = 0 AND s.IdAziendaInterna = @idSede) OR (@isSede = 0 AND u.Condivisa = 1) )
+					(
+						(
+						@isSede = 1
+						AND s.Id = @idSede
+						)
+					OR
+						(
+						@isSede = 0
+						AND s.IdAziendaInterna = @idSede
+						)
+					OR
+						(
+						@isSede = 0
+						AND u.Condivisa = 1
+						)
+					)
 					AND s.Id <> @IdSelected
 					AND u.Disabilitata = 0
 					AND NOT EXISTS ( SELECT 1 FROM dbo.tblRifiutiAutorizzazioni a WHERE s.Id = a.IdSede AND a.Nessuna = 1 AND a.IdRuolo = 'P' AND a.Lock = 0 )
-					AND (@Search IS NULL OR s.NomeCompleto + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%')
+					AND
+						(
+						@Search IS NULL
+						OR s.NomeCompleto + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%'
+						)
 				UNION ALL -- autorizzazioni produttore
 
 				SELECT
@@ -190,14 +228,33 @@ BEGIN
 					INNER JOIN dbo.tblRifiutiAutorizzazioni a ON u.Id = a.IdSede
 					INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
 				WHERE
-					( (@isSede = 1 AND a.IdSede = @idSede) OR (@isSede = 0 AND u.IdAziendaInterna = @idSede) OR (@isSede = 0 AND u.Condivisa = 1) )
+					(
+						(
+						@isSede = 1
+						AND a.IdSede = @idSede
+						)
+					OR
+						(
+						@isSede = 0
+						AND u.IdAziendaInterna = @idSede
+						)
+					OR
+						(
+						@isSede = 0
+						AND u.Condivisa = 1
+						)
+					)
 					AND a.Disabilitata = 0
 					AND s.Disabilitata = 0
 					AND u.Disabilitata = 0
 					AND a.Id <> @IdSelected
 					AND a.IdRuolo = @IdRuolo
 					AND a.Lock < 2
-					AND (@Search IS NULL OR ISNULL(a.Numero + ' ', '') + s.NomeCompleto + ' ' + s.IndirizzoCompleto + ISNULL(' - ' + a.Identificativo, '') LIKE '%' + @Search + '%')
+					AND
+						(
+						@Search IS NULL
+						OR ISNULL(a.Numero + ' ', '') + s.NomeCompleto + ' ' + s.IndirizzoCompleto + ISNULL(' - ' + a.Identificativo, '') LIKE '%' + @Search + '%'
+						)
 			)
 			SELECT TOP 20 Id, [Text], Selected
 			FROM cte ORDER BY Pos, [Text]

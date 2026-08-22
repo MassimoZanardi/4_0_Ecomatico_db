@@ -75,9 +75,21 @@ BEGIN
 				e.Id = @IdSessione
 				AND a.Nessuna = 0
 				AND a.Lock = 0
-				AND (@Numero IS NULL OR a.Numero LIKE '%' + @Numero + '%')
-				AND (@Sede IS NULL OR s.NomeCompleto + ' - ' + s.IndirizzoCompleto LIKE '%' + @Sede + '%')
-				AND (@IdRuolo IS NULL OR a.IdRuolo = @IdRuolo)
+				AND
+					(
+					@Numero IS NULL
+					OR a.Numero LIKE '%' + @Numero + '%'
+					)
+				AND
+					(
+					@Sede IS NULL
+					OR s.NomeCompleto + ' - ' + s.IndirizzoCompleto LIKE '%' + @Sede + '%'
+					)
+				AND
+					(
+					@IdRuolo IS NULL
+					OR a.IdRuolo = @IdRuolo
+					)
 			UNION ALL
 
 			-- Autorizzazioni esterne: legate alla sessione tramite aziende esterne condivise
@@ -117,9 +129,21 @@ BEGIN
 				AND a.Nessuna = 0
 				AND s.Disabilitata = 0
 				AND a.Lock = 0
-				AND (@Numero IS NULL OR a.Numero LIKE '%' + @Numero + '%')
-				AND (@Sede IS NULL OR s.NomeCompleto + ' - ' + s.IndirizzoCompleto LIKE '%' + @Sede + '%')
-				AND (@IdRuolo IS NULL OR a.IdRuolo = @IdRuolo)
+				AND
+					(
+					@Numero IS NULL
+					OR a.Numero LIKE '%' + @Numero + '%'
+					)
+				AND
+					(
+					@Sede IS NULL
+					OR s.NomeCompleto + ' - ' + s.IndirizzoCompleto LIKE '%' + @Sede + '%'
+					)
+				AND
+					(
+					@IdRuolo IS NULL
+					OR a.IdRuolo = @IdRuolo
+					)
 		)
 		SELECT
 			tbl.Id, tbl.StatoValore, tbl.StatoDescrizione,

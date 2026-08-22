@@ -113,10 +113,25 @@ BEGIN
 			RowsCount = COUNT(*) OVER ()
 		FROM tbl
 		WHERE
-			(@Nome IS NULL OR tbl.NomeCompleto LIKE '%' + @Nome + '%')
-			AND (@Indirizzo IS NULL OR tbl.IndirizzoCompleto LIKE '%' + @Indirizzo + '%')
-			AND (@CodiceFiscale IS NULL OR tbl.CodiceFiscale LIKE '%' + @CodiceFiscale + '%')
-			AND (@Note IS NULL OR tbl.Note LIKE '%' + @Note + '%')
+			(
+			@Nome IS NULL
+			OR tbl.NomeCompleto LIKE '%' + @Nome + '%'
+			)
+			AND
+				(
+				@Indirizzo IS NULL
+				OR tbl.IndirizzoCompleto LIKE '%' + @Indirizzo + '%'
+				)
+			AND
+				(
+				@CodiceFiscale IS NULL
+				OR tbl.CodiceFiscale LIKE '%' + @CodiceFiscale + '%'
+				)
+			AND
+				(
+				@Note IS NULL
+				OR tbl.Note LIKE '%' + @Note + '%'
+				)
 		ORDER BY tbl.NomeCompleto
 		OFFSET @Offset ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY

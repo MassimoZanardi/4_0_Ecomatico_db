@@ -175,7 +175,12 @@ BEGIN
 						FROM dbo.tblRicorrenze
 						WHERE
 							Id = @IdEvento
-							AND (IdIntervallo <> @IdIntervallo OR Frequenza <> @Frequenza OR Relativo <> @Relativo)
+							AND
+								(
+								IdIntervallo <> @IdIntervallo
+								OR Frequenza <> @Frequenza
+								OR Relativo <> @Relativo
+								)
 					)
 						DELETE dbo.tblRicorrenzeEccezioni
 						WHERE

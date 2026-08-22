@@ -34,6 +34,10 @@ RETURN
 		AND e.IdTipo = 'V'
 		AND e.[Data] BETWEEN @DallaData AND @AllaData
 		-- Ricorre = 0: evento singolo; Eccezione = 1: occorrenza modificata
-		AND (r.Id IS NULL OR z.IdEvento IS NOT NULL)
+		AND
+			(
+			r.Id IS NULL
+			OR z.IdEvento IS NOT NULL
+			)
 		AND e.Lock = 0
 );

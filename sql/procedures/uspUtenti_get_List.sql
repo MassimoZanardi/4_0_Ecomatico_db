@@ -81,8 +81,16 @@ BEGIN
 			u.Lock = 0
 			AND u.[Master] = 0
 			AND s.Id = @IdSessione
-			AND (@Email IS NULL OR u.Email LIKE '%' + @Email + '%')
-			AND (@Ruolo IS NULL OR r.Nome LIKE '%' + @Ruolo + '%')
+			AND
+				(
+				@Email IS NULL
+				OR u.Email LIKE '%' + @Email + '%'
+				)
+			AND
+				(
+				@Ruolo IS NULL
+				OR r.Nome LIKE '%' + @Ruolo + '%'
+				)
 		ORDER BY u.Email
 		OFFSET @Offset ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY

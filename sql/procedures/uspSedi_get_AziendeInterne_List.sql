@@ -64,10 +64,26 @@ BEGIN
 			AND u.IdRuolo = 'AD'
 			AND s.IdParent IS NULL
 			AND s.Lock = 0
-			AND (@Nome IS NULL OR s.NomeCompleto LIKE '%' + @Nome + '%')
-			AND (@Indirizzo IS NULL OR s.IndirizzoCompleto LIKE '%' + @Indirizzo + '%')
-			AND (@CodiceFiscale IS NULL OR s.CodiceFiscale LIKE '%' + @CodiceFiscale + '%')
-			AND (@Note IS NULL OR s.Note LIKE '%' + @Note + '%')
+			AND
+				(
+				@Nome IS NULL
+				OR s.NomeCompleto LIKE '%' + @Nome + '%'
+				)
+			AND
+				(
+				@Indirizzo IS NULL
+				OR s.IndirizzoCompleto LIKE '%' + @Indirizzo + '%'
+				)
+			AND
+				(
+				@CodiceFiscale IS NULL
+				OR s.CodiceFiscale LIKE '%' + @CodiceFiscale + '%'
+				)
+			AND
+				(
+				@Note IS NULL
+				OR s.Note LIKE '%' + @Note + '%'
+				)
 		ORDER BY s.NomeCompleto
 		OFFSET @Offset ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY

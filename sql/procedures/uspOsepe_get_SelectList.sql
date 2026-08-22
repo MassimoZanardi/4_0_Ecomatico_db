@@ -34,14 +34,14 @@ BEGIN
 		IF @IncludiSedi = 1 INSERT @tblTipi (Tipo) VALUES ('S');
 		IF @IncludiPersone = 1 INSERT @tblTipi (Tipo) VALUES ('P');
 
-		/*
-		*   Imposta @idAziendaInterna in funzione del Contesto
-		*   0 = Dominio    → IdDominio    (solo da sessione su dominio Master) -- non implementato
-		*   1 = Azienda    → IdAzienda
-		*   2 = Sede       → IdSede
-		*   3 = Registro   → IdRegistro
-		*   4 = Magazzino  → IdMagazzino
-		*   5 = Calendario → IdCalendario
+		/*
+		*   Imposta @idAziendaInterna in funzione del Contesto
+		*   0 = Dominio    → IdDominio    (solo da sessione su dominio Master) -- non implementato
+		*   1 = Azienda    → IdAzienda
+		*   2 = Sede       → IdSede
+		*   3 = Registro   → IdRegistro
+		*   4 = Magazzino  → IdMagazzino
+		*   5 = Calendario → IdCalendario
 		*/
 
 		DECLARE @idAziendaInterna CHAR(16);
@@ -151,12 +151,23 @@ BEGIN
 				CROSS APPLY dbo.ufnOsepe_get_ByUtente_List(e.IdUtente) u
 			WHERE
 				e.Id = @IdSessione
-				AND ( (u.IdDominio = e.IdDominio AND u.Condivisa = 1) OR u.IdSede = ISNULL(@idAziendaInterna, u.IdSede) )
+				AND
+					(
+						(
+						u.IdDominio = e.IdDominio
+						AND u.Condivisa = 1
+						)
+					OR u.IdSede = ISNULL(@idAziendaInterna, u.IdSede)
+					)
 				AND u.Tipo IN (SELECT Tipo FROM @tblTipi)
 				AND u.Disabilitata = 0
 				AND u.ImpiegabileServizi = IIF(@ImpiegabileServizi = 1, 1, u.ImpiegabileServizi)
 				AND u.Id <> @IdSelected
-				AND (@Search IS NULL OR u.[Text] LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR u.[Text] LIKE '%' + @Search + '%'
+					)
 		)
 		SELECT TOP 50
 			Id,

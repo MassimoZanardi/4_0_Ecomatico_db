@@ -105,7 +105,12 @@ BEGIN
 		WHERE
 			IdParent = @Id
 			AND Lock = 0
-			AND (@Search IS NULL OR NomeCompleto LIKE '%' + @Search + '%' OR IndirizzoCompleto LIKE '%' + @Search + '%')
+			AND
+				(
+				@Search IS NULL
+				OR NomeCompleto LIKE '%' + @Search + '%'
+				OR IndirizzoCompleto LIKE '%' + @Search + '%'
+				)
 		ORDER BY NomeCompleto
 		OPTION (RECOMPILE);
 

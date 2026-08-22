@@ -28,7 +28,11 @@ BEGIN
 			AND TokenResetScade > GETDATE()
 			AND IdStato = @StatoAttivo
 			AND Lock = 0 -- esclude utenti bloccati
-			AND (Scadenza IS NULL OR Scadenza >= CAST(GETDATE() AS DATE));
+			AND
+				(
+				Scadenza IS NULL
+				OR Scadenza >= CAST(GETDATE() AS DATE)
+				);
 
 	END TRY
 	BEGIN CATCH

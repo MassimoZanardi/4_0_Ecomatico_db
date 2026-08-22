@@ -60,7 +60,11 @@ BEGIN
 			WHERE
 				e.Id = @IdSessione
 				AND i.Id <> @IdSelected
-				AND (@Search IS NULL OR i.[Text] + ' [' + i.TipoNome + ']' LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR i.[Text] + ' [' + i.TipoNome + ']' LIKE '%' + @Search + '%'
+					)
 		)
 		SELECT TOP 50
 			Id,

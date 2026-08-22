@@ -38,8 +38,15 @@ BEGIN
 				Pos = 2
 			FROM dbo.tblRifiutiEer
 			WHERE
-				(@IdSelected IS NULL OR Id <> @IdSelected)
-				AND (@Search IS NULL OR (Nome + IIF(Pericoloso = 1, '*', '') + ' - ' + Descrizione) LIKE '%' + @Search + '%')
+				(
+				@IdSelected IS NULL
+				OR Id <> @IdSelected
+				)
+				AND
+					(
+					@Search IS NULL
+					OR (Nome + IIF(Pericoloso = 1, '*', '') + ' - ' + Descrizione) LIKE '%' + @Search + '%'
+					)
 		)
 		SELECT TOP 20 Id, [Text], Selected
 		FROM cte

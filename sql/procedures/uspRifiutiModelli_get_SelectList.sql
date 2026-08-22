@@ -53,9 +53,26 @@ BEGIN
 			WHERE
 				r.IdRegistro = @idRegistro
 				AND o.IsRentri = ISNULL(@IsRentri, o.IsRentri)
-				AND ( @IsFormulario IS NULL OR (@IsFormulario = 0 AND NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiOperazioniFormulario WHERE Id = o.Id)) OR (@IsFormulario = 1 AND EXISTS (SELECT 1 FROM dbo.tblRifiutiOperazioniFormulario WHERE Id = o.Id)) )
+				AND
+					(
+					@IsFormulario IS NULL
+					OR
+						(
+						@IsFormulario = 0
+						AND NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiOperazioniFormulario WHERE Id = o.Id)
+						)
+					OR
+						(
+						@IsFormulario = 1
+						AND EXISTS (SELECT 1 FROM dbo.tblRifiutiOperazioniFormulario WHERE Id = o.Id)
+						)
+					)
 				AND r.Lock = 0
-				AND (@Search IS NULL OR r.Nome LIKE '%' + @Search + '%')
+				AND
+					(
+					@Search IS NULL
+					OR r.Nome LIKE '%' + @Search + '%'
+					)
 		)
 		SELECT TOP 50
 			Id,

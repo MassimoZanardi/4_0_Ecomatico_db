@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
@@ -20,10 +20,31 @@ CREATE TABLE [dbo].[tblRifiutiModelli](
 	[IdAutorizzazioneIntermediario1] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[IdTipoTrasporto1] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[Nome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Note] [varchar](500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[UtenteNote] [varchar](500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[Etichette] [varchar](2000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[Lock] [tinyint] NULL,
+	[IdProvenienza] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdMateriale] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[MaterialeDescrizione] [varchar](200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[LuogoDiProduzione] [bit] NULL,
+	[Detentore] [bit] NULL,
+	[IdAutorizzazioneTrasportatore2] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdAutorizzazioneTrasportatore3] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdTipoTrasporto2] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdTipoTrasporto3] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdAutorizzazioneIntermediario2] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdAutorizzazioneIntermediario3] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdTrasportoTransfrontalieroTipo] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdRaee] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[AllaRinfusa] [bit] NULL,
+	[TrasportoAdr] [bit] NULL,
+	[NumeroOnu] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[AdrNote] [varchar](200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdAnalisiTipo] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[AnalisiData] [date] NULL,
+	[AnalisiNumero] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[RegistrazioneNote] [varchar](500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[FormularioNote] [varchar](500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
  CONSTRAINT [PK_tblRifiutiModelli] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
@@ -133,3 +154,80 @@ REFERENCES [dbo].[tblUnitaMisura] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblUnitaMisura]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiProvenienze] FOREIGN KEY([IdProvenienza])
+REFERENCES [dbo].[tblRifiutiProvenienze] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiProvenienze]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMateriali] FOREIGN KEY([IdMateriale])
+REFERENCES [dbo].[tblRifiutiMateriali] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMateriali]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneTrasportatore2] FOREIGN KEY([IdAutorizzazioneTrasportatore2])
+REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneTrasportatore2]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneTrasportatore3] FOREIGN KEY([IdAutorizzazioneTrasportatore3])
+REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneTrasportatore3]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneIntermediario2] FOREIGN KEY([IdAutorizzazioneIntermediario2])
+REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneIntermediario2]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneIntermediario3] FOREIGN KEY([IdAutorizzazioneIntermediario3])
+REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneIntermediario3]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi2] FOREIGN KEY([IdTipoTrasporto2])
+REFERENCES [dbo].[tblRifiutiMovimentiTrasportiTipi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi2]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi3] FOREIGN KEY([IdTipoTrasporto3])
+REFERENCES [dbo].[tblRifiutiMovimentiTrasportiTipi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi3]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiDocumentiTrasportiTipi] FOREIGN KEY([IdTrasportoTransfrontalieroTipo])
+REFERENCES [dbo].[tblRifiutiDocumentiTrasportiTipi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiDocumentiTrasportiTipi]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiRaee] FOREIGN KEY([IdRaee])
+REFERENCES [dbo].[tblRifiutiRaee] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiRaee]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAnalisiTipi] FOREIGN KEY([IdAnalisiTipo])
+REFERENCES [dbo].[tblRifiutiAnalisiTipi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAnalisiTipi]

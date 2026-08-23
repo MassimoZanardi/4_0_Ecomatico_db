@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_ins]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_ins]
 	@IdSessione CHAR(16) = NULL,
 	@IdOperazione CHAR(1) = NULL,
 	@IdModello CHAR(16) = NULL
@@ -42,14 +42,11 @@ BEGIN
 		IF @idRegistro IS NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Selezionare il registro';
+			SET @returnMessage = 'Selezionare il registro nel quale inserire il nuovo formulario';
 			GOTO BRANCH_END;
 		END
 
-		-- Titolarità sul modello: senza questo controllo, chiunque avesse permesso RFR
-		-- poteva creare un formulario copiando i dati (EER, autorizzazioni, imballo, ecc.)
-		-- di un modello di un'altra azienda, conoscendone l'Id — stesso pattern già usato
-		-- in uspRifiutiModelli_get.
+		-- Titolarità sul modello
 		IF @IdModello IS NOT NULL AND NOT EXISTS (
 			SELECT 1
 			FROM
@@ -87,8 +84,8 @@ BEGIN
 			ELSE IF @IdModello IS NOT NULL
 			BEGIN
 				INSERT dbo.tblRifiutiMovimenti
-					(Id, IdRegistro, IdOperazione, IdUnitaMisura, IdEer, IdStatoFisico, IdAttivita, Note)
-				SELECT @idMovimento, @idRegistro, IdOperazione, IdUnitaMisura, IdEer, IdStatoFisico, IdAttivita, UtenteNote
+					(Id, IdRegistro, IdOperazione, IdUnitaMisura, IdEer, IdStatoFisico, IdAttivita, IdProvenienza, Note)
+				SELECT @idMovimento, @idRegistro, IdOperazione, IdUnitaMisura, IdEer, IdStatoFisico, IdAttivita, IdProvenienza, UtenteNote
 				FROM dbo.tblRifiutiModelli
 				WHERE Id = @IdModello;
 
@@ -129,10 +126,54 @@ BEGIN
 				FROM dbo.tblRifiutiModelli
 				WHERE
 					Id = @IdModello
+					AND IdAutorizzazioneTrasportatore2 IS NOT NULL
+				)
+					INSERT dbo.tblRifiutiMovimentiTrasportatori (Id, IdAutorizzazione, IdTipo, Pos)
+					SELECT @idMovimento, IdAutorizzazioneTrasportatore2, IdTipoTrasporto2, 1
+					FROM dbo.tblRifiutiModelli
+					WHERE Id = @IdModello;
+
+				IF EXISTS (SELECT 1
+				FROM dbo.tblRifiutiModelli
+				WHERE
+					Id = @IdModello
+					AND IdAutorizzazioneTrasportatore3 IS NOT NULL
+				)
+					INSERT dbo.tblRifiutiMovimentiTrasportatori (Id, IdAutorizzazione, IdTipo, Pos)
+					SELECT @idMovimento, IdAutorizzazioneTrasportatore3, IdTipoTrasporto3, 2
+					FROM dbo.tblRifiutiModelli
+					WHERE Id = @IdModello;
+
+				IF EXISTS (SELECT 1
+				FROM dbo.tblRifiutiModelli
+				WHERE
+					Id = @IdModello
 					AND IdAutorizzazioneIntermediario1 IS NOT NULL
 				)
 					INSERT dbo.tblRifiutiMovimentiIntermediari (Id, IdAutorizzazione, Pos)
 					SELECT @idMovimento, IdAutorizzazioneIntermediario1, 0
+					FROM dbo.tblRifiutiModelli
+					WHERE Id = @IdModello;
+
+				IF EXISTS (SELECT 1
+				FROM dbo.tblRifiutiModelli
+				WHERE
+					Id = @IdModello
+					AND IdAutorizzazioneIntermediario2 IS NOT NULL
+				)
+					INSERT dbo.tblRifiutiMovimentiIntermediari (Id, IdAutorizzazione, Pos)
+					SELECT @idMovimento, IdAutorizzazioneIntermediario2, 1
+					FROM dbo.tblRifiutiModelli
+					WHERE Id = @IdModello;
+
+				IF EXISTS (SELECT 1
+				FROM dbo.tblRifiutiModelli
+				WHERE
+					Id = @IdModello
+					AND IdAutorizzazioneIntermediario3 IS NOT NULL
+				)
+					INSERT dbo.tblRifiutiMovimentiIntermediari (Id, IdAutorizzazione, Pos)
+					SELECT @idMovimento, IdAutorizzazioneIntermediario3, 2
 					FROM dbo.tblRifiutiModelli
 					WHERE Id = @IdModello;
 
@@ -145,8 +186,8 @@ BEGIN
 					WHERE Id = @IdModello;
 
 				INSERT dbo.tblRifiutiFormulari
-					(Id, IdMovimento, IdImballo, IdAdr, Note, Lock)
-				SELECT @returnId, @idMovimento, IdImballo, IdAdr, Note, 2
+					(Id, IdMovimento, IdImballo, AllaRinfusa, IdAdr, TrasportoAdr, NumeroOnu, AdrNote, IdAnalisiTipo, AnalisiNumero, AnalisiData, LuogoDiProduzione, Detentore, Note, Lock)
+				SELECT @returnId, @idMovimento, IdImballo, AllaRinfusa, IdAdr, TrasportoAdr, NumeroOnu, AdrNote, IdAnalisiTipo, AnalisiNumero, AnalisiData, LuogoDiProduzione, Detentore, FormularioNote, 2
 				FROM dbo.tblRifiutiModelli
 				WHERE Id = @IdModello;
 

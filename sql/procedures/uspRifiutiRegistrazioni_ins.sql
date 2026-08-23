@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_ins]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_ins]
 	@IdSessione CHAR(16) = NULL,
 	@IdOperazione CHAR(1) = NULL,
 	@IdModello CHAR(16) = NULL,
@@ -45,7 +45,7 @@ BEGIN
 		IF @idRegistro IS NULL AND @IdFormulario IS NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Selezionare il registro';
+			SET @returnMessage = 'Selezionare il registro nel quale inserire la nuova registrazione';
 			GOTO BRANCH_END;
 		END
 
@@ -128,8 +128,8 @@ BEGIN
 				ELSE IF @IdModello IS NOT NULL
 				BEGIN
 					INSERT dbo.tblRifiutiMovimenti
-						(Id, IdRegistro, IdOperazione, IdEer, IdStatoFisico, IdAttivita, IdUnitaMisura, Note)
-					SELECT @idMovimento, @idRegistro, IdOperazione, IdEer, IdStatoFisico, IdAttivita, IdUnitaMisura, UtenteNote
+						(Id, IdRegistro, IdOperazione, IdEer, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, Note)
+					SELECT @idMovimento, @idRegistro, IdOperazione, IdEer, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, UtenteNote
 					FROM dbo.tblRifiutiModelli
 					WHERE Id = @IdModello;
 
@@ -170,10 +170,54 @@ BEGIN
 					FROM dbo.tblRifiutiModelli
 					WHERE
 						Id = @IdModello
+						AND IdAutorizzazioneTrasportatore2 IS NOT NULL
+					)
+						INSERT dbo.tblRifiutiMovimentiTrasportatori (Id, IdAutorizzazione, IdTipo, Pos)
+						SELECT @idMovimento, IdAutorizzazioneTrasportatore2, IdTipoTrasporto2, 1
+						FROM dbo.tblRifiutiModelli
+						WHERE Id = @IdModello;
+
+					IF EXISTS (SELECT 1
+					FROM dbo.tblRifiutiModelli
+					WHERE
+						Id = @IdModello
+						AND IdAutorizzazioneTrasportatore3 IS NOT NULL
+					)
+						INSERT dbo.tblRifiutiMovimentiTrasportatori (Id, IdAutorizzazione, IdTipo, Pos)
+						SELECT @idMovimento, IdAutorizzazioneTrasportatore3, IdTipoTrasporto3, 2
+						FROM dbo.tblRifiutiModelli
+						WHERE Id = @IdModello;
+
+					IF EXISTS (SELECT 1
+					FROM dbo.tblRifiutiModelli
+					WHERE
+						Id = @IdModello
 						AND IdAutorizzazioneIntermediario1 IS NOT NULL
 					)
 						INSERT dbo.tblRifiutiMovimentiIntermediari (Id, IdAutorizzazione, Pos)
 						SELECT @idMovimento, IdAutorizzazioneIntermediario1, 0
+						FROM dbo.tblRifiutiModelli
+						WHERE Id = @IdModello;
+
+					IF EXISTS (SELECT 1
+					FROM dbo.tblRifiutiModelli
+					WHERE
+						Id = @IdModello
+						AND IdAutorizzazioneIntermediario2 IS NOT NULL
+					)
+						INSERT dbo.tblRifiutiMovimentiIntermediari (Id, IdAutorizzazione, Pos)
+						SELECT @idMovimento, IdAutorizzazioneIntermediario2, 1
+						FROM dbo.tblRifiutiModelli
+						WHERE Id = @IdModello;
+
+					IF EXISTS (SELECT 1
+					FROM dbo.tblRifiutiModelli
+					WHERE
+						Id = @IdModello
+						AND IdAutorizzazioneIntermediario3 IS NOT NULL
+					)
+						INSERT dbo.tblRifiutiMovimentiIntermediari (Id, IdAutorizzazione, Pos)
+						SELECT @idMovimento, IdAutorizzazioneIntermediario3, 2
 						FROM dbo.tblRifiutiModelli
 						WHERE Id = @IdModello;
 
@@ -186,8 +230,8 @@ BEGIN
 						WHERE Id = @IdModello;
 
 					INSERT dbo.tblRifiutiRegistrazioni
-						(Id, IdMovimento, Operazione, Note, Lock)
-					SELECT @returnId, @idMovimento, o.Operazione, m.Note, 2
+						(Id, IdMovimento, Operazione, Note, IdRaee, IdMateriale, MaterialeDescrizione, IdTrasportoTransfrontalieroTipo, Lock)
+					SELECT @returnId, @idMovimento, o.Operazione, m.RegistrazioneNote, m.IdRaee, m.IdMateriale, m.MaterialeDescrizione, m.IdTrasportoTransfrontalieroTipo, 2
 					FROM
 						dbo.tblRifiutiModelli m
 						INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id

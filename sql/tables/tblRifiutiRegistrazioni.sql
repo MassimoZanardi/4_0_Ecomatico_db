@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
@@ -95,11 +95,11 @@ GO
 ALTER TABLE [dbo].[tblRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiRegistrazioniEsitiCausaliRespingimento]
 GO
 
-ALTER TABLE [dbo].[tblRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiTrasportiTransfrontalieriTipi] FOREIGN KEY([IdTrasportoTransfrontalieroTipo])
-REFERENCES [dbo].[tblRifiutiTrasportiTransfrontalieriTipi] ([Id])
+ALTER TABLE [dbo].[tblRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiDocumentiTrasportiTipi] FOREIGN KEY([IdTrasportoTransfrontalieroTipo])
+REFERENCES [dbo].[tblRifiutiDocumentiTrasportiTipi] ([Id])
 GO
 
-ALTER TABLE [dbo].[tblRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiTrasportiTransfrontalieriTipi]
+ALTER TABLE [dbo].[tblRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiDocumentiTrasportiTipi]
 GO
 
 ALTER TABLE [dbo].[tblRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiRegistrazioni_tblUnitaMisura] FOREIGN KEY([IdUnitaMisuraQuantitaRespinta])

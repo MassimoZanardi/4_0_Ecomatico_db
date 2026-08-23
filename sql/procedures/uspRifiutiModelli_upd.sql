@@ -50,6 +50,36 @@ BEGIN
 		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdRegistro = NULLIF(LTRIM(RTRIM(@IdRegistro)), '');
+		SET @IdEer = NULLIF(LTRIM(RTRIM(@IdEer)), '');
+		SET @IdProvenienza = NULLIF(LTRIM(RTRIM(@IdProvenienza)), '');
+		SET @IdStatoFisico = NULLIF(LTRIM(RTRIM(@IdStatoFisico)), '');
+		SET @IdMateriale = NULLIF(LTRIM(RTRIM(@IdMateriale)), '');
+		SET @IdAttivitaRs = NULLIF(LTRIM(RTRIM(@IdAttivitaRs)), '');
+		SET @IdUnitaMisura = NULLIF(LTRIM(RTRIM(@IdUnitaMisura)), '');
+		SET @IdAutorizzazioneProduttoreDetentore = NULLIF(LTRIM(RTRIM(@IdAutorizzazioneProduttoreDetentore)), '');
+		SET @IdAutorizzazioneDestinatario = NULLIF(LTRIM(RTRIM(@IdAutorizzazioneDestinatario)), '');
+		SET @IdAutorizzazioneTrasportatore1 = NULLIF(LTRIM(RTRIM(@IdAutorizzazioneTrasportatore1)), '');
+		SET @IdAutorizzazioneTrasportatore2 = NULLIF(LTRIM(RTRIM(@IdAutorizzazioneTrasportatore2)), '');
+		SET @IdAutorizzazioneTrasportatore3 = NULLIF(LTRIM(RTRIM(@IdAutorizzazioneTrasportatore3)), '');
+		SET @IdTipoTrasporto1 = NULLIF(LTRIM(RTRIM(@IdTipoTrasporto1)), '');
+		SET @IdTipoTrasporto2 = NULLIF(LTRIM(RTRIM(@IdTipoTrasporto2)), '');
+		SET @IdTipoTrasporto3 = NULLIF(LTRIM(RTRIM(@IdTipoTrasporto3)), '');
+		SET @IdAutorizzazioneIntermediario1 = NULLIF(LTRIM(RTRIM(@IdAutorizzazioneIntermediario1)), '');
+		SET @IdAutorizzazioneIntermediario2 = NULLIF(LTRIM(RTRIM(@IdAutorizzazioneIntermediario2)), '');
+		SET @IdAutorizzazioneIntermediario3 = NULLIF(LTRIM(RTRIM(@IdAutorizzazioneIntermediario3)), '');
+		SET @IdDocumentoTrasportoTipo = NULLIF(LTRIM(RTRIM(@IdDocumentoTrasportoTipo)), '');
+		SET @IdRaee = NULLIF(LTRIM(RTRIM(@IdRaee)), '');
+		SET @IdAdr = NULLIF(LTRIM(RTRIM(@IdAdr)), '');
+		SET @IdImballo = NULLIF(LTRIM(RTRIM(@IdImballo)), '');
+		SET @IdAnalisiTipo = NULLIF(LTRIM(RTRIM(@IdAnalisiTipo)), '');
+		SET @Nome = dbo.ufnStringhe_get_SenzaSpazi(@Nome, 50, 1);
+		SET @MaterialeDescrizione = dbo.ufnStringhe_get_SenzaSpazi(@MaterialeDescrizione, 200, 1);
+		SET @NumeroOnu = dbo.ufnStringhe_get_SenzaSpazi(@NumeroOnu, 20, 1);
+		SET @AdrNote = dbo.ufnStringhe_get_SenzaSpazi(@AdrNote, 200, 1);
+		SET @AnalisiNumero = dbo.ufnStringhe_get_SenzaSpazi(@AnalisiNumero, 50, 1);
+		SET @RegistrazioneNote = dbo.ufnStringhe_get_SenzaSpazi(@RegistrazioneNote, 500, 1);
+		SET @FormularioNote = dbo.ufnStringhe_get_SenzaSpazi(@FormularioNote, 500, 1);
+		SET @UtenteNote = dbo.ufnStringhe_get_SenzaSpazi(@UtenteNote, 500, 1);
 
 		IF @Id IS NULL
 		BEGIN

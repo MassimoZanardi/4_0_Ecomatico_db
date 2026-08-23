@@ -142,9 +142,29 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- IdOperazione è fisso sul modello (scelto alla creazione, non modificabile qui): da esso
+		-- deriviamo quali campi sono applicabili, imponendo NULL su quelli non pertinenti a
+		-- prescindere da cosa viene passato dal chiamante — non ci si fida che client/C# l'abbiano
+		-- già fatto correttamente. @IsMateriale = 1 solo per l'operazione 'K' (produzione di
+		-- materiali): Eer/StatoFisico/Provenienza/ClassiPericolo/Raee/DocumentoTrasporto si
+		-- escludono a vicenda con Materiale/MaterialeDescrizione. @IsFormulario governa i campi
+		-- copiati solo su tblRifiutiFormulari (Imballo/AllaRinfusa/ADR completo/Analisi/Note
+		-- formulario), inutilizzabili per le operazioni che non possono mai generare un formulario.
+		DECLARE @idOperazioneModello CHAR(1);
+		DECLARE @isFormulario BIT;
+		SELECT
+			@idOperazioneModello = m.IdOperazione,
+			@isFormulario = ISNULL(o.IsFormulario, 0)
+		FROM
+			dbo.tblRifiutiModelli m
+			LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+		WHERE m.Id = @Id;
+
+		DECLARE @isMateriale BIT = IIF(@idOperazioneModello = 'K', 1, 0);
+
 		BEGIN TRANSACTION;
 
-			-- Aggiorna le classi di pericolo
+			-- Aggiorna le classi di pericolo (non applicabili al Materiale)
 			DELETE dbo.tblRifiutiModelliClassiPericolo
 			WHERE Id = @Id;
 
@@ -155,7 +175,8 @@ BEGIN
 				c.Id
 			FROM
 				dbo.tblRifiutiClassiPericolo c
-				INNER JOIN STRING_SPLIT(@ClassiPericolo, ';') v ON c.Id = v.value;
+				INNER JOIN STRING_SPLIT(@ClassiPericolo, ';') v ON c.Id = v.value
+			WHERE @isMateriale = 0;
 
 			-- Aggiorna le etichette
 			DELETE dbo.tblRifiutiModelliEtichette
@@ -173,15 +194,15 @@ BEGIN
 			UPDATE dbo.tblRifiutiModelli
 			SET
 				Nome = @Nome,
-				IdEer = @IdEer,
-				IdProvenienza = @IdProvenienza,
-				IdStatoFisico = @IdStatoFisico,
-				IdMateriale = @IdMateriale,
-				MaterialeDescrizione = @MaterialeDescrizione,
+				IdEer = IIF(@isMateriale = 1, NULL, @IdEer),
+				IdProvenienza = IIF(@isMateriale = 1, NULL, @IdProvenienza),
+				IdStatoFisico = IIF(@isMateriale = 1, NULL, @IdStatoFisico),
+				IdMateriale = IIF(@isMateriale = 1, @IdMateriale, NULL),
+				MaterialeDescrizione = IIF(@isMateriale = 1, @MaterialeDescrizione, NULL),
 				IdAttivita = @IdAttivitaRs,
 				IdUnitaMisura = @IdUnitaMisura,
-				IdImballo = @IdImballo,
-				IdAdr = @IdAdr,
+				IdImballo = IIF(@isFormulario = 1, @IdImballo, NULL),
+				IdAdr = IIF(@isFormulario = 1, @IdAdr, NULL),
 				IdAutorizzazioneProduttoreDetentore = @IdAutorizzazioneProduttoreDetentore,
 				LuogoDiProduzione = @LuogoDiProduzione,
 				Detentore = @Detentore,
@@ -195,17 +216,17 @@ BEGIN
 				IdAutorizzazioneIntermediario1 = @IdAutorizzazioneIntermediario1,
 				IdAutorizzazioneIntermediario2 = @IdAutorizzazioneIntermediario2,
 				IdAutorizzazioneIntermediario3 = @IdAutorizzazioneIntermediario3,
-				IdTrasportoTransfrontalieroTipo = @IdDocumentoTrasportoTipo,
-				IdRaee = @IdRaee,
-				AllaRinfusa = @AllaRinfusa,
-				TrasportoAdr = @TrasportoAdr,
-				NumeroOnu = @NumeroOnu,
-				AdrNote = @AdrNote,
-				IdAnalisiTipo = @IdAnalisiTipo,
-				AnalisiNumero = @AnalisiNumero,
-				AnalisiData = @AnalisiData,
+				IdTrasportoTransfrontalieroTipo = IIF(@isMateriale = 1, NULL, @IdDocumentoTrasportoTipo),
+				IdRaee = IIF(@isMateriale = 1, NULL, @IdRaee),
+				AllaRinfusa = IIF(@isFormulario = 1, @AllaRinfusa, NULL),
+				TrasportoAdr = IIF(@isFormulario = 1, @TrasportoAdr, NULL),
+				NumeroOnu = IIF(@isFormulario = 1, @NumeroOnu, NULL),
+				AdrNote = IIF(@isFormulario = 1, @AdrNote, NULL),
+				IdAnalisiTipo = IIF(@isFormulario = 1, @IdAnalisiTipo, NULL),
+				AnalisiNumero = IIF(@isFormulario = 1, @AnalisiNumero, NULL),
+				AnalisiData = IIF(@isFormulario = 1, @AnalisiData, NULL),
 				RegistrazioneNote = @RegistrazioneNote,
-				FormularioNote = @FormularioNote,
+				FormularioNote = IIF(@isFormulario = 1, @FormularioNote, NULL),
 				UtenteNote = @UtenteNote,
 				Etichette = dbo.ufnRifiutiModelli_get_Etichette(Id),
 				Lock = 0

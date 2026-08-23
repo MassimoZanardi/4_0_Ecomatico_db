@@ -55,12 +55,16 @@ BEGIN
 		-- non sono più restituiti: il modello è solo un contenitore di valori di default, l'enforcement
 		-- di quali campi sono applicabili avviene alla generazione della Registrazione/Formulario (che
 		-- deriva gli stessi flag dalla stessa IdOperazione) — decisione esplicita dell'utente 2026-08-23.
+		-- IsFormulario invece resta: governa la visibilità dei campi (Imballo/ADR/Analisi/Note formulario)
+		-- che vengono copiati solo su tblRifiutiFormulari e sarebbero altrimenti dati morti per le
+		-- operazioni che non possono mai generare un formulario.
 		SELECT
 			m.Id,
 			m.IdRegistro,
 			Nome = ISNULL(m.Nome, ''),
 			IdOperazione = ISNULL(m.IdOperazione, '0'),
 			OperazioneNome = ISNULL(o.Nome, ''),
+			IsFormulario = ISNULL(o.IsFormulario, 0),
 			IdEer = ISNULL(m.IdEer, '000000'),
 			IdProvenienza = ISNULL(m.IdProvenienza, 'S'),
 			IdStatoFisico = ISNULL(m.IdStatoFisico, '0'),

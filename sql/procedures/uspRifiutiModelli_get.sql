@@ -51,6 +51,10 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- I flag IsProduttore/IsTrasportatore/IsDestinatario/IsIntermediario/IsAttivitaRs/IsMateriale
+		-- non sono più restituiti: il modello è solo un contenitore di valori di default, l'enforcement
+		-- di quali campi sono applicabili avviene alla generazione della Registrazione/Formulario (che
+		-- deriva gli stessi flag dalla stessa IdOperazione) — decisione esplicita dell'utente 2026-08-23.
 		SELECT
 			m.Id,
 			m.IdRegistro,
@@ -91,12 +95,6 @@ BEGIN
 			RegistrazioneNote = ISNULL(m.RegistrazioneNote, ''),
 			FormularioNote = ISNULL(m.FormularioNote, ''),
 			UtenteNote = ISNULL(m.UtenteNote, ''),
-			o.IsProduttore,
-			o.IsTrasportatore,
-			o.IsDestinatario,
-			o.IsIntermediario,
-			o.IsAttivitaRs,
-			IsMateriale = ISNULL(o.IsMateriale, 0),
 			m.Lock
 		FROM
 			dbo.tblRifiutiModelli m

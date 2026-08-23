@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_ins]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_ins]
 	@IdSessione CHAR(16) = NULL,
 	@IdOperazione CHAR(1) = NULL,
 	@IdModello CHAR(16) = NULL,
@@ -103,6 +107,65 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Lettura unica del modello (era ripetuta fino a 16 volte più sotto, una per ogni campo/EXISTS):
+		-- valorizzata solo quando il ramo sottostante userà @IdModello, riusata da tutti i suoi INSERT
+		DECLARE
+			@mIdOperazione CHAR(1),
+			@mOperazione CHAR(1),
+			@mIdEer CHAR(6),
+			@mIdStatoFisico CHAR(1),
+			@mIdAttivita CHAR(2),
+			@mIdUnitaMisura CHAR(2),
+			@mIdProvenienza CHAR(1),
+			@mUtenteNote VARCHAR(500),
+			@mIdAutorizzazioneProduttoreDetentore CHAR(16),
+			@mIdAutorizzazioneDestinatario CHAR(16),
+			@mIdAutorizzazioneTrasportatore1 CHAR(16),
+			@mIdAutorizzazioneTrasportatore2 CHAR(16),
+			@mIdAutorizzazioneTrasportatore3 CHAR(16),
+			@mIdTipoTrasporto1 CHAR(1),
+			@mIdTipoTrasporto2 CHAR(1),
+			@mIdTipoTrasporto3 CHAR(1),
+			@mIdAutorizzazioneIntermediario1 CHAR(16),
+			@mIdAutorizzazioneIntermediario2 CHAR(16),
+			@mIdAutorizzazioneIntermediario3 CHAR(16),
+			@mRegistrazioneNote VARCHAR(500),
+			@mIdRaee CHAR(1),
+			@mIdMateriale CHAR(2),
+			@mMaterialeDescrizione VARCHAR(200),
+			@mIdTrasportoTransfrontalieroTipo CHAR(1);
+
+		IF @IdFormulario IS NULL AND @IdModello IS NOT NULL
+			SELECT
+				@mIdOperazione = m.IdOperazione,
+				@mOperazione = o.Operazione,
+				@mIdEer = m.IdEer,
+				@mIdStatoFisico = m.IdStatoFisico,
+				@mIdAttivita = m.IdAttivita,
+				@mIdUnitaMisura = m.IdUnitaMisura,
+				@mIdProvenienza = m.IdProvenienza,
+				@mUtenteNote = m.UtenteNote,
+				@mIdAutorizzazioneProduttoreDetentore = m.IdAutorizzazioneProduttoreDetentore,
+				@mIdAutorizzazioneDestinatario = m.IdAutorizzazioneDestinatario,
+				@mIdAutorizzazioneTrasportatore1 = m.IdAutorizzazioneTrasportatore1,
+				@mIdAutorizzazioneTrasportatore2 = m.IdAutorizzazioneTrasportatore2,
+				@mIdAutorizzazioneTrasportatore3 = m.IdAutorizzazioneTrasportatore3,
+				@mIdTipoTrasporto1 = m.IdTipoTrasporto1,
+				@mIdTipoTrasporto2 = m.IdTipoTrasporto2,
+				@mIdTipoTrasporto3 = m.IdTipoTrasporto3,
+				@mIdAutorizzazioneIntermediario1 = m.IdAutorizzazioneIntermediario1,
+				@mIdAutorizzazioneIntermediario2 = m.IdAutorizzazioneIntermediario2,
+				@mIdAutorizzazioneIntermediario3 = m.IdAutorizzazioneIntermediario3,
+				@mRegistrazioneNote = m.RegistrazioneNote,
+				@mIdRaee = m.IdRaee,
+				@mIdMateriale = m.IdMateriale,
+				@mMaterialeDescrizione = m.MaterialeDescrizione,
+				@mIdTrasportoTransfrontalieroTipo = m.IdTrasportoTransfrontalieroTipo
+			FROM
+				dbo.tblRifiutiModelli m
+				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+			WHERE m.Id = @IdModello;
+
 		DECLARE @idMovimento CHAR(16);
 
 		-- uspId_get gestisce la propria transazione internamente: chiamate FUORI dalla transazione
@@ -129,97 +192,40 @@ BEGIN
 				BEGIN
 					INSERT dbo.tblRifiutiMovimenti
 						(Id, IdRegistro, IdOperazione, IdEer, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, Note)
-					SELECT @idMovimento, @idRegistro, IdOperazione, IdEer, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, UtenteNote
-					FROM dbo.tblRifiutiModelli
-					WHERE Id = @IdModello;
+					VALUES
+						(@idMovimento, @idRegistro, @mIdOperazione, @mIdEer, @mIdStatoFisico, @mIdAttivita, @mIdUnitaMisura, @mIdProvenienza, @mUtenteNote);
 
-					IF EXISTS (SELECT 1
-					FROM dbo.tblRifiutiModelli
-					WHERE
-						Id = @IdModello
-						AND IdAutorizzazioneProduttoreDetentore IS NOT NULL
-					)
+					IF @mIdAutorizzazioneProduttoreDetentore IS NOT NULL
 						INSERT dbo.tblRifiutiMovimentiProduttori (Id, IdAutorizzazione, Pos)
-						SELECT @idMovimento, IdAutorizzazioneProduttoreDetentore, 0
-						FROM dbo.tblRifiutiModelli
-						WHERE Id = @IdModello;
+						VALUES (@idMovimento, @mIdAutorizzazioneProduttoreDetentore, 0);
 
-					IF EXISTS (SELECT 1
-					FROM dbo.tblRifiutiModelli
-					WHERE
-						Id = @IdModello
-						AND IdAutorizzazioneDestinatario IS NOT NULL
-					)
+					IF @mIdAutorizzazioneDestinatario IS NOT NULL
 						INSERT dbo.tblRifiutiMovimentiDestinatari (Id, IdAutorizzazione, Pos)
-						SELECT @idMovimento, IdAutorizzazioneDestinatario, 0
-						FROM dbo.tblRifiutiModelli
-						WHERE Id = @IdModello;
+						VALUES (@idMovimento, @mIdAutorizzazioneDestinatario, 0);
 
-					IF EXISTS (SELECT 1
-					FROM dbo.tblRifiutiModelli
-					WHERE
-						Id = @IdModello
-						AND IdAutorizzazioneTrasportatore1 IS NOT NULL
-					)
+					IF @mIdAutorizzazioneTrasportatore1 IS NOT NULL
 						INSERT dbo.tblRifiutiMovimentiTrasportatori (Id, IdAutorizzazione, IdTipo, Pos)
-						SELECT @idMovimento, IdAutorizzazioneTrasportatore1, IdTipoTrasporto1, 0
-						FROM dbo.tblRifiutiModelli
-						WHERE Id = @IdModello;
+						VALUES (@idMovimento, @mIdAutorizzazioneTrasportatore1, @mIdTipoTrasporto1, 0);
 
-					IF EXISTS (SELECT 1
-					FROM dbo.tblRifiutiModelli
-					WHERE
-						Id = @IdModello
-						AND IdAutorizzazioneTrasportatore2 IS NOT NULL
-					)
+					IF @mIdAutorizzazioneTrasportatore2 IS NOT NULL
 						INSERT dbo.tblRifiutiMovimentiTrasportatori (Id, IdAutorizzazione, IdTipo, Pos)
-						SELECT @idMovimento, IdAutorizzazioneTrasportatore2, IdTipoTrasporto2, 1
-						FROM dbo.tblRifiutiModelli
-						WHERE Id = @IdModello;
+						VALUES (@idMovimento, @mIdAutorizzazioneTrasportatore2, @mIdTipoTrasporto2, 1);
 
-					IF EXISTS (SELECT 1
-					FROM dbo.tblRifiutiModelli
-					WHERE
-						Id = @IdModello
-						AND IdAutorizzazioneTrasportatore3 IS NOT NULL
-					)
+					IF @mIdAutorizzazioneTrasportatore3 IS NOT NULL
 						INSERT dbo.tblRifiutiMovimentiTrasportatori (Id, IdAutorizzazione, IdTipo, Pos)
-						SELECT @idMovimento, IdAutorizzazioneTrasportatore3, IdTipoTrasporto3, 2
-						FROM dbo.tblRifiutiModelli
-						WHERE Id = @IdModello;
+						VALUES (@idMovimento, @mIdAutorizzazioneTrasportatore3, @mIdTipoTrasporto3, 2);
 
-					IF EXISTS (SELECT 1
-					FROM dbo.tblRifiutiModelli
-					WHERE
-						Id = @IdModello
-						AND IdAutorizzazioneIntermediario1 IS NOT NULL
-					)
+					IF @mIdAutorizzazioneIntermediario1 IS NOT NULL
 						INSERT dbo.tblRifiutiMovimentiIntermediari (Id, IdAutorizzazione, Pos)
-						SELECT @idMovimento, IdAutorizzazioneIntermediario1, 0
-						FROM dbo.tblRifiutiModelli
-						WHERE Id = @IdModello;
+						VALUES (@idMovimento, @mIdAutorizzazioneIntermediario1, 0);
 
-					IF EXISTS (SELECT 1
-					FROM dbo.tblRifiutiModelli
-					WHERE
-						Id = @IdModello
-						AND IdAutorizzazioneIntermediario2 IS NOT NULL
-					)
+					IF @mIdAutorizzazioneIntermediario2 IS NOT NULL
 						INSERT dbo.tblRifiutiMovimentiIntermediari (Id, IdAutorizzazione, Pos)
-						SELECT @idMovimento, IdAutorizzazioneIntermediario2, 1
-						FROM dbo.tblRifiutiModelli
-						WHERE Id = @IdModello;
+						VALUES (@idMovimento, @mIdAutorizzazioneIntermediario2, 1);
 
-					IF EXISTS (SELECT 1
-					FROM dbo.tblRifiutiModelli
-					WHERE
-						Id = @IdModello
-						AND IdAutorizzazioneIntermediario3 IS NOT NULL
-					)
+					IF @mIdAutorizzazioneIntermediario3 IS NOT NULL
 						INSERT dbo.tblRifiutiMovimentiIntermediari (Id, IdAutorizzazione, Pos)
-						SELECT @idMovimento, IdAutorizzazioneIntermediario3, 2
-						FROM dbo.tblRifiutiModelli
-						WHERE Id = @IdModello;
+						VALUES (@idMovimento, @mIdAutorizzazioneIntermediario3, 2);
 
 					IF EXISTS (SELECT 1
 					FROM dbo.tblRifiutiModelliClassiPericolo
@@ -231,11 +237,8 @@ BEGIN
 
 					INSERT dbo.tblRifiutiRegistrazioni
 						(Id, IdMovimento, Operazione, Note, IdRaee, IdMateriale, MaterialeDescrizione, IdTrasportoTransfrontalieroTipo, Lock)
-					SELECT @returnId, @idMovimento, o.Operazione, m.RegistrazioneNote, m.IdRaee, m.IdMateriale, m.MaterialeDescrizione, m.IdTrasportoTransfrontalieroTipo, 2
-					FROM
-						dbo.tblRifiutiModelli m
-						INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
-					WHERE m.Id = @IdModello;
+					VALUES
+						(@returnId, @idMovimento, @mOperazione, @mRegistrazioneNote, @mIdRaee, @mIdMateriale, @mMaterialeDescrizione, @mIdTrasportoTransfrontalieroTipo, 2);
 
 					IF EXISTS (SELECT 1
 					FROM dbo.tblRifiutiModelliEtichette

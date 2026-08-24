@@ -349,20 +349,24 @@ BEGIN
 
 		IF @isIntegrazioneFir = 1
 		BEGIN
+			-- Verifica l'unicità del numero di formulario solo contro registrazioni attive
+			-- (r.Lock < 2), non contro il solo elenco dei formulari: un formulario può
+			-- esistere senza alcuna registrazione associata (creato standalone da Formulari),
+			-- nel qual caso non deve bloccare il riutilizzo del suo numero.
 			IF EXISTS (
 				SELECT 1
 				FROM
-					dbo.tblRifiutiFormulari f
-					INNER JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id
+					dbo.tblRifiutiRegistrazioni r
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 				WHERE
-					f.IdMovimento <> @idMovimento
+					r.Id <> @Id
 					AND m.IdRegistro = @idRegistro
-					AND f.Lock < 2
+					AND r.Lock < 2
 					AND m.FormularioNumero = @FormularioNumero
 			)
 			BEGIN
 				SET @returnValue = -1;
-				SET @returnMessage = 'Un''altra registrazione con lo stesso numero è già presente';
+				SET @returnMessage = 'Un''altra registrazione con lo stesso numero di formulario è già presente';
 				GOTO BRANCH_END;
 			END
 		END

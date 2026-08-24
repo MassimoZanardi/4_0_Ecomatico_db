@@ -219,6 +219,7 @@ BEGIN
 			END
 		FROM Giacenze
 		ORDER BY
+			GiacenzaGiorni DESC,
 			Nome,
 			StatoFisico,
 			Tipo,

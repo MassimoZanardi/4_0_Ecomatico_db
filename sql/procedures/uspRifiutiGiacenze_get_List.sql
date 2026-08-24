@@ -4,7 +4,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiGiacenze_get_List]
 	@IdSessione CHAR(16) = NULL,
 	@IdRegistro CHAR(16) = NULL,
 	@Data DATE = NULL,
-	@Vista CHAR(1) = 'E'
+	@Vista CHAR(1) = 'E',
+	@Search VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -16,6 +17,7 @@ BEGIN
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdRegistro = NULLIF(LTRIM(RTRIM(@IdRegistro)), '');
 		SET @Vista = NULLIF(LTRIM(RTRIM(@Vista)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -121,6 +123,7 @@ BEGIN
 				AND ISNULL(m.IdOperazione, '') <> 'R'
 				AND m.Quantita > 0
 				AND o.Operazione = 'C'
+				AND (@Search IS NULL OR m.IdEer LIKE '%' + REPLACE(@Search, '.', '') + '%')
 			GROUP BY
 				CASE WHEN @Vista = 'E' THEN e.Id END,
 				CASE WHEN @Vista = 'E' THEN s.Nome END,
@@ -155,6 +158,7 @@ BEGIN
 				AND m.IdOperazione = 'R'
 				AND m.Quantita > 0
 				AND o.Operazione = 'S'
+				AND (@Search IS NULL OR m.IdEer LIKE '%' + REPLACE(@Search, '.', '') + '%')
 			GROUP BY
 				CASE WHEN @Vista = 'E' THEN e.Id END,
 				CASE WHEN @Vista = 'E' THEN s.Nome END,
@@ -188,6 +192,7 @@ BEGIN
 				AND ISNULL(m.IdOperazione, '') <> 'R'
 				AND m.Quantita > 0
 				AND o.Operazione = 'C'
+				AND (@Search IS NULL OR e.Id LIKE '%' + @Search + '%' OR e.Nome LIKE '%' + @Search + '%')
 			GROUP BY
 				CASE WHEN @Vista = 'E' THEN e.Id END,
 				CASE WHEN @Vista = 'T' THEN r.Etichette END
@@ -214,7 +219,8 @@ BEGIN
 			Tipo,
 			Etichette
 		OFFSET @Offset ROWS
-		FETCH NEXT @RowsPerPage ROWS ONLY;
+		FETCH NEXT @RowsPerPage ROWS ONLY
+		OPTION (RECOMPILE);
 
 	END TRY
 	BEGIN CATCH

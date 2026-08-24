@@ -8,7 +8,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiGiacenze_get_Carichi_List]
 	@Tipo CHAR(1) = NULL,
 	@Id CHAR(6) = NULL,
 	@IdStatoFisico CHAR(1) = NULL,
-	@Etichette VARCHAR(2000) = NULL
+	@Etichette VARCHAR(2000) = NULL,
+	@Search VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -24,6 +25,7 @@ BEGIN
 		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @IdStatoFisico = NULLIF(LTRIM(RTRIM(@IdStatoFisico)), '');
 		SET @Etichette = NULLIF(LTRIM(RTRIM(@Etichette)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -148,6 +150,7 @@ BEGIN
 				AND (m.Quantita - ISNULL(a.Quantita, 0)) > 0
 				AND (@Tipo IS NULL OR @Vista = 'T' OR (e.Id = @Id AND m.IdStatoFisico = @IdStatoFisico))
 				AND (@Tipo IS NULL OR @Vista = 'E' OR ((@Etichette IS NULL AND r.Etichette IS NULL) OR r.Etichette = @Etichette))
+				AND (@Search IS NULL OR e.Id LIKE '%' + REPLACE(@Search, '.', '') + '%')
 
 			UNION ALL
 
@@ -183,6 +186,7 @@ BEGIN
 				AND (m.Quantita - ISNULL(a.Quantita, 0)) > 0
 				AND (@Tipo IS NULL OR @Vista = 'T' OR (ISNULL(e.Id, '') = ISNULL(@Id, '') AND ISNULL(m.IdStatoFisico, '') = ISNULL(@IdStatoFisico, '')))
 				AND (@Tipo IS NULL OR @Vista = 'E' OR ((@Etichette IS NULL AND r.Etichette IS NULL) OR r.Etichette = @Etichette))
+				AND (@Search IS NULL OR ISNULL(e.Id, '') LIKE '%' + REPLACE(@Search, '.', '') + '%')
 
 			UNION ALL
 
@@ -217,6 +221,7 @@ BEGIN
 				AND (m.Quantita - ISNULL(a.Quantita, 0)) > 0
 				AND (@Tipo IS NULL OR @Vista = 'T' OR e.Id = @Id)
 				AND (@Tipo IS NULL OR @Vista = 'E' OR ((@Etichette IS NULL AND r.Etichette IS NULL) OR r.Etichette = @Etichette))
+				AND (@Search IS NULL OR e.Id LIKE '%' + @Search + '%' OR e.Nome LIKE '%' + @Search + '%')
 		)
 		SELECT
 			Id, Numero, [Data], IdEer, EerNome, IdStatoFisico, StatoFisico, Etichette,

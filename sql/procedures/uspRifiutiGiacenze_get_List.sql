@@ -125,6 +125,7 @@ BEGIN
 				CASE WHEN @Vista = 'E' THEN e.Id END,
 				CASE WHEN @Vista = 'E' THEN s.Nome END,
 				CASE WHEN @Vista = 'T' THEN r.Etichette END
+			HAVING SUM(m.Quantita - ISNULL(a.Quantita, 0)) > 0
 
 			UNION ALL
 
@@ -158,6 +159,7 @@ BEGIN
 				CASE WHEN @Vista = 'E' THEN e.Id END,
 				CASE WHEN @Vista = 'E' THEN s.Nome END,
 				CASE WHEN @Vista = 'T' THEN r.Etichette END
+			HAVING SUM(m.Quantita - ISNULL(a.Quantita, 0)) > 0
 
 			UNION ALL
 
@@ -189,6 +191,7 @@ BEGIN
 			GROUP BY
 				CASE WHEN @Vista = 'E' THEN e.Id END,
 				CASE WHEN @Vista = 'T' THEN r.Etichette END
+			HAVING SUM(m.Quantita - ISNULL(a.Quantita, 0)) > 0
 		)
 		SELECT
 			TipoCodice, Tipo, Id, Nome, Descrizione, IdStatoFisico, StatoFisico, Etichette,

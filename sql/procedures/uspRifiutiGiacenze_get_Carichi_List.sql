@@ -239,7 +239,7 @@ BEGIN
 			END,
 			RowsCount = COUNT(*) OVER ()
 		FROM Carichi
-		ORDER BY [Data], Numero
+		ORDER BY GiacenzaGiorni DESC, EerNome, Numero
 		OFFSET @Offset ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY
 		OPTION (RECOMPILE);

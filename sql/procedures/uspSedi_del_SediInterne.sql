@@ -156,6 +156,19 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Gestione EoW: stesso controllo del magazzino tradizionale, sui magazzini EoW propri della sede
+			IF EXISTS (SELECT 1
+			FROM dbo.tblEoWMagazzini
+			WHERE
+				IdSede = @Id
+				AND Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con magazzini EoW associati non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
 			IF EXISTS (SELECT 1
 			FROM dbo.tblRifiutiRegistri
 			WHERE
@@ -339,6 +352,37 @@ BEGIN
 				WHERE IdSede = @Id;
 				DELETE dbo.tblMagazzini
 				WHERE IdSede = @Id;
+
+				-- Gestione EoW: magazzini/lotti/movimenti EoW di proprietà esclusiva della sede, e
+				-- le configurazioni MaterialiRegistri legate ai lotti o ai registri in cancellazione
+				-- (stesso ordine/logica di uspSYS_del_SedeInternaCascade).
+				DELETE r
+				FROM dbo.tblEoWMovimentiRelazioni r
+				INNER JOIN dbo.tblEoWMovimenti m ON r.Id = m.Id OR r.IdParent = m.Id
+				INNER JOIN dbo.tblEoWLotti l ON m.IdLotto = l.Id
+				INNER JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id
+				WHERE g.IdSede = @Id;
+
+				DELETE m
+				FROM dbo.tblEoWMovimenti m
+				INNER JOIN dbo.tblEoWLotti l ON m.IdLotto = l.Id
+				INNER JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id
+				WHERE g.IdSede = @Id;
+
+				DELETE mr
+				FROM dbo.tblEoWMaterialiRegistri mr
+				WHERE
+					mr.IdLotto IN (SELECT l.Id FROM dbo.tblEoWLotti l INNER JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id WHERE g.IdSede = @Id)
+					OR mr.IdRegistro IN (SELECT Id FROM dbo.tblRifiutiRegistri WHERE IdSede = @Id);
+
+				DELETE l
+				FROM dbo.tblEoWLotti l
+				INNER JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id
+				WHERE g.IdSede = @Id;
+
+				DELETE dbo.tblEoWMagazzini
+				WHERE IdSede = @Id;
+
 				DELETE dbo.tblRifiutiAutorizzazioni
 				WHERE IdSede = @Id;
 				DELETE dbo.tblRifiutiRegistri

@@ -146,6 +146,10 @@ BEGIN
 		ELSE IF @lock = 2
 		BEGIN
 			BEGIN TRANSACTION;
+				-- Gestione EoW: la configurazione dell'automatismo per questo registro
+				-- (tblEoWMaterialiRegistri.IdRegistro) va rimossa prima del registro stesso.
+				DELETE dbo.tblEoWMaterialiRegistri
+				WHERE IdRegistro = @Id;
 				DELETE dbo.tblRifiutiRegistri
 				WHERE Id = @Id;
 				DELETE dbo.tblIdCancellati

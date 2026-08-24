@@ -186,6 +186,12 @@ BEGIN
 					AND @idFormulario IS NULL;
 				DELETE dbo.tblRifiutiRegistrazioniEtichette
 				WHERE Id = @Id;
+				-- Gestione EoW: tblEoWMovimenti.IdRegistrazione (nullable) può referenziare questa
+				-- registrazione se l'automatismo sulla causale K l'ha già collegata a un movimento
+				-- di magazzino EoW - si azzera il collegamento anziché bloccare la cancellazione,
+				-- il movimento resta un record di magazzino valido anche senza la registrazione di
+				-- origine (stesso pattern di uspSYS_del_RegistroCascade).
+				UPDATE dbo.tblEoWMovimenti SET IdRegistrazione = NULL WHERE IdRegistrazione = @Id;
 				DELETE dbo.tblRifiutiRegistrazioni
 				WHERE Id = @Id;
 				DELETE dbo.tblRifiutiFormulari

@@ -105,7 +105,7 @@ BEGIN
 				StatoFisico = MIN(CASE WHEN @Vista = 'E' THEN s.Nome END),
 				Etichette = MIN(CASE WHEN @Vista = 'T' THEN r.Etichette END),
 				Quantita = SUM(m.Quantita - ISNULL(a.Quantita, 0)),
-				GiacenzaGiorni = DATEDIFF(DAY, MIN(r.[Data]), @Data),
+				GiacenzaGiorni = DATEDIFF(DAY, MIN(CASE WHEN m.Quantita - ISNULL(a.Quantita, 0) > 0 THEN r.[Data] END), @Data),
 				MovimentiNumero = COUNT(DISTINCT IIF(m.Quantita - ISNULL(a.Quantita, 0) > 0, r.Id, NULL))
 			FROM
 				dbo.tblRifiutiRegistrazioni r
@@ -138,7 +138,7 @@ BEGIN
 				StatoFisico = MIN(CASE WHEN @Vista = 'E' THEN s.Nome END),
 				Etichette = MIN(CASE WHEN @Vista = 'T' THEN r.Etichette END),
 				Quantita = SUM(m.Quantita - ISNULL(a.Quantita, 0)),
-				GiacenzaGiorni = DATEDIFF(DAY, MIN(r.[Data]), @Data),
+				GiacenzaGiorni = DATEDIFF(DAY, MIN(CASE WHEN m.Quantita - ISNULL(a.Quantita, 0) > 0 THEN r.[Data] END), @Data),
 				MovimentiNumero = COUNT(DISTINCT IIF(m.Quantita - ISNULL(a.Quantita, 0) > 0, r.Id, NULL))
 			FROM
 				dbo.tblRifiutiRegistrazioni r
@@ -171,7 +171,7 @@ BEGIN
 				StatoFisico = CASE WHEN @Vista = 'E' THEN 'nd' END,
 				Etichette = MIN(CASE WHEN @Vista = 'T' THEN r.Etichette END),
 				Quantita = SUM(m.Quantita - ISNULL(a.Quantita, 0)),
-				GiacenzaGiorni = DATEDIFF(DAY, MIN(r.[Data]), @Data),
+				GiacenzaGiorni = DATEDIFF(DAY, MIN(CASE WHEN m.Quantita - ISNULL(a.Quantita, 0) > 0 THEN r.[Data] END), @Data),
 				MovimentiNumero = COUNT(DISTINCT IIF(m.Quantita - ISNULL(a.Quantita, 0) > 0, r.Id, NULL))
 			FROM
 				dbo.tblRifiutiRegistrazioni r

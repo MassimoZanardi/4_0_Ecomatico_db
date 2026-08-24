@@ -141,6 +141,30 @@ BEGIN
 			SET @IdNumeroTipo = NULL;
 		END
 
+		-- Per un destinatario (IdRuolo = 'D') il numero è obbligatorio se la sede è in Italia
+		-- (nessun indirizzo associato equivale a Italia, coerente con uspSedi_get), opzionale
+		-- se la sede è estera.
+		IF @Numero IS NULL AND EXISTS (
+			SELECT 1
+			FROM dbo.tblRifiutiAutorizzazioni
+			WHERE Id = @Id AND IdRuolo = 'D'
+		)
+		AND EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblSedi s
+				LEFT JOIN dbo.tblSediIndirizzi si ON s.Id = si.Id
+				LEFT JOIN dbo.tblIndirizzi ind ON si.IdIndirizzo = ind.Id
+			WHERE
+				s.Id = @IdSede
+				AND ISNULL(ind.IdNazione, '380') = '380'
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Per un destinatario con sede in Italia il numero è obbligatorio';
+			GOTO BRANCH_END;
+		END
+
 		IF @IdTipo = '0' OR @IdNumeroTipo = 'A' OR EXISTS (SELECT 1
 		FROM dbo.tblRifiutiAutorizzazioni
 		WHERE

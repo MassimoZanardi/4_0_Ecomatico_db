@@ -31,10 +31,10 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdRegistro non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		IF @Vista NOT IN ('E', 'T')
+		IF @Vista NOT IN ('E', 'M', 'T')
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Il parametro @Vista deve valere ''E'' oppure ''T''';
+			SET @returnMessage = 'Il parametro @Vista deve valere ''E'', ''M'' oppure ''T''';
 			GOTO BRANCH_END;
 		END
 
@@ -74,12 +74,14 @@ BEGIN
 
 		DECLARE @Offset INT = (@PageNumber - 1) * @RowsPerPage;
 
-		-- @Vista = 'E': raggruppa per EER/materiale + stato fisico (comportamento storico, invariato).
-		-- @Vista = 'T': raggruppa per combinazione esatta di etichette (r.Etichette, JSON canonico
-		-- già mantenuto da uspEtichette_upd/_del su tblRifiutiRegistrazioni.Etichette; NULL = bucket
-		-- "Nessuna etichetta"). Le due modalità condividono la stessa query: la chiave di GROUP BY
-		-- usa CASE su @Vista, così la dimensione non richiesta collassa a una costante per ogni riga
-		-- e non spezza ulteriormente i gruppi.
+		-- @Vista IN ('E', 'M'): solo righe Rifiuto prodotto/trattato, raggruppate per EER + stato fisico.
+		-- @Vista = 'M': solo righe Materiale prodotto, raggruppate per materiale.
+		-- @Vista = 'T': tutti i tipi, raggruppati per combinazione esatta di etichette (r.Etichette,
+		-- JSON canonico già mantenuto da uspEtichette_upd/_del su tblRifiutiRegistrazioni.Etichette;
+		-- NULL = bucket "Nessuna etichetta"). Le tre modalità condividono la stessa query: i rami
+		-- P/T (Rifiuto prodotto/trattato) sono attivi per @Vista IN ('E','T'), il ramo M (Materiale)
+		-- per @Vista IN ('M','T'); la chiave di GROUP BY usa CASE su @Vista, così la dimensione non
+		-- richiesta collassa a una costante per ogni riga e non spezza ulteriormente i gruppi.
 		-- StatoValore/StatoDescrizione (semaforo anzianità giacenza) sono derivati in un SELECT
 		-- esterno alla CTE Giacenze, per non ripetere tre volte l'espressione DATEDIFF.
 		;WITH QuantitaAssegnata AS (
@@ -100,11 +102,11 @@ BEGIN
 			SELECT
 				TipoCodice = 'P',
 				Tipo = 'Rifiuto prodotto',
-				Id = MIN(CASE WHEN @Vista = 'E' THEN e.Id END),
-				Nome = MIN(CASE WHEN @Vista = 'E' THEN e.Nome END),
-				Descrizione = MIN(CASE WHEN @Vista = 'E' THEN e.Descrizione END),
-				IdStatoFisico = MIN(CASE WHEN @Vista = 'E' THEN m.IdStatoFisico END),
-				StatoFisico = MIN(CASE WHEN @Vista = 'E' THEN s.Nome END),
+				Id = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Id END),
+				Nome = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Nome END),
+				Descrizione = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Descrizione END),
+				IdStatoFisico = MIN(CASE WHEN @Vista IN ('E', 'M') THEN m.IdStatoFisico END),
+				StatoFisico = MIN(CASE WHEN @Vista IN ('E', 'M') THEN s.Nome END),
 				Etichette = MIN(CASE WHEN @Vista = 'T' THEN r.Etichette END),
 				Quantita = SUM(m.Quantita - ISNULL(a.Quantita, 0)),
 				GiacenzaGiorni = DATEDIFF(DAY, MIN(CASE WHEN m.Quantita - ISNULL(a.Quantita, 0) > 0 THEN r.[Data] END), @Data),
@@ -123,10 +125,11 @@ BEGIN
 				AND ISNULL(m.IdOperazione, '') <> 'R'
 				AND m.Quantita > 0
 				AND o.Operazione = 'C'
+				AND @Vista IN ('E', 'T')
 				AND (@Search IS NULL OR m.IdEer LIKE '%' + REPLACE(@Search, '.', '') + '%')
 			GROUP BY
-				CASE WHEN @Vista = 'E' THEN e.Id END,
-				CASE WHEN @Vista = 'E' THEN s.Nome END,
+				CASE WHEN @Vista IN ('E', 'M') THEN e.Id END,
+				CASE WHEN @Vista IN ('E', 'M') THEN s.Nome END,
 				CASE WHEN @Vista = 'T' THEN r.Etichette END
 			HAVING SUM(m.Quantita - ISNULL(a.Quantita, 0)) > 0
 
@@ -135,11 +138,11 @@ BEGIN
 			SELECT
 				TipoCodice = 'T',
 				Tipo = 'Rifiuto trattato',
-				Id = MIN(CASE WHEN @Vista = 'E' THEN e.Id END),
-				Nome = MIN(CASE WHEN @Vista = 'E' THEN e.Nome END),
-				Descrizione = MIN(CASE WHEN @Vista = 'E' THEN e.Descrizione END),
-				IdStatoFisico = MIN(CASE WHEN @Vista = 'E' THEN m.IdStatoFisico END),
-				StatoFisico = MIN(CASE WHEN @Vista = 'E' THEN s.Nome END),
+				Id = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Id END),
+				Nome = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Nome END),
+				Descrizione = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Descrizione END),
+				IdStatoFisico = MIN(CASE WHEN @Vista IN ('E', 'M') THEN m.IdStatoFisico END),
+				StatoFisico = MIN(CASE WHEN @Vista IN ('E', 'M') THEN s.Nome END),
 				Etichette = MIN(CASE WHEN @Vista = 'T' THEN r.Etichette END),
 				Quantita = SUM(m.Quantita - ISNULL(a.Quantita, 0)),
 				GiacenzaGiorni = DATEDIFF(DAY, MIN(CASE WHEN m.Quantita - ISNULL(a.Quantita, 0) > 0 THEN r.[Data] END), @Data),
@@ -158,10 +161,11 @@ BEGIN
 				AND m.IdOperazione = 'R'
 				AND m.Quantita > 0
 				AND o.Operazione = 'S'
+				AND @Vista IN ('E', 'T')
 				AND (@Search IS NULL OR m.IdEer LIKE '%' + REPLACE(@Search, '.', '') + '%')
 			GROUP BY
-				CASE WHEN @Vista = 'E' THEN e.Id END,
-				CASE WHEN @Vista = 'E' THEN s.Nome END,
+				CASE WHEN @Vista IN ('E', 'M') THEN e.Id END,
+				CASE WHEN @Vista IN ('E', 'M') THEN s.Nome END,
 				CASE WHEN @Vista = 'T' THEN r.Etichette END
 			HAVING SUM(m.Quantita - ISNULL(a.Quantita, 0)) > 0
 
@@ -170,11 +174,11 @@ BEGIN
 			SELECT
 				TipoCodice = 'M',
 				Tipo = 'Materiale prodotto',
-				Id = MIN(CASE WHEN @Vista = 'E' THEN e.Id END),
-				Nome = MIN(CASE WHEN @Vista = 'E' THEN e.Nome END),
-				Descrizione = MIN(CASE WHEN @Vista = 'E' THEN e.Nome END),
+				Id = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Id END),
+				Nome = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Nome END),
+				Descrizione = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Nome END),
 				IdStatoFisico = NULL,
-				StatoFisico = CASE WHEN @Vista = 'E' THEN 'nd' END,
+				StatoFisico = CASE WHEN @Vista IN ('E', 'M') THEN 'nd' END,
 				Etichette = MIN(CASE WHEN @Vista = 'T' THEN r.Etichette END),
 				Quantita = SUM(m.Quantita - ISNULL(a.Quantita, 0)),
 				GiacenzaGiorni = DATEDIFF(DAY, MIN(CASE WHEN m.Quantita - ISNULL(a.Quantita, 0) > 0 THEN r.[Data] END), @Data),
@@ -192,9 +196,10 @@ BEGIN
 				AND ISNULL(m.IdOperazione, '') <> 'R'
 				AND m.Quantita > 0
 				AND o.Operazione = 'C'
+				AND @Vista IN ('M', 'T')
 				AND (@Search IS NULL OR e.Id LIKE '%' + @Search + '%' OR e.Nome LIKE '%' + @Search + '%')
 			GROUP BY
-				CASE WHEN @Vista = 'E' THEN e.Id END,
+				CASE WHEN @Vista IN ('E', 'M') THEN e.Id END,
 				CASE WHEN @Vista = 'T' THEN r.Etichette END
 			HAVING SUM(m.Quantita - ISNULL(a.Quantita, 0)) > 0
 		)

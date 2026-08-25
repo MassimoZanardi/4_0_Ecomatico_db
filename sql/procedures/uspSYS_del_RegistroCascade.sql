@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE dbo.uspSYS_del_RegistroCascade
+﻿CREATE OR ALTER PROCEDURE dbo.uspSYS_del_RegistroCascade
     @IdRegistro CHAR(16)    = NULL,
     @Conferma   VARCHAR(50) = NULL
 AS
@@ -93,6 +93,13 @@ BEGIN
 
             DELETE FROM dbo.tblRifiutiMovimenti WHERE Id IN (SELECT Id FROM #RifiutiMovimenti);
 
+            -- tblRifiutiLimiti.IdRegistro è nullable e il Limite appartiene alla Sede (non al
+            -- Registro, non toccato da questa SP): cancellando solo il Registro il Limite resta
+            -- valido, perde solo lo scoping specifico al registro (torna a valere sull'intera sede).
+            DECLARE @limitiScollegati INT;
+            UPDATE dbo.tblRifiutiLimiti SET IdRegistro = NULL WHERE IdRegistro = @IdRegistro;
+            SET @limitiScollegati = @@ROWCOUNT;
+
             DELETE FROM dbo.tblRifiutiRegistri WHERE Id = @IdRegistro;
 
             -- Pulizia del generatore di Id condiviso (dbo.uspId_get)
@@ -115,7 +122,8 @@ BEGIN
             ', Modelli rimossi: ', (SELECT COUNT(*) FROM #RifiutiModelli),
             ', Formulari rimossi: ', (SELECT COUNT(*) FROM #RifiutiFormulari),
             ', Registrazioni rimosse: ', (SELECT COUNT(*) FROM #RifiutiRegistrazioni),
-            '. Relazioni di altre registrazioni scollegate: ', @relazioniEsterneRimosse, '.');
+            '. Relazioni di altre registrazioni scollegate: ', @relazioniEsterneRimosse,
+            '. Limiti rifiuti scollegati dal registro: ', @limitiScollegati, '.');
 
         SELECT @returnValue AS ReturnValue, @returnMessage AS ReturnMessage;
     END TRY

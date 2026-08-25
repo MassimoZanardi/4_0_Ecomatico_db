@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE dbo.uspSYS_del_SedeEsternaCascade
+﻿CREATE OR ALTER PROCEDURE dbo.uspSYS_del_SedeEsternaCascade
     @IdSede   CHAR(16)    = NULL,
     @Conferma VARCHAR(50) = NULL
 AS
@@ -82,6 +82,10 @@ BEGIN
         SELECT Id INTO #RifiutiRegistri FROM dbo.tblRifiutiRegistri WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #RifiutiAutorizzazioni FROM dbo.tblRifiutiAutorizzazioni WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #RifiutiModelli FROM dbo.tblRifiutiModelli WHERE IdRegistro IN (SELECT Id FROM #RifiutiRegistri);
+
+        -- tblRifiutiLimiti* non è mai popolato per una sede esterna (i Limiti si possono creare
+        -- solo su sedi interne, confermato dall'utente): a differenza di uspSYS_del_SedeInternaCascade,
+        -- qui non serve raccoglierlo/cancellarlo.
 
         SELECT Id INTO #RifiutiMovimenti
         FROM dbo.tblRifiutiMovimenti

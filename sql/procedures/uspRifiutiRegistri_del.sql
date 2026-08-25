@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistri_del]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistri_del]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Reset BIT = 0
@@ -113,6 +113,18 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			IF EXISTS (SELECT 1
+			FROM dbo.tblRifiutiLimiti
+			WHERE
+				IdRegistro = @Id
+				AND Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un registro con limiti rifiuti associati non può essere cancellato';
+				GOTO BRANCH_END;
+			END
+
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblRifiutiRegistri
 				SET Lock = 4
@@ -150,6 +162,16 @@ BEGIN
 				-- (tblEoWMaterialiRegistri.IdRegistro) va rimossa prima del registro stesso.
 				DELETE dbo.tblEoWMaterialiRegistri
 				WHERE IdRegistro = @Id;
+
+				-- tblRifiutiLimiti.IdRegistro è nullable e il Limite appartiene alla Sede (non al
+				-- Registro): un Limite scoped a questo registro perde solo lo scoping specifico,
+				-- torna a valere sull'intera sede. Ramo di fatto irraggiungibile in pratica (il
+				-- picker dei Registri di uspRifiutiLimiti_get_Registri_SelectList espone solo
+				-- registri Lock=0, mai in bozza), mantenuto per difesa dalla FK NO_ACTION.
+				UPDATE dbo.tblRifiutiLimiti
+				SET IdRegistro = NULL
+				WHERE IdRegistro = @Id;
+
 				DELETE dbo.tblRifiutiRegistri
 				WHERE Id = @Id;
 				DELETE dbo.tblIdCancellati

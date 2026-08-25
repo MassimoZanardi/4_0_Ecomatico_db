@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspSedi_del_SediInterne]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspSedi_del_SediInterne]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Reset BIT = 0
@@ -275,6 +275,18 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			IF EXISTS (SELECT 1
+			FROM dbo.tblRifiutiLimiti
+			WHERE
+				IdSede = @Id
+				AND Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con limiti rifiuti associati non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblSedi
 				SET Lock = 4
@@ -385,6 +397,18 @@ BEGIN
 
 				DELETE dbo.tblRifiutiAutorizzazioni
 				WHERE IdSede = @Id;
+
+				-- tblRifiutiLimiti* va rimosso prima di tblRifiutiRegistri: FK NO_ACTION su IdRegistro
+				-- bloccherebbe altrimenti la cancellazione del registro sottostante.
+				DELETE dbo.tblRifiutiLimitiEer
+				WHERE IdLimite IN (SELECT Id FROM dbo.tblRifiutiLimiti WHERE IdSede = @Id);
+				DELETE dbo.tblRifiutiLimitiEtichette
+				WHERE IdLimite IN (SELECT Id FROM dbo.tblRifiutiLimiti WHERE IdSede = @Id);
+				DELETE dbo.tblRifiutiLimitiOperazioni
+				WHERE IdLimite IN (SELECT Id FROM dbo.tblRifiutiLimiti WHERE IdSede = @Id);
+				DELETE dbo.tblRifiutiLimiti
+				WHERE IdSede = @Id;
+
 				DELETE dbo.tblRifiutiRegistri
 				WHERE IdSede = @Id;
 				DELETE dbo.tblTipi

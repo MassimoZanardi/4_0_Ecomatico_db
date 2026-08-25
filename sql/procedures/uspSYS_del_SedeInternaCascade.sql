@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE dbo.uspSYS_del_SedeInternaCascade
+﻿CREATE OR ALTER PROCEDURE dbo.uspSYS_del_SedeInternaCascade
     @IdSede   CHAR(16)    = NULL,
     @Conferma VARCHAR(50) = NULL
 AS
@@ -88,6 +88,11 @@ BEGIN
         SELECT Id INTO #RifiutiAutorizzazioni FROM dbo.tblRifiutiAutorizzazioni WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #RifiutiModelli FROM dbo.tblRifiutiModelli WHERE IdRegistro IN (SELECT Id FROM #RifiutiRegistri);
 
+        -- tblRifiutiLimiti.IdSede è NOT NULL (proprietà della sede) e IdRegistro è nullable (scoping
+        -- opzionale a un registro specifico della stessa sede) - entrambi i rami coperti per sicurezza.
+        SELECT Id INTO #RifiutiLimiti FROM dbo.tblRifiutiLimiti
+        WHERE IdSede IN (SELECT Id FROM #Sedi) OR IdRegistro IN (SELECT Id FROM #RifiutiRegistri);
+
         SELECT Id INTO #RifiutiMovimenti
         FROM dbo.tblRifiutiMovimenti
         WHERE IdSedeProduttoreDetentore IN (SELECT Id FROM #Sedi)
@@ -164,6 +169,13 @@ BEGIN
             WHERE Id       IN (SELECT Id FROM #RifiutiRegistrazioni)
                OR IdParent IN (SELECT Id FROM #RifiutiRegistrazioni);
             DELETE FROM dbo.tblRifiutiRegistrazioni WHERE Id IN (SELECT Id FROM #RifiutiRegistrazioni);
+
+            -- tblRifiutiLimiti* va rimosso prima di tblRifiutiRegistri: FK NO_ACTION su IdRegistro
+            -- bloccherebbe altrimenti la cancellazione del registro sottostante.
+            DELETE FROM dbo.tblRifiutiLimitiEer        WHERE IdLimite IN (SELECT Id FROM #RifiutiLimiti);
+            DELETE FROM dbo.tblRifiutiLimitiEtichette  WHERE IdLimite IN (SELECT Id FROM #RifiutiLimiti);
+            DELETE FROM dbo.tblRifiutiLimitiOperazioni WHERE IdLimite IN (SELECT Id FROM #RifiutiLimiti);
+            DELETE FROM dbo.tblRifiutiLimiti           WHERE Id IN (SELECT Id FROM #RifiutiLimiti);
 
             DELETE FROM dbo.tblRifiutiMovimenti WHERE Id IN (SELECT Id FROM #RifiutiMovimenti);
             DELETE FROM dbo.tblRifiutiRegistri  WHERE Id IN (SELECT Id FROM #RifiutiRegistri);
@@ -267,6 +279,7 @@ BEGIN
                 UNION SELECT Id FROM #RifiutiMovimenti
                 UNION SELECT Id FROM #RifiutiRegistri
                 UNION SELECT Id FROM #RifiutiRegistrazioni
+                UNION SELECT Id FROM #RifiutiLimiti
                 UNION SELECT Id FROM #Scadenze
                 UNION SELECT Id FROM #Servizi
                 UNION SELECT Id FROM #Tipi
@@ -279,7 +292,7 @@ BEGIN
 
         COMMIT TRANSACTION;
 
-        SET @returnMessage = CONCAT('Cancellazione completata. Sedi rimosse: ', @totaleSedi, '. Riferimenti esterni azzerati/rimossi su Etichette/Autorizzazioni condivise: ', @rifEsterniRimossi, '. Movimenti EoW rimossi: ', (SELECT COUNT(*) FROM #EoWMovimenti), ', Lotti EoW rimossi: ', (SELECT COUNT(*) FROM #EoWLotti), ', Magazzini EoW rimossi: ', (SELECT COUNT(*) FROM #EoWMagazzini), '.');
+        SET @returnMessage = CONCAT('Cancellazione completata. Sedi rimosse: ', @totaleSedi, '. Riferimenti esterni azzerati/rimossi su Etichette/Autorizzazioni condivise: ', @rifEsterniRimossi, '. Movimenti EoW rimossi: ', (SELECT COUNT(*) FROM #EoWMovimenti), ', Lotti EoW rimossi: ', (SELECT COUNT(*) FROM #EoWLotti), ', Magazzini EoW rimossi: ', (SELECT COUNT(*) FROM #EoWMagazzini), ', Limiti rifiuti rimossi: ', (SELECT COUNT(*) FROM #RifiutiLimiti), '.');
 
         SELECT @returnValue AS ReturnValue, @returnMessage AS ReturnMessage;
     END TRY

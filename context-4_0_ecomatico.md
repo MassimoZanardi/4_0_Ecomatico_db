@@ -1,6 +1,6 @@
 # Contesto sessione di revisione — 4_0_ecomatico
 
-Ultimo aggiornamento: 2026-08-14.
+Ultimo aggiornamento: 2026-08-25 (nuova SP aggiunta dopo la chiusura della revisione sistematica, vedi sezione dedicata in fondo al file; la revisione stessa resta chiusa al 2026-08-14).
 
 **PROGETTO DI REVISIONE SISTEMATICA CHIUSO 2026-08-14.** Tutte le stored procedure di `4_0_ecomatico` raggiungibili dall'applicativo sono state riviste almeno una volta, ad eccezione di: `uspSYS_*` (confermato fuori perimetro, tooling di sviluppo dell'utente) e le 4 SP confermate codice morto (`uspFunzioni_get_PermessoByUtente`, `uspSedi_del`, `uspUtenti_get_Password`, `uspSessioni_upd_AziendaByRegistro`), lasciate intenzionalmente intoccate. L'audit indici (sezione dedicata più sotto) è anch'esso chiuso. Eventuali nuove sessioni di lavoro su questo database partono da zero findings noti — usare questo file + la memoria persistente come riferimento, non ripartire da un "prossimo modulo" perché non ce n'è uno.
 
@@ -401,4 +401,20 @@ Tutti i moduli sono stati rivisti. `uspSYS_*` resta **fuori perimetro** (conferm
 
 **Gruppo infrastruttura chiuso 2026-08-14**: nessuna delle 4 SP ha ricevuto modifiche (solo conferme + una lasciata intoccata perché morta) — esito legittimo, non tutti i moduli richiedono fix.
 
-**Lezione di metodologia importante (2026-08-14)**: `sys.sql_modules.definition` (e `OBJECT_DEFINITION()`) **normalizza silenziosamente `CREATE OR ALTER` in `CREATE`** (spazi extra al posto delle parole rimosse) indipendentemente da come la SP è stata effettivamente creata/alterata — **non è mai utilizzabile come diagnostica** per verificare se una SP usa `CREATE OR ALTER`. Non invalida le revisioni passate (gli script di deploy hanno sempre scritto `CREATE OR ALTER` esplicitamente nell'header), ma da qui in avanti questo "finding" va tolto dal catalogo dei controlli — non verificarlo mai più leggendo la definizione a posteriori.
+**Lezione di metodologia importante (2026-08-14)**: `sys.sql_modules.definition` (e `OBJECT_DEFINITION()`) **normalizza silenziosamente `CREATE OR ALTER` in `CREATE`** (spazi extra al posto delle parole rimosse) indipendentemente da come la SP è stata effettivamente creata/alterata — **non è mai utilizzabile come diagnostica** per verificare se una SP usa `CREATE OR ALTER`. Non invalida le revisioni passate (gli script di deploy hanno sempre scritto `CREATE OR ALTER` esplicitamente nell'header), ma da qui in avanti questo "finding" va tolto dal catalogo dei controlli — non verificarlo mai più leggendo la definizione a posteriori. **Conseguenza pratica per i file del repo**: i mirror in `sql/procedures/*.sql` vanno scritti a mano con `CREATE OR ALTER` (o riusando il file di deploy già normalizzato), mai rigenerati da `OBJECT_DEFINITION`/questo script, altrimenti si perde `OR ALTER` e il prossimo deploy fallisce se la SP esiste già.
+
+---
+
+## Sviluppo post-revisione (dopo la chiusura 2026-08-14)
+
+Sezione per le nuove SP create da zero (non fix di SP esistenti) dopo la chiusura del progetto di revisione sistematica. A differenza delle sezioni sopra (audit di codice preesistente), queste voci documentano funzionalità nuove.
+
+### `uspRifiutiGiacenze_get_Quantita` (nuova, 2026-08-25)
+Estende il modulo Giacenze (`uspRifiutiGiacenze_get_List`, `uspRifiutiGiacenze_get_Carichi_List`) con una terza SP che valorizza in un **OUTPUT param scalare** (non un result set) la giacenza residua per una singola combinazione Registro+Eer+StatoFisico, invece di restituire liste aggregate/dettaglio carichi.
+
+- **Firma**: `@IdRegistro, @IdSessione, @IdEer, @IdStatoFisico, @Data = NULL, @Giacenza DECIMAL(18,2) OUTPUT`.
+- **Logica**: stessa formula `Quantita - QuantitaAssegnata` delle due SP sorelle (CTE `QuantitaAssegnata` su `tblRifiutiRegistrazioniRelazioni`, filtrata `p.[Data] <= @Data` cosicché gli scarichi con data futura rispetto a `@Data` non riducono la giacenza calcolata a quella data — verificato esplicitamente su richiesta dell'utente). I due rami "Rifiuto prodotto" (`IdOperazione<>'R'`, `Operazione='C'`) e "Rifiuto trattato" (`IdOperazione='R'`, `Operazione='S'`) sono uniti in un solo `SUM` con `OR` invece di due `UNION ALL`, essendo mutuamente esclusivi sullo stesso record.
+- **Permessi/titolarità**: stessi controlli delle SP sorelle (`RRG≥1` + `ufnSedi_get_SediInterneBySessione_List` su Registro→Sede).
+- **Deviazione nota dallo standard generale**: filtro `r.Lock = 0` (non `Lock < 2`) per coerenza con le due SP sorelle dello stesso modulo, non con lo standard generico del progetto.
+- **Verificata**: smoke test sessione basso privilegio (diniego pulito) + confronto su dati reali con `uspRifiutiGiacenze_get_List` sullo stesso Registro (`fd73e743a19b44c0`) — match esatto su un solo ramo (EER 010102/P → 22.00) e su somma Prodotto+Trattato (EER 010101/P → 12.00+1.00=13.00).
+- Deploy + mirror committati (`375eeb6`).

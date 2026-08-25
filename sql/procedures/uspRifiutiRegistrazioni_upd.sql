@@ -45,6 +45,9 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd]
 	@IdMateriale CHAR(2) = NULL,
 	@MaterialeDescrizione VARCHAR(200) = NULL,
 
+	-- Provenienza
+	@IdAttivitaProvenienza CHAR(1) = NULL,
+
 	@RegistrazioneAuto BIT = 0,
 	@RinumeraRegistro BIT = 0,
 	@NessunaRegistrazioneAssociata BIT = 0
@@ -122,6 +125,7 @@ BEGIN
 		DECLARE @isDestinatario BIT;
 		DECLARE @isIntermediario BIT;
 		DECLARE @isAttivitaRs BIT;
+		DECLARE @isAttivitaProvenienza BIT;
 
 		-- Recupero dati registrazione
 		SELECT
@@ -140,6 +144,7 @@ BEGIN
 			@isDestinatario = o.IsDestinatario,
 			@isIntermediario = o.IsIntermediario,
 			@isAttivitaRs = o.IsAttivitaRs,
+			@isAttivitaProvenienza = o.IsAttivitaProvenienza,
 			@totaleQuantitaAssegnata = CASE
 				WHEN @NessunaRegistrazioneAssociata = 1 THEN 0
 				ELSE
@@ -190,6 +195,7 @@ BEGIN
 		SET @IdStatoFisico = NULLIF(LTRIM(RTRIM(@IdStatoFisico)), '');
 		SET @IdMateriale = NULLIF(LTRIM(RTRIM(@IdMateriale)), '');
 		SET @IdAttivitaRs = NULLIF(LTRIM(RTRIM(@IdAttivitaRs)), '');
+		SET @IdAttivitaProvenienza = NULLIF(LTRIM(RTRIM(@IdAttivitaProvenienza)), '');
 		SET @IdUnitaMisura = NULLIF(LTRIM(RTRIM(@IdUnitaMisura)), '');
 		SET @IdUnitaMisura = ISNULL(@IdUnitaMisura, 'KG');
 		SET @IdDocumentoTrasportoTipo = NULLIF(LTRIM(RTRIM(@IdDocumentoTrasportoTipo)), '');
@@ -263,6 +269,10 @@ BEGIN
 		-- Attività RS
 		IF @isAttivitaRs = 0 OR @IdAttivitaRs = '00'
 			SET @IdAttivitaRs = NULL;
+
+		-- Attività Provenienza
+		IF @isAttivitaProvenienza = 0 OR @IdAttivitaProvenienza = '0'
+			SET @IdAttivitaProvenienza = NULL;
 
 		-- Autorizzazioni: azzera se il ruolo non è previsto per l'operazione, o se è "nessuna" (SediciZeri)
 		IF @isProduttore = 0 OR @IdAutorizzazioneProduttoreDetentore = @idSediciZeri
@@ -1015,6 +1025,7 @@ BEGIN
 				DataFineTrasporto = @DataFineTrasporto,
 				IdMateriale = @IdMateriale,
 				MaterialeDescrizione = @MaterialeDescrizione,
+				IdAttivitaProvenienza = @IdAttivitaProvenienza,
 				Lock = 0
 			WHERE Id = @Id;
 

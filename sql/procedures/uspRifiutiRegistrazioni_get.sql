@@ -159,6 +159,9 @@ BEGIN
 			IdMateriale = ISNULL(r.IdMateriale, '00'),
 			MaterialeDescrizione = ISNULL(r.MaterialeDescrizione, ''),
 
+			-- Provenienza
+			IdAttivitaProvenienza = ISNULL(r.IdAttivitaProvenienza, '0'),
+
 			IsIntegrazioneFir = ISNULL(o.IsIntegrazioneFir, 0),
 			IsProduttore = ISNULL(o.IsProduttore, 0),
 			IsTrasportatore = ISNULL(o.IsTrasportatore, 0),

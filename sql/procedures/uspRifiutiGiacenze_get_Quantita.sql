@@ -3,8 +3,7 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiGiacenze_get_Quantita]
 	@IdSessione CHAR(16) = NULL,
 	@IdEer CHAR(6) = NULL,
 	@IdStatoFisico CHAR(1) = NULL,
-	@Data DATE = NULL,
-	@Giacenza DECIMAL(18, 2) OUTPUT
+	@Data DATE = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -12,7 +11,7 @@ BEGIN
 
 		DECLARE @returnValue INT = 0;
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
-		SET @Giacenza = NULL;
+		DECLARE @Giacenza DECIMAL(18, 2);
 
 		SET @IdRegistro = NULLIF(LTRIM(RTRIM(@IdRegistro)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
@@ -112,7 +111,7 @@ BEGIN
 			)
 			AND (m.Quantita - ISNULL(a.Quantita, 0)) > 0;
 
-		SET @Giacenza = ISNULL(@Giacenza, 0);
+		SELECT rtn = ISNULL(@Giacenza, 0);
 
 	END TRY
 	BEGIN CATCH

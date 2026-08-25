@@ -12,6 +12,7 @@ CREATE TABLE [dbo].[tblRifiutiRegistrazioni](
 	[IdCausaleRespingimento] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[IdTrasportoTransfrontalieroTipo] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[IdMateriale] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdAttivitaProvenienza] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[IdUnitaMisuraQuantitaRespinta] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[CausaleRespingimentoAltro] [varchar](100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[QuantitaRespinta] [decimal](18, 2) NULL,
@@ -107,3 +108,10 @@ REFERENCES [dbo].[tblUnitaMisura] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblRifiutiRegistrazioni_tblUnitaMisura]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiAttivitaProvenienze] FOREIGN KEY([IdAttivitaProvenienza])
+REFERENCES [dbo].[tblRifiutiAttivitaProvenienze] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiAttivitaProvenienze]

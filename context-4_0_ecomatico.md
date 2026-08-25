@@ -420,3 +420,16 @@ Estende il modulo Giacenze (`uspRifiutiGiacenze_get_List`, `uspRifiutiGiacenze_g
 - **Verificata**: smoke test sessione basso privilegio (diniego pulito) + confronto su dati reali con `uspRifiutiGiacenze_get_List` sullo stesso Registro (`fd73e743a19b44c0`), ripetuto due volte a distanza (i dati reali dell'ambiente cambiano nel tempo — non fidarsi di un confronto fatto in momenti diversi): match esatto entrambe le volte (22.00 su un solo ramo la prima volta, 2.00+4.00=6.00 la seconda).
 - **Consumer applicativo**: `IRifiutoGiacenzaRepository`/`RifiutoGiacenzaRepository`/`IRifiutoGiacenzaService`/`RifiutoGiacenzaService.GetQuantitaAsync` in `4_0_Ecomatico` (repo app separato), via `ScalarAsync<decimal, dynamic>`.
 - Deploy + mirror committati (`375eeb6`, poi corretto in un commit successivo per il cambio OUTPUT→result set).
+
+### `tblRifiutiRegistrazioni.IdAttivitaProvenienza` (nuova colonna, 2026-08-25)
+Nuova colonna `CHAR(1) NULL`, FK verso `tblRifiutiAttivitaProvenienze.Id` (tabella creata live dall'utente lo stesso giorno, non ancora tracciata nel repo — mirror aggiunto in `sql/tables/tblRifiutiAttivitaProvenienze.sql`). Nessuna SP/modello C# ancora aggiornati per usarla — solo colonna+FK a livello di schema.
+
+**Riordino fisico colonne (stesso giorno)**: su richiesta esplicita dell'utente, la colonna è stata posizionata fisicamente sopra `IdUnitaMisuraQuantitaRespinta` (non solo nello script di documentazione) — in T-SQL `ALTER TABLE ADD` accoda sempre in fondo, quindi l'unico modo è stato un **rebuild completo della tabella**:
+1. Drop delle 2 funzioni `WITH SCHEMABINDING` che referenziano la tabella (`ufnRifiutiRegistrazioni_get_IsQuantitaSuperiore`, `ufnRifiutiRegistrazioni_get_UltimoNumero`) — altrimenti bloccano il `DROP TABLE`.
+2. Drop delle 4 FK in entrata da altre tabelle (`tblRifiutiRegistrazioniEtichette`, `tblRifiutiRegistrazioniRelazioni` ×2, `tblEoWMovimenti`).
+3. `CREATE TABLE ..._new` con l'ordine colonne desiderato, `INSERT INTO ..._new SELECT ... FROM` la vecchia (7 righe, verificato `COUNT(*)` invariato), `DROP TABLE` vecchia, `sp_rename` tabella e PK ai nomi originali.
+4. Ricreati i 2 indici nonclustered, le 8 FK in uscita, le 4 FK in entrata, le 2 funzioni schema-bound (contenuto identico, invariato).
+5. Tutto in un'unica transazione (`XACT_ABORT ON`/`TRY-CATCH`/`ROLLBACK`), **fuori** però dal footer standard delle SP (è uno script DDL one-shot, non una stored procedure — non va confuso con lo skeleton `uspXxx`).
+6. Verificato: ordine colonne, conteggio righe, indici, FK uscita/entrata, `is_schema_bound=1` sulle 2 funzioni, smoke test reale su `uspRifiutiRegistrazioni_get` + `uspRifiutiGiacenze_get_Quantita` (dati reali, invariati) + diniego pulito basso privilegio.
+7. **Lezione**: prima di un rebuild tabella, controllare sempre `sys.sql_expression_dependencies` (SP/funzioni che referenziano la tabella) **e** `sys.sql_modules.is_schema_bound` sui referenzianti — solo gli oggetti schema-bound bloccano davvero il `DROP TABLE`; le SP normali (non schema-bound) restano valide anche a tabella ricreata, deferred name resolution permettendo.
+8. Fattibile senza rischi solo perché la tabella aveva 7 righe (ambiente dev) — su una tabella di produzione con molte righe/foreign key aggiuntive questa operazione andrebbe pianificata con più cautela (finestra di manutenzione, backup, downtime).

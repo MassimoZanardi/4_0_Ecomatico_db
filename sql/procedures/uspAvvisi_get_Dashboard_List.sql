@@ -90,6 +90,7 @@ BEGIN
 			),
 			UrlDestinazione = '/home/avvisi',
 			Icona = 'fa-calendar-check'
+		WHERE EXISTS (SELECT 1 FROM @IdCalendario) -- categoria esclusa del tutto se l'utente non ha nessun calendario visibile
 
 		UNION ALL -- Categoria esclusa del tutto se manca il permesso RLM
 

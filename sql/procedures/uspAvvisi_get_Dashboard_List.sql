@@ -58,7 +58,7 @@ BEGIN
 			Area = 'Scadenze',
 			AreaIcona = 'fa-calendar-check',
 			Categoria = 'Scadenze',
-			Descrizione = 'Scadenze scadute o in avviso nelle prossime settimane',
+			Descrizione = 'Scadenze imminenti o già scadute',
 			[Count] = (
 				SELECT COUNT(*)
 				FROM dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendarioScadenze, @IdTipoScadenze)
@@ -79,7 +79,7 @@ BEGIN
 			-- scaduta o imminente, non il totale dei servizi - la fascia sopra indica
 			-- già il modulo (Servizi), qui si descrive cosa conta il numero.
 			Categoria = 'Scadenze',
-			Descrizione = 'Servizi con scadenza scaduta o in avviso nelle prossime settimane',
+			Descrizione = 'Servizi con scadenza imminente o già superata',
 			[Count] = (
 				SELECT COUNT(*)
 				FROM dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendarioServizi, @IdTipoServizi)

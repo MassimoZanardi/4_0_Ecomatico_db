@@ -56,7 +56,7 @@ BEGIN
 
 		SELECT
 			Area = 'Scadenze',
-			AreaIcona = 'fa-calendar-check',
+			AreaIcona = (SELECT REPLACE(Icon, 'fal ', '') FROM dbo.tblPagineAree WHERE Nome = 'Scadenze'),
 			Categoria = 'Scadenze',
 			Descrizione = 'Scadenze imminenti o già scadute',
 			[Count] = (
@@ -74,7 +74,7 @@ BEGIN
 
 		SELECT
 			Area = 'Servizi',
-			AreaIcona = 'fa-calendar-alt',
+			AreaIcona = (SELECT REPLACE(Icon, 'fal ', '') FROM dbo.tblPagineAree WHERE Nome = 'Servizi'),
 			-- "Scadenze" e non "Servizi": il numero conta i servizi con una scadenza
 			-- scaduta o imminente, non il totale dei servizi - la fascia sopra indica
 			-- già il modulo (Servizi), qui si descrive cosa conta il numero.
@@ -97,7 +97,7 @@ BEGIN
 
 		SELECT
 			Area = 'Rifiuti',
-			AreaIcona = 'fa-trash-alt',
+			AreaIcona = (SELECT REPLACE(Icon, 'fal ', '') FROM dbo.tblPagineAree WHERE Nome = 'Rifiuti'),
 			Categoria = 'Limiti superati',
 			Descrizione = 'Limiti rifiuti che hanno superato la soglia impostata',
 			[Count] = (
@@ -114,7 +114,7 @@ BEGIN
 
 		SELECT
 			Area = 'Rifiuti',
-			AreaIcona = 'fa-trash-alt',
+			AreaIcona = (SELECT REPLACE(Icon, 'fal ', '') FROM dbo.tblPagineAree WHERE Nome = 'Rifiuti'),
 			Categoria = 'Autorizzazioni in scadenza',
 			Descrizione = 'Autorizzazioni rifiuti scadute o in scadenza entro 30 giorni',
 			[Count] = (

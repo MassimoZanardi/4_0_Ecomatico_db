@@ -54,7 +54,13 @@ BEGIN
 		DECLARE @IdTipoServizi tvpId_Char_1;
 		INSERT INTO @IdTipoServizi (Id) VALUES ('V');
 
+		;WITH Base AS (
+
 		SELECT
+			-- Pos della voce di menu di primo livello dell'Area: la dashboard segue
+			-- dinamicamente l'ordine delle Aree nel menu, senza doverlo duplicare qui.
+			AreaPos = (SELECT m.Pos FROM dbo.tblMenu m WHERE m.IdParent IS NULL AND m.IdArea = 'SCD'),
+			Ordine = 0,
 			Area = 'Scadenze',
 			AreaIcona = (SELECT REPLACE(Icon, 'fal ', '') FROM dbo.tblPagineAree WHERE Nome = 'Scadenze'),
 			Categoria = 'Scadenze',
@@ -73,6 +79,8 @@ BEGIN
 		UNION ALL -- Categoria esclusa del tutto se manca il permesso SRV
 
 		SELECT
+			AreaPos = (SELECT m.Pos FROM dbo.tblMenu m WHERE m.IdParent IS NULL AND m.IdArea = 'SRV'),
+			Ordine = 0,
 			Area = 'Servizi',
 			AreaIcona = (SELECT REPLACE(Icon, 'fal ', '') FROM dbo.tblPagineAree WHERE Nome = 'Servizi'),
 			-- "Scadenze" e non "Servizi": il numero conta i servizi con una scadenza
@@ -96,6 +104,8 @@ BEGIN
 		UNION ALL -- Categoria esclusa del tutto se manca il permesso RLM
 
 		SELECT
+			AreaPos = (SELECT m.Pos FROM dbo.tblMenu m WHERE m.IdParent IS NULL AND m.IdArea = 'RIF'),
+			Ordine = 0,
 			Area = 'Rifiuti',
 			AreaIcona = (SELECT REPLACE(Icon, 'fal ', '') FROM dbo.tblPagineAree WHERE Nome = 'Rifiuti'),
 			Categoria = 'Limiti superati',
@@ -113,6 +123,8 @@ BEGIN
 		UNION ALL -- Categoria esclusa del tutto se manca il permesso RAT
 
 		SELECT
+			AreaPos = (SELECT m.Pos FROM dbo.tblMenu m WHERE m.IdParent IS NULL AND m.IdArea = 'RIF'),
+			Ordine = 1,
 			Area = 'Rifiuti',
 			AreaIcona = (SELECT REPLACE(Icon, 'fal ', '') FROM dbo.tblPagineAree WHERE Nome = 'Rifiuti'),
 			Categoria = 'Autorizzazioni in scadenza',
@@ -133,6 +145,11 @@ BEGIN
 			-- (a differenza di Limiti superati, che è un calcolo live senza data pianificata).
 			Icona = 'fa-calendar-check'
 		WHERE @permessoAutorizzazioni >= 1
+
+		)
+		SELECT Area, AreaIcona, Categoria, Descrizione, [Count], UrlDestinazione, Icona
+		FROM Base
+		ORDER BY AreaPos, Ordine
 		OPTION (RECOMPILE);
 
 	END TRY

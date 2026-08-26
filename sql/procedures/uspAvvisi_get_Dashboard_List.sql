@@ -57,6 +57,7 @@ BEGIN
 		SELECT
 			Area = 'Scadenze',
 			Categoria = 'Scadenze',
+			Descrizione = 'Scadenze scadute o in avviso nelle prossime settimane',
 			[Count] = (
 				SELECT COUNT(*)
 				FROM dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendarioScadenze, @IdTipoScadenze)
@@ -72,7 +73,11 @@ BEGIN
 
 		SELECT
 			Area = 'Servizi',
-			Categoria = 'Servizi',
+			-- "Scadenze" e non "Servizi": il numero conta i servizi con una scadenza
+			-- scaduta o imminente, non il totale dei servizi - la fascia sopra indica
+			-- già il modulo (Servizi), qui si descrive cosa conta il numero.
+			Categoria = 'Scadenze',
+			Descrizione = 'Servizi con scadenza scaduta o in avviso nelle prossime settimane',
 			[Count] = (
 				SELECT COUNT(*)
 				FROM dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendarioServizi, @IdTipoServizi)
@@ -89,6 +94,7 @@ BEGIN
 		SELECT
 			Area = 'Rifiuti',
 			Categoria = 'Limiti superati',
+			Descrizione = 'Limiti rifiuti che hanno superato la soglia impostata',
 			[Count] = (
 				SELECT COUNT(*)
 				FROM dbo.ufnRifiutiLimiti_get_Verifica_List(NULL) v
@@ -104,6 +110,7 @@ BEGIN
 		SELECT
 			Area = 'Rifiuti',
 			Categoria = 'Autorizzazioni in scadenza',
+			Descrizione = 'Autorizzazioni rifiuti scadute o in scadenza entro 30 giorni',
 			[Count] = (
 				SELECT COUNT(*)
 				FROM

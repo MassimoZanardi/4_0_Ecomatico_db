@@ -11,7 +11,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiLimiti_upd]
 	@Valore DECIMAL(18, 2) = NULL,
 	@Riferimento CHAR(1) = NULL,
 	@Intervallo CHAR(2) = NULL,
-	@IdOperazioni VARCHAR(200) = NULL
+	@IdOperazioni VARCHAR(200) = NULL,
+	@VerificaPerRegistro BIT = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -176,7 +177,8 @@ BEGIN
 				Nome = @Nome,
 				Valore = @Valore,
 				Riferimento = @Riferimento,
-				Intervallo = @Intervallo
+				Intervallo = @Intervallo,
+				VerificaPerRegistro = IIF(@IdRegistro IS NULL, ISNULL(@VerificaPerRegistro, 1), NULL)
 			WHERE
 				Id = @Id
 				AND Lock <= 2;

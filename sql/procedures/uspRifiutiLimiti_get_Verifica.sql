@@ -48,18 +48,38 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Registri applicabili per ciascun limite: il registro specifico se indicato,
-		-- altrimenti tutti i registri attivi della sede del limite.
-		;WITH LimitiRegistri AS (
+		-- Righe di verifica effettive per ciascun limite: un limite con @IdRegistro esplicito
+		-- produce sempre una sola riga (verifica ristretta a quel registro); un limite senza
+		-- registro produce una riga aggregata di sede (VerificaPerRegistro=0) oppure una riga
+		-- per ciascun registro della sede, indipendente (VerificaPerRegistro=1, default).
+		;WITH LimitiEspansi AS (
 			SELECT
-				c.Id AS IdLimite,
-				r.Id AS IdRegistro
+				IdLimite = c.Id,
+				IdRegistroVerifica = c.IdRegistro
+			FROM dbo.tblRifiutiLimiti c
+			WHERE c.IdRegistro IS NOT NULL
+
+			UNION ALL
+
+			SELECT
+				IdLimite = c.Id,
+				IdRegistroVerifica = NULL
+			FROM dbo.tblRifiutiLimiti c
+			WHERE
+				c.IdRegistro IS NULL
+				AND ISNULL(c.VerificaPerRegistro, 1) = 0
+
+			UNION ALL
+
+			SELECT
+				IdLimite = c.Id,
+				IdRegistroVerifica = r.Id
 			FROM
 				dbo.tblRifiutiLimiti c
 				INNER JOIN dbo.tblRifiutiRegistri r ON r.IdSede = c.IdSede AND r.Lock = 0
 			WHERE
 				c.IdRegistro IS NULL
-				OR c.IdRegistro = r.Id
+				AND ISNULL(c.VerificaPerRegistro, 1) = 1
 		),
 		-- Stessa logica di quantità residua di uspRifiutiGiacenze_get_Quantita, non ristretta
 		-- a un singolo registro/EER/stato fisico: il filtro per limite avviene nelle APPLY sotto.
@@ -82,6 +102,8 @@ BEGIN
 			c.Nome,
 			c.IdSede,
 			c.IdRegistro,
+			le.IdRegistroVerifica,
+			RegistroVerificaNome = rv.Nome,
 			c.IdUnitaMisura,
 			c.Riferimento,
 			c.Intervallo,
@@ -99,6 +121,8 @@ BEGIN
 		FROM
 			dbo.tblRifiutiLimiti c
 			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			INNER JOIN LimitiEspansi le ON le.IdLimite = c.Id
+			LEFT JOIN dbo.tblRifiutiRegistri rv ON rv.Id = le.IdRegistroVerifica
 			CROSS APPLY (
 				SELECT
 					GiacenzaQuantita = SUM(x.ResiduoUnitaMisura),
@@ -118,7 +142,10 @@ BEGIN
 					WHERE
 						r.Lock = 0
 						AND r.[Data] <= @Data
-						AND m.IdRegistro IN (SELECT IdRegistro FROM LimitiRegistri WHERE IdLimite = c.Id)
+						AND (
+							(le.IdRegistroVerifica IS NOT NULL AND m.IdRegistro = le.IdRegistroVerifica)
+							OR (le.IdRegistroVerifica IS NULL AND m.IdRegistro IN (SELECT Id FROM dbo.tblRifiutiRegistri WHERE IdSede = c.IdSede AND Lock = 0))
+						)
 						AND m.Quantita > 0
 						AND (
 							(ISNULL(m.IdOperazione, '') <> 'R' AND o.Operazione = 'C')
@@ -159,7 +186,10 @@ BEGIN
 							WHEN 'MM' THEN DATEFROMPARTS(YEAR(@Data), MONTH(@Data), 1)
 							WHEN 'YY' THEN DATEFROMPARTS(YEAR(@Data), 1, 1)
 						END
-						AND m.IdRegistro IN (SELECT IdRegistro FROM LimitiRegistri WHERE IdLimite = c.Id)
+						AND (
+							(le.IdRegistroVerifica IS NOT NULL AND m.IdRegistro = le.IdRegistroVerifica)
+							OR (le.IdRegistroVerifica IS NULL AND m.IdRegistro IN (SELECT Id FROM dbo.tblRifiutiRegistri WHERE IdSede = c.IdSede AND Lock = 0))
+						)
 						AND m.Quantita > 0
 						AND (
 							NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiLimitiEer WHERE IdLimite = c.Id)
@@ -184,7 +214,7 @@ BEGIN
 		WHERE
 			c.Lock = 0
 			AND (@IdSede IS NULL OR c.IdSede = @IdSede)
-		ORDER BY c.Nome
+		ORDER BY c.Nome, rv.Nome
 		OPTION (RECOMPILE);
 
 	END TRY

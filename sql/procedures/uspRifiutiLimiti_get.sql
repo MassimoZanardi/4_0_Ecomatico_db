@@ -75,6 +75,7 @@ BEGIN
 			c.Valore,
 			c.Riferimento,
 			c.Intervallo,
+			VerificaPerRegistro = ISNULL(c.VerificaPerRegistro, 1),
 			c.Lock,
 			SedeNome = s.Nome + ' ' + s.IndirizzoCompleto,
 			RegistroNome = r.Nome

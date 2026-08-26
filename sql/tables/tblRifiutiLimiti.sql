@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
@@ -14,6 +14,7 @@ CREATE TABLE [dbo].[tblRifiutiLimiti](
 	[Riferimento] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[Intervallo] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[Lock] [tinyint] NULL,
+	[VerificaPerRegistro] [bit] NULL,
  CONSTRAINT [PK_tblRifiutiLimiti] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC

@@ -78,6 +78,7 @@ BEGIN
 			AND u.IdRuolo = 'US';
 
 		DECLARE @permessoLimiti TINYINT = dbo.ufnFunzioni_get_PermessoByUtente('RLM', @IdUtente);
+		DECLARE @permessoAutorizzazioni TINYINT = dbo.ufnFunzioni_get_PermessoByUtente('RAT', @IdUtente);
 
 		SELECT
 			Categoria = 'Scadenze/Servizi',
@@ -105,6 +106,25 @@ BEGIN
 			UrlDestinazione = '/home/avvisi/limiti',
 			Icona = 'fa-exclamation-triangle'
 		WHERE @permessoLimiti >= 1
+
+		UNION ALL -- Categoria esclusa del tutto se manca il permesso RAT
+
+		SELECT
+			Categoria = 'Autorizzazioni in scadenza',
+			[Count] = (
+				SELECT COUNT(*)
+				FROM
+					dbo.tblRifiutiAutorizzazioni a
+					INNER JOIN dbo.ufnSedi_get_SediInterneByUtente_List(@IdUtente) i ON a.IdSede = i.Id
+				WHERE
+					a.Nessuna = 0
+					AND a.Disabilitata = 0
+					AND a.Lock = 0
+					AND (a.DataFine < @countData OR DATEDIFF(DAY, @countData, a.DataFine) < 30)
+			),
+			UrlDestinazione = '/home/avvisi/autorizzazioni',
+			Icona = 'fa-file-contract'
+		WHERE @permessoAutorizzazioni >= 1
 		OPTION (RECOMPILE);
 
 	END TRY

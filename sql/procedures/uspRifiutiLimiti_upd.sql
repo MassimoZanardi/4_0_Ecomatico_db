@@ -150,6 +150,23 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Controlla che non esista un altro record con lo stesso nome nella sede
+		-- (ambito Sede e non Registro: IdRegistro è opzionale sui limiti)
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblRifiutiLimiti
+			WHERE
+				Id <> @Id
+				AND IdSede = @idSede
+				AND Lock = 0
+				AND Nome = @Nome
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Un altro limite con lo stesso nome è già presente';
+			GOTO BRANCH_END;
+		END
+
 		BEGIN TRANSACTION;
 			UPDATE dbo.tblRifiutiLimiti
 			SET

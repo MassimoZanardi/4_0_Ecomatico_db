@@ -1,6 +1,7 @@
 ﻿CREATE OR ALTER PROCEDURE [dbo].[uspAvvisi_get_Count]
 	@IdUtente CHAR(16) = NULL,
-	@Update BIT = 0
+	@Update BIT = 0,
+	@Force BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -24,14 +25,16 @@ BEGIN
 
 		IF @Update = 1
 		BEGIN
-			-- Legge il conteggio dalla cache se ancora valido
-			SELECT @count = AvvisiCount
-			FROM dbo.tblUtentiDefault
-			WHERE
-				Id = @IdUtente
-				AND DATEDIFF(SECOND, AvvisiCountData, @countData) <= @countSecond;
+			-- Legge il conteggio dalla cache se ancora valido (saltato con @Force=1:
+			-- richiesta manuale di refresh, non il polling periodico automatico)
+			IF @Force = 0
+				SELECT @count = AvvisiCount
+				FROM dbo.tblUtentiDefault
+				WHERE
+					Id = @IdUtente
+					AND DATEDIFF(SECOND, AvvisiCountData, @countData) <= @countSecond;
 
-			-- Cache scaduta o assente: ricalcola
+			-- Cache scaduta, assente o @Force=1: ricalcola
 			IF @count IS NULL
 			BEGIN
 				-- Finestra temporale: ultimi 30 giorni → prossime 4 settimane

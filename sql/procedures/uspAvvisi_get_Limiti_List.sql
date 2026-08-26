@@ -50,6 +50,7 @@ BEGIN
 		SELECT
 			tbl.Id,
 			tbl.Nome,
+			SedeNome = s.Nome + ' ' + s.IndirizzoCompleto,
 			RegistroNome = tbl.RegistroVerificaNome,
 			tbl.IdUnitaMisura,
 			tbl.Riferimento,
@@ -58,8 +59,9 @@ BEGIN
 			tbl.ValoreAttuale,
 			tblCount.RowsCount
 		FROM tbl
+		INNER JOIN dbo.tblSedi s ON s.Id = tbl.IdSede
 		CROSS JOIN tblCount
-		ORDER BY tbl.Nome, tbl.RegistroVerificaNome
+		ORDER BY s.Nome, tbl.Nome, tbl.RegistroVerificaNome
 		OFFSET @Offset ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY
 		OPTION (RECOMPILE);

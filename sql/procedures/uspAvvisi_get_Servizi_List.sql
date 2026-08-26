@@ -63,10 +63,16 @@ BEGIN
 				StatoDescrizione = e.Stato + IIF(e.[Data] < GETDATE(), ' - Scaduto', ''),
 				Testo = e.AvvisoTesto,
 				e.[Data],
+				Tipo = t.Nome,
+				Sede = sd.Nome,
+				Calendario = cal.Nome,
 				UrlDestinazione = IIF(e.Assegnato = 1, '/servizi/assegnati/', '/servizi/servizi/')
 			FROM
 				dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendario, @IdTipo) e
 				LEFT JOIN dbo.tblServizi v WITH (NOLOCK) ON e.Id = v.IdEvento
+				LEFT JOIN dbo.tblTipi t ON v.IdTipo = t.Id
+				INNER JOIN dbo.tblCalendari cal ON e.IdCalendario = cal.Id
+				INNER JOIN dbo.tblSedi sd ON cal.IdSede = sd.Id
 			WHERE
 				e.IdStato = 'D'
 				AND e.Avviso = 1
@@ -81,6 +87,9 @@ BEGIN
 			tbl.StatoDescrizione,
 			tbl.Testo,
 			tbl.[Data],
+			tbl.Tipo,
+			tbl.Sede,
+			tbl.Calendario,
 			tbl.UrlDestinazione,
 			tblCount.RowsCount
 		FROM tbl

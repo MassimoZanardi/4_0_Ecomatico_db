@@ -27,18 +27,23 @@ BEGIN
 
 		DECLARE @Offset INT = (@PageNumber - 1) * @RowsPerPage;
 
-		-- Nessun permesso RLM: nessun avviso Limiti, non è un errore (stesso spirito del
-		-- filtro moduli-calendario di uspAvvisi_get_List, che semplicemente non include
-		-- ciò a cui l'utente non ha accesso, invece di negare l'intera lista Avvisi).
+		-- Pagina dedicata: a differenza di uspAvvisi_get_Count (dove il permesso mancante
+		-- su un solo modulo non deve rompere il conteggio aggregato), qui neghiamo
+		-- esplicitamente l'accesso, come le altre pagine dell'app.
 		DECLARE @permesso TINYINT = dbo.ufnFunzioni_get_PermessoByUtente('RLM', @IdUtente);
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
 
 		;WITH tbl AS (
 			SELECT v.*
 			FROM dbo.ufnRifiutiLimiti_get_Verifica_List(NULL) v
 			INNER JOIN dbo.ufnSedi_get_SediInterneByUtente_List(@IdUtente) i ON v.IdSede = i.Id
 			WHERE
-				@permesso >= 1
-				AND v.Superato = 1
+				v.Superato = 1
 				AND (@Search IS NULL OR v.Nome LIKE '%' + @Search + '%')
 		),
 		tblCount AS (SELECT COUNT(*) AS RowsCount FROM tbl)

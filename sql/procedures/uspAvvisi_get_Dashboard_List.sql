@@ -56,6 +56,7 @@ BEGIN
 
 		SELECT
 			Area = 'Scadenze',
+			AreaIcona = 'fa-calendar-check',
 			Categoria = 'Scadenze',
 			Descrizione = 'Scadenze scadute o in avviso nelle prossime settimane',
 			[Count] = (
@@ -73,6 +74,7 @@ BEGIN
 
 		SELECT
 			Area = 'Servizi',
+			AreaIcona = 'fa-calendar-alt',
 			-- "Scadenze" e non "Servizi": il numero conta i servizi con una scadenza
 			-- scaduta o imminente, non il totale dei servizi - la fascia sopra indica
 			-- già il modulo (Servizi), qui si descrive cosa conta il numero.
@@ -86,13 +88,16 @@ BEGIN
 					AND AvvisoData < @countData
 			),
 			UrlDestinazione = '/home/avvisi/servizi',
-			Icona = 'fa-calendar-alt'
+			-- Calendario (non l'icona del modulo Servizi): il sottotitolo indica la natura
+			-- "scadenza pianificata" dell'avviso, non il modulo (già indicato sopra).
+			Icona = 'fa-calendar-check'
 		WHERE @permessoServizi >= 1
 
 		UNION ALL -- Categoria esclusa del tutto se manca il permesso RLM
 
 		SELECT
 			Area = 'Rifiuti',
+			AreaIcona = 'fa-trash-alt',
 			Categoria = 'Limiti superati',
 			Descrizione = 'Limiti rifiuti che hanno superato la soglia impostata',
 			[Count] = (
@@ -109,6 +114,7 @@ BEGIN
 
 		SELECT
 			Area = 'Rifiuti',
+			AreaIcona = 'fa-trash-alt',
 			Categoria = 'Autorizzazioni in scadenza',
 			Descrizione = 'Autorizzazioni rifiuti scadute o in scadenza entro 30 giorni',
 			[Count] = (
@@ -123,7 +129,9 @@ BEGIN
 					AND (a.DataFine < @countData OR DATEDIFF(DAY, @countData, a.DataFine) < 30)
 			),
 			UrlDestinazione = '/home/avvisi/autorizzazioni',
-			Icona = 'fa-file-contract'
+			-- Calendario: ha una DataFine nota in anticipo, stessa natura di Scadenze/Servizi
+			-- (a differenza di Limiti superati, che è un calcolo live senza data pianificata).
+			Icona = 'fa-calendar-check'
 		WHERE @permessoAutorizzazioni >= 1
 		OPTION (RECOMPILE);
 

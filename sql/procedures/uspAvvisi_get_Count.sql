@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspAvvisi_get_Count]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspAvvisi_get_Count]
 	@IdUtente CHAR(16) = NULL,
 	@Update BIT = 0
 AS
@@ -95,6 +95,16 @@ BEGIN
 				WHERE
 					IdStato = 'D'
 					AND AvvisoData < @countData;
+
+				-- Somma i limiti rifiuti superati (nessun permesso RLM: 0, non un errore)
+				DECLARE @countLimiti INT = 0;
+				IF dbo.ufnFunzioni_get_PermessoByUtente('RLM', @IdUtente) >= 1
+					SELECT @countLimiti = COUNT(*)
+					FROM dbo.ufnRifiutiLimiti_get_Verifica_List(NULL) v
+					INNER JOIN dbo.ufnSedi_get_SediInterneByUtente_List(@IdUtente) i ON v.IdSede = i.Id
+					WHERE v.Superato = 1;
+
+				SET @count = @count + @countLimiti;
 
 				-- Aggiorna la cache
 				UPDATE dbo.tblUtentiDefault

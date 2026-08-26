@@ -28,70 +28,59 @@ BEGIN
 		DECLARE @DallaData SMALLDATETIME = DATEADD(DAY, -30, @countData);
 		DECLARE @AllaData SMALLDATETIME = DATEADD(DAY, 28, @countData);
 
-		-- Calendari accessibili dall'utente sui moduli abilitati
-		DECLARE @IdCalendario tvpId_Char_16;
-		INSERT INTO @IdCalendario (Id)
-		SELECT c.Id
-		FROM dbo.ufnSedi_get_SediInterneByUtente_List(@IdUtente) s
-		INNER JOIN dbo.tblCalendari c ON s.Id = c.IdSede
-		WHERE
-			c.Lock = 0
-			AND c.IdModulo IN (
-			  -- Admin: moduli abilitati sul dominio
-			  SELECT dm.IdModulo
-			  FROM dbo.tblUtenti u
-			  INNER JOIN dbo.tblDominiModuli dm ON u.IdDominio = dm.Id
-			  WHERE u.Id = @IdUtente
-				AND u.IdRuolo = 'AD'
-
-			  UNION ALL -- AD e US mutualmente esclusivi
-
-			  -- Utente Standard: moduli delle funzioni con permesso esplicito
-			  SELECT f.Id
-			  FROM dbo.tblUtenti u
-			  INNER JOIN dbo.tblUtentiFunzioni uf ON u.Id = uf.Id
-			  INNER JOIN dbo.tblModuliFunzioni f ON uf.IdFunzione = f.IdFunzione
-			  WHERE u.Id = @IdUtente
-				AND u.IdRuolo = 'US'
-		  );
-
-		-- Tipi di eventi accessibili dall'utente
-		DECLARE @IdTipo tvpId_Char_1;
-		INSERT INTO @IdTipo (Id)
-		SELECT t.IdTipo
-		FROM dbo.tblUtenti u
-		INNER JOIN dbo.tblDominiModuli d ON u.IdDominio = d.Id
-		INNER JOIN dbo.tblModuliFunzioni mf ON d.IdModulo = mf.Id
-		INNER JOIN dbo.tblFunzioni f ON mf.IdFunzione = f.Id
-		INNER JOIN dbo.tblFunzioniEventiTipi t ON f.Id = t.Id
-		WHERE
-			u.Id = @IdUtente
-			AND u.IdRuolo = 'AD'
-		UNION ALL -- AD e US mutualmente esclusivi
-
-		SELECT t.IdTipo
-		FROM dbo.tblUtenti u
-		INNER JOIN dbo.tblUtentiFunzioni uf ON u.Id = uf.Id
-		INNER JOIN dbo.tblFunzioniEventiTipi t ON uf.Id = t.Id
-		WHERE
-			u.Id = @IdUtente
-			AND u.IdRuolo = 'US';
-
+		DECLARE @permessoScadenze TINYINT = dbo.ufnFunzioni_get_PermessoByUtente('SCD', @IdUtente);
+		DECLARE @permessoServizi TINYINT = dbo.ufnFunzioni_get_PermessoByUtente('SRV', @IdUtente);
 		DECLARE @permessoLimiti TINYINT = dbo.ufnFunzioni_get_PermessoByUtente('RLM', @IdUtente);
 		DECLARE @permessoAutorizzazioni TINYINT = dbo.ufnFunzioni_get_PermessoByUtente('RAT', @IdUtente);
 
+		-- Permesso già verificato: niente branching AD/US, filtro diretto sul modulo.
+		DECLARE @IdCalendarioScadenze tvpId_Char_16;
+		INSERT INTO @IdCalendarioScadenze (Id)
+		SELECT c.Id
+		FROM dbo.ufnSedi_get_SediInterneByUtente_List(@IdUtente) s
+		INNER JOIN dbo.tblCalendari c ON s.Id = c.IdSede
+		WHERE c.Lock = 0 AND c.IdModulo = 'SCD';
+
+		DECLARE @IdTipoScadenze tvpId_Char_1;
+		INSERT INTO @IdTipoScadenze (Id) VALUES ('S');
+
+		DECLARE @IdCalendarioServizi tvpId_Char_16;
+		INSERT INTO @IdCalendarioServizi (Id)
+		SELECT c.Id
+		FROM dbo.ufnSedi_get_SediInterneByUtente_List(@IdUtente) s
+		INNER JOIN dbo.tblCalendari c ON s.Id = c.IdSede
+		WHERE c.Lock = 0 AND c.IdModulo = 'SRV';
+
+		DECLARE @IdTipoServizi tvpId_Char_1;
+		INSERT INTO @IdTipoServizi (Id) VALUES ('V');
+
 		SELECT
-			Categoria = 'Scadenze/Servizi',
+			Categoria = 'Scadenze',
 			[Count] = (
 				SELECT COUNT(*)
-				FROM dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendario, @IdTipo)
+				FROM dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendarioScadenze, @IdTipoScadenze)
 				WHERE
 					IdStato = 'D'
 					AND AvvisoData < @countData
 			),
-			UrlDestinazione = '/home/avvisi',
+			UrlDestinazione = '/home/avvisi/scadenze',
 			Icona = 'fa-calendar-check'
-		WHERE EXISTS (SELECT 1 FROM @IdCalendario) -- categoria esclusa del tutto se l'utente non ha nessun calendario visibile
+		WHERE @permessoScadenze >= 1 -- categoria esclusa del tutto se manca il permesso SCD
+
+		UNION ALL -- Categoria esclusa del tutto se manca il permesso SRV
+
+		SELECT
+			Categoria = 'Servizi',
+			[Count] = (
+				SELECT COUNT(*)
+				FROM dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendarioServizi, @IdTipoServizi)
+				WHERE
+					IdStato = 'D'
+					AND AvvisoData < @countData
+			),
+			UrlDestinazione = '/home/avvisi/servizi',
+			Icona = 'fa-calendar-alt'
+		WHERE @permessoServizi >= 1
 
 		UNION ALL -- Categoria esclusa del tutto se manca il permesso RLM
 

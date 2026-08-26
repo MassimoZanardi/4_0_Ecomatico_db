@@ -37,67 +37,54 @@ BEGIN
 			-- Cache scaduta, assente o @Force=1: ricalcola
 			IF @count IS NULL
 			BEGIN
+				SET @count = 0;
+
 				-- Finestra temporale: ultimi 30 giorni → prossime 4 settimane
 				DECLARE @DallaData SMALLDATETIME = DATEADD(DAY, -30, @countData);
 				DECLARE @AllaData SMALLDATETIME = DATEADD(DAY, 28, @countData);
 
-				-- Calendari accessibili dall'utente sui moduli abilitati
-				DECLARE @IdCalendario tvpId_Char_16;
-				INSERT INTO @IdCalendario (Id)
-				SELECT c.Id
-				FROM dbo.ufnSedi_get_SediInterneByUtente_List(@IdUtente) s
-				INNER JOIN dbo.tblCalendari c ON s.Id = c.IdSede
-				WHERE
-					c.Lock = 0
-					AND c.IdModulo IN (
-					  -- Admin: moduli abilitati sul dominio
-					  SELECT dm.IdModulo
-					  FROM dbo.tblUtenti u
-					  INNER JOIN dbo.tblDominiModuli dm ON u.IdDominio = dm.Id
-					  WHERE u.Id = @IdUtente
-						AND u.IdRuolo = 'AD'
+				-- Somma le scadenze pendenti (nessun permesso SCD: 0, non un errore).
+				-- Permesso già verificato: niente branching AD/US, filtro diretto sul modulo.
+				DECLARE @countScadenze INT = 0;
+				IF dbo.ufnFunzioni_get_PermessoByUtente('SCD', @IdUtente) >= 1
+				BEGIN
+					DECLARE @IdCalendarioScadenze tvpId_Char_16;
+					INSERT INTO @IdCalendarioScadenze (Id)
+					SELECT c.Id
+					FROM dbo.ufnSedi_get_SediInterneByUtente_List(@IdUtente) s
+					INNER JOIN dbo.tblCalendari c ON s.Id = c.IdSede
+					WHERE c.Lock = 0 AND c.IdModulo = 'SCD';
 
-					  UNION ALL -- AD e US mutualmente esclusivi
+					DECLARE @IdTipoScadenze tvpId_Char_1;
+					INSERT INTO @IdTipoScadenze (Id) VALUES ('S');
 
-					  -- Utente Standard: moduli delle funzioni con permesso esplicito
-					  SELECT f.Id
-					  FROM dbo.tblUtenti u
-					  INNER JOIN dbo.tblUtentiFunzioni uf ON u.Id = uf.Id
-					  INNER JOIN dbo.tblModuliFunzioni f ON uf.IdFunzione = f.IdFunzione
-					  WHERE u.Id = @IdUtente
-						AND u.IdRuolo = 'US'
-				  );
+					SELECT @countScadenze = COUNT(*)
+					FROM dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendarioScadenze, @IdTipoScadenze)
+					WHERE IdStato = 'D' AND AvvisoData < @countData;
+				END
 
-				-- Tipi di eventi accessibili dall'utente
-				DECLARE @IdTipo tvpId_Char_1;
-				INSERT INTO @IdTipo (Id)
-				SELECT t.IdTipo
-				FROM dbo.tblUtenti u
-				INNER JOIN dbo.tblDominiModuli d ON u.IdDominio = d.Id
-				INNER JOIN dbo.tblModuliFunzioni mf ON d.IdModulo = mf.Id
-				INNER JOIN dbo.tblFunzioni f ON mf.IdFunzione = f.Id
-				INNER JOIN dbo.tblFunzioniEventiTipi t ON f.Id = t.Id
-				WHERE
-					u.Id = @IdUtente
-					AND u.IdRuolo = 'AD'
-				UNION ALL -- AD e US mutualmente esclusivi
+				SET @count = @count + @countScadenze;
 
-				SELECT t.IdTipo
-				FROM dbo.tblUtenti u
-				INNER JOIN dbo.tblUtentiFunzioni uf ON u.Id = uf.Id
-				INNER JOIN dbo.tblFunzioniEventiTipi t ON uf.Id = t.Id
-				WHERE
-					u.Id = @IdUtente
-					AND u.IdRuolo = 'US';
+				-- Somma i servizi pendenti (nessun permesso SRV: 0, non un errore)
+				DECLARE @countServizi INT = 0;
+				IF dbo.ufnFunzioni_get_PermessoByUtente('SRV', @IdUtente) >= 1
+				BEGIN
+					DECLARE @IdCalendarioServizi tvpId_Char_16;
+					INSERT INTO @IdCalendarioServizi (Id)
+					SELECT c.Id
+					FROM dbo.ufnSedi_get_SediInterneByUtente_List(@IdUtente) s
+					INNER JOIN dbo.tblCalendari c ON s.Id = c.IdSede
+					WHERE c.Lock = 0 AND c.IdModulo = 'SRV';
 
-				-- Conta gli avvisi pendenti nella finestra temporale
-				SELECT @count = COUNT(*)
-				FROM dbo.ufnEventi_get_All_List(
-						   @DallaData, @AllaData, @IdUtente,
-						   @IdCalendario, @IdTipo)
-				WHERE
-					IdStato = 'D'
-					AND AvvisoData < @countData;
+					DECLARE @IdTipoServizi tvpId_Char_1;
+					INSERT INTO @IdTipoServizi (Id) VALUES ('V');
+
+					SELECT @countServizi = COUNT(*)
+					FROM dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendarioServizi, @IdTipoServizi)
+					WHERE IdStato = 'D' AND AvvisoData < @countData;
+				END
+
+				SET @count = @count + @countServizi;
 
 				-- Somma i limiti rifiuti superati (nessun permesso RLM: 0, non un errore)
 				DECLARE @countLimiti INT = 0;

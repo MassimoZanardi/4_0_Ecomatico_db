@@ -55,6 +55,7 @@ BEGIN
 		INSERT INTO @IdTipoServizi (Id) VALUES ('V');
 
 		SELECT
+			Area = 'Scadenze',
 			Categoria = 'Scadenze',
 			[Count] = (
 				SELECT COUNT(*)
@@ -70,6 +71,7 @@ BEGIN
 		UNION ALL -- Categoria esclusa del tutto se manca il permesso SRV
 
 		SELECT
+			Area = 'Servizi',
 			Categoria = 'Servizi',
 			[Count] = (
 				SELECT COUNT(*)
@@ -85,6 +87,7 @@ BEGIN
 		UNION ALL -- Categoria esclusa del tutto se manca il permesso RLM
 
 		SELECT
+			Area = 'Rifiuti',
 			Categoria = 'Limiti superati',
 			[Count] = (
 				SELECT COUNT(*)
@@ -99,6 +102,7 @@ BEGIN
 		UNION ALL -- Categoria esclusa del tutto se manca il permesso RAT
 
 		SELECT
+			Area = 'Rifiuti',
 			Categoria = 'Autorizzazioni in scadenza',
 			[Count] = (
 				SELECT COUNT(*)

@@ -215,6 +215,8 @@ BEGIN
 		IF @ControlloAttivita = 1 AND @IdAttivitaRs IS NOT NULL AND @IdAutorizzazioneDestinatario IS NOT NULL AND @IdAutorizzazioneDestinatario <> @sediZeri
 		BEGIN
 			DECLARE @destinatarioAttivita BIT = 0;
+			DECLARE @attivitaCodice VARCHAR(3);
+			SELECT @attivitaCodice = Codice FROM dbo.tblRifiutiAttivitaRecuperoSmaltimento WHERE Id = @IdAttivitaRs;
 			SELECT @destinatarioAttivita = ISNULL(ru.Attivita, 0)
 			FROM
 				dbo.tblRifiutiAutorizzazioni a
@@ -225,7 +227,7 @@ BEGIN
 				SELECT 1 FROM dbo.tblRifiutiAutorizzazioniAttivita WHERE Id = @IdAutorizzazioneDestinatario AND IdAttivita = @IdAttivitaRs
 			)
 			BEGIN
-				INSERT INTO @messaggi (Messaggio) VALUES ('L''attività di recupero/smaltimento indicata non è compresa nell''autorizzazione del destinatario');
+				INSERT INTO @messaggi (Messaggio) VALUES ('L''attività di recupero/smaltimento ' + @b + ISNULL(@attivitaCodice, @IdAttivitaRs) + @b + ' non è compresa nell''autorizzazione del destinatario');
 			END
 		END
 

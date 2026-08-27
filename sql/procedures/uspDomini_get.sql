@@ -66,6 +66,7 @@ BEGIN
 			RegistriMax,
 			MagazziniMax,
 			ServiziMax,
+			RentriMax,
 			Demo,
 			Logo,
 			Codice = LOWER(ISNULL(Codice, RIGHT(CONVERT(VARCHAR(36), NEWID()), 5))),

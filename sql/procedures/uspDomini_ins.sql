@@ -37,7 +37,7 @@ BEGIN
 		BEGIN TRANSACTION;
 			INSERT INTO dbo.tblDomini
 				(Id, IdStato, [Master], Registrazione, Scadenza, ScadenzaAuto,
-				 UtentiMax, AziendeMax, SediMax, RegistriMax, MagazziniMax, ServiziMax, Demo, Lock)
+				 UtentiMax, AziendeMax, SediMax, RegistriMax, MagazziniMax, ServiziMax, RentriMax, Demo, Lock)
 			VALUES (
 				@returnId,
 				'AT',
@@ -46,7 +46,7 @@ BEGIN
 				DATEADD(YEAR, 1, EOMONTH(GETDATE())),
 				1,
 				1, 1, 1,
-				0, 0, 0,
+				0, 0, 0, 0,
 				0,
 				2
 			);

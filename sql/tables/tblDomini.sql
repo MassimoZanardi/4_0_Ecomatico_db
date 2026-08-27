@@ -19,6 +19,7 @@ CREATE TABLE [dbo].[tblDomini](
 	[RegistriMax] [int] NULL,
 	[MagazziniMax] [int] NULL,
 	[ServiziMax] [int] NULL,
+	[RentriMax] [int] NULL,
 	[Demo] [bit] NULL,
 	[Codice] [char](5) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[Logo] [varbinary](max) NULL,

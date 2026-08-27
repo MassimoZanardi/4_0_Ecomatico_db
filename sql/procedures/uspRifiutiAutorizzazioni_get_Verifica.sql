@@ -86,6 +86,10 @@ BEGIN
 		END
 
 		DECLARE @sediZeri CHAR(16) = REPLICATE('0', 16);
+		-- Delimitatore (non stampabile) usato per marcare il "soggetto" di ogni messaggio,
+		-- così il livello di presentazione (Razor) puo' evidenziarlo in grassetto senza dover
+		-- fare parsing testuale ne' inserire HTML qui (mai HTML diretto su dati utente: XSS).
+		DECLARE @b CHAR(1) = CHAR(2);
 		DECLARE @messaggi TABLE (Ordine INT IDENTITY(1,1), Messaggio VARCHAR(300));
 
 		-- 1) Scadenza delle autorizzazioni associate (tutte quelle valorizzate)
@@ -107,7 +111,7 @@ BEGIN
 
 			INSERT INTO @messaggi (Messaggio)
 			SELECT
-				'L''autorizzazione ' + r.RuoloLabel + ' (n. ' + ISNULL(a.Numero, '') + ') è scaduta il ' + CONVERT(VARCHAR(10), a.DataFine, 103)
+				'L''autorizzazione ' + @b + r.RuoloLabel + ' (n. ' + ISNULL(a.Numero, '') + ')' + @b + ' è scaduta il ' + CONVERT(VARCHAR(10), a.DataFine, 103)
 			FROM
 				@ruoli r
 				INNER JOIN dbo.tblRifiutiAutorizzazioni a ON r.IdAutorizzazione = a.Id
@@ -136,14 +140,14 @@ BEGIN
 		BEGIN
 			IF NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiAutorizzazioniTarghe WHERE Id = @IdAutorizzazioneTrasportatore1 AND Rimorchio = 0 AND Targa = @TargaMotrice)
 			BEGIN
-				INSERT INTO @messaggi (Messaggio) VALUES ('La targa motrice ' + @TargaMotrice + ' non è presente nell''autorizzazione del trasportatore');
+				INSERT INTO @messaggi (Messaggio) VALUES ('La targa motrice ' + @b + @TargaMotrice + @b + ' non è presente nell''autorizzazione del trasportatore');
 			END
 			ELSE IF @IdEer IS NOT NULL AND (
 				NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiAutorizzazioniEer WHERE Id = @IdAutorizzazioneTrasportatore1 AND IdEer = @IdEer)
 				OR EXISTS (SELECT 1 FROM dbo.tblRifiutiAutorizzazioniTargheEerEsclusi WHERE Id = @IdAutorizzazioneTrasportatore1 AND Targa = @TargaMotrice AND IdEer = @IdEer)
 			)
 			BEGIN
-				INSERT INTO @messaggi (Messaggio) VALUES ('La targa motrice ' + @TargaMotrice + ' non è abilitata per il codice EER ' + @IdEer);
+				INSERT INTO @messaggi (Messaggio) VALUES ('La targa motrice ' + @b + @TargaMotrice + @b + ' non è abilitata per il codice EER ' + @IdEer);
 			END
 		END
 
@@ -152,14 +156,14 @@ BEGIN
 		BEGIN
 			IF NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiAutorizzazioniTarghe WHERE Id = @IdAutorizzazioneTrasportatore1 AND Rimorchio = 1 AND Targa = @TargaRimorchio)
 			BEGIN
-				INSERT INTO @messaggi (Messaggio) VALUES ('La targa rimorchio ' + @TargaRimorchio + ' non è presente nell''autorizzazione del trasportatore');
+				INSERT INTO @messaggi (Messaggio) VALUES ('La targa rimorchio ' + @b + @TargaRimorchio + @b + ' non è presente nell''autorizzazione del trasportatore');
 			END
 			ELSE IF @IdEer IS NOT NULL AND (
 				NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiAutorizzazioniEer WHERE Id = @IdAutorizzazioneTrasportatore1 AND IdEer = @IdEer)
 				OR EXISTS (SELECT 1 FROM dbo.tblRifiutiAutorizzazioniTargheEerEsclusi WHERE Id = @IdAutorizzazioneTrasportatore1 AND Targa = @TargaRimorchio AND IdEer = @IdEer)
 			)
 			BEGIN
-				INSERT INTO @messaggi (Messaggio) VALUES ('La targa rimorchio ' + @TargaRimorchio + ' non è abilitata per il codice EER ' + @IdEer);
+				INSERT INTO @messaggi (Messaggio) VALUES ('La targa rimorchio ' + @b + @TargaRimorchio + @b + ' non è abilitata per il codice EER ' + @IdEer);
 			END
 		END
 
@@ -179,29 +183,29 @@ BEGIN
 
 			IF @ControlloConducenti = 1 AND @conducenteTrovato = 0
 			BEGIN
-				INSERT INTO @messaggi (Messaggio) VALUES ('Il conducente ' + @ConducenteNome + ' ' + @ConducenteCognome + ' non è presente nell''autorizzazione del trasportatore');
+				INSERT INTO @messaggi (Messaggio) VALUES ('Il conducente ' + @b + @ConducenteNome + ' ' + @ConducenteCognome + @b + ' non è presente nell''autorizzazione del trasportatore');
 			END
 
 			IF @ControlloPatenti = 1 AND @conducenteTrovato = 1
 			BEGIN
 				IF @scadenzaPatente IS NULL
 				BEGIN
-					INSERT INTO @messaggi (Messaggio) VALUES ('Non è indicata la scadenza della patente del conducente ' + @ConducenteNome + ' ' + @ConducenteCognome);
+					INSERT INTO @messaggi (Messaggio) VALUES ('Non è indicata la scadenza della patente del conducente ' + @b + @ConducenteNome + ' ' + @ConducenteCognome + @b);
 				END
 				ELSE IF @scadenzaPatente < @Data
 				BEGIN
-					INSERT INTO @messaggi (Messaggio) VALUES ('La patente del conducente ' + @ConducenteNome + ' ' + @ConducenteCognome + ' è scaduta il ' + CONVERT(VARCHAR(10), @scadenzaPatente, 103));
+					INSERT INTO @messaggi (Messaggio) VALUES ('La patente del conducente ' + @b + @ConducenteNome + ' ' + @ConducenteCognome + @b + ' è scaduta il ' + CONVERT(VARCHAR(10), @scadenzaPatente, 103));
 				END
 
 				IF @TrasportoAdr = 1
 				BEGIN
 					IF @scadenzaPatenteAdr IS NULL
 					BEGIN
-						INSERT INTO @messaggi (Messaggio) VALUES ('Non è indicata la scadenza della patente ADR del conducente ' + @ConducenteNome + ' ' + @ConducenteCognome);
+						INSERT INTO @messaggi (Messaggio) VALUES ('Non è indicata la scadenza della patente ADR del conducente ' + @b + @ConducenteNome + ' ' + @ConducenteCognome + @b);
 					END
 					ELSE IF @scadenzaPatenteAdr < @Data
 					BEGIN
-						INSERT INTO @messaggi (Messaggio) VALUES ('La patente ADR del conducente ' + @ConducenteNome + ' ' + @ConducenteCognome + ' è scaduta il ' + CONVERT(VARCHAR(10), @scadenzaPatenteAdr, 103));
+						INSERT INTO @messaggi (Messaggio) VALUES ('La patente ADR del conducente ' + @b + @ConducenteNome + ' ' + @ConducenteCognome + @b + ' è scaduta il ' + CONVERT(VARCHAR(10), @scadenzaPatenteAdr, 103));
 					END
 				END
 			END

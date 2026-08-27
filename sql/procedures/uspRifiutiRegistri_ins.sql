@@ -1,3 +1,9 @@
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistri_ins]
 	@IdSessione CHAR(16) = NULL
 AS
@@ -46,8 +52,8 @@ BEGIN
 		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
 
 		BEGIN TRANSACTION;
-			INSERT dbo.tblRifiutiRegistri (Id, IdSede, Lock)
-			VALUES (@returnId, @idSede, 2);
+			INSERT dbo.tblRifiutiRegistri (Id, IdSede, Lock, ControlloScadenzeAutorizzazioni, ControlloTarghe, ControlloConducenti, ControlloPatenti, ControlloAttivitaRs)
+			VALUES (@returnId, @idSede, 2, 1, 1, 1, 1, 1);
 		COMMIT TRANSACTION;
 
 		SELECT Id = @returnId;
@@ -65,3 +71,4 @@ BEGIN
 	END
 
 END;
+GO

@@ -9,6 +9,11 @@ CREATE TABLE [dbo].[tblRifiutiRegistri](
 	[IdSede] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[IdTipo] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[Nome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[ControlloScadenzeAutorizzazioni] [bit] NULL,
+	[ControlloTarghe] [bit] NULL,
+	[ControlloConducenti] [bit] NULL,
+	[ControlloPatenti] [bit] NULL,
+	[ControlloAttivitaRs] [bit] NULL,
 	[Lock] [tinyint] NULL,
  CONSTRAINT [PK_tblRifiutiRegistri] PRIMARY KEY CLUSTERED 
 (

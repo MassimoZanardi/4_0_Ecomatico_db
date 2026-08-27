@@ -1,8 +1,19 @@
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistri_upd]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@IdTipo CHAR(1) = NULL,
-	@Nome VARCHAR(50) = NULL
+	@Nome VARCHAR(50) = NULL,
+	@ControlloScadenzeAutorizzazioni BIT = 1,
+	@ControlloTarghe BIT = 1,
+	@ControlloConducenti BIT = 1,
+	@ControlloPatenti BIT = 1,
+	@ControlloAttivitaRs BIT = 1
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -14,6 +25,11 @@ BEGIN
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdTipo = NULLIF(LTRIM(RTRIM(@IdTipo)), '');
 		SET @Nome = dbo.ufnStringhe_get_SenzaSpazi(@Nome, 0, 1);
+		SET @ControlloScadenzeAutorizzazioni = ISNULL(@ControlloScadenzeAutorizzazioni, 1);
+		SET @ControlloTarghe = ISNULL(@ControlloTarghe, 1);
+		SET @ControlloConducenti = ISNULL(@ControlloConducenti, 1);
+		SET @ControlloPatenti = ISNULL(@ControlloPatenti, 1);
+		SET @ControlloAttivitaRs = ISNULL(@ControlloAttivitaRs, 1);
 
 		IF @Id IS NULL
 		BEGIN
@@ -115,7 +131,12 @@ BEGIN
 			SET
 				Lock = 0,
 				Nome = @Nome,
-				IdTipo = @IdTipo
+				IdTipo = @IdTipo,
+				ControlloScadenzeAutorizzazioni = @ControlloScadenzeAutorizzazioni,
+				ControlloTarghe = @ControlloTarghe,
+				ControlloConducenti = @ControlloConducenti,
+				ControlloPatenti = @ControlloPatenti,
+				ControlloAttivitaRs = @ControlloAttivitaRs
 			WHERE
 				Id = @Id
 				AND Lock <= 2;
@@ -147,3 +168,4 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 END;
+GO

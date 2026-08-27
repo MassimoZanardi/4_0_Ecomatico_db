@@ -1,3 +1,9 @@
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistri_get]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
@@ -67,6 +73,11 @@ BEGIN
 			IdSede,
 			IdTipo,
 			Nome = ISNULL(Nome, ''),
+			ControlloScadenzeAutorizzazioni = ISNULL(ControlloScadenzeAutorizzazioni, 1),
+			ControlloTarghe = ISNULL(ControlloTarghe, 1),
+			ControlloConducenti = ISNULL(ControlloConducenti, 1),
+			ControlloPatenti = ISNULL(ControlloPatenti, 1),
+			ControlloAttivitaRs = ISNULL(ControlloAttivitaRs, 1),
 			Lock
 		FROM dbo.tblRifiutiRegistri
 		WHERE
@@ -86,3 +97,4 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 END;
+GO

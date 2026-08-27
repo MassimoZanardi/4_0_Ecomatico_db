@@ -64,7 +64,7 @@ BEGIN
 				Tipo = t.Nome,
 				Sede = sd.Nome,
 				Calendario = cal.Nome,
-				UrlDestinazione = '/scadenze/scadenze/'
+				UrlDestinazione = '/scadenze/'
 			FROM
 				dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendario, @IdTipo) e
 				LEFT JOIN dbo.tblScadenze s WITH (NOLOCK) ON e.Id = s.IdEvento

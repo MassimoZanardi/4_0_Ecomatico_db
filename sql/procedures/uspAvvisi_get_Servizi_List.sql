@@ -66,7 +66,7 @@ BEGIN
 				Tipo = t.Nome,
 				Sede = sd.Nome,
 				Calendario = cal.Nome,
-				UrlDestinazione = IIF(e.Assegnato = 1, '/servizi/assegnati/', '/servizi/servizi/')
+				UrlDestinazione = IIF(e.Assegnato = 1, '/servizi/assegnati/', '/servizi/')
 			FROM
 				dbo.ufnEventi_get_All_List(@DallaData, @AllaData, @IdUtente, @IdCalendario, @IdTipo) e
 				LEFT JOIN dbo.tblServizi v WITH (NOLOCK) ON e.Id = v.IdEvento

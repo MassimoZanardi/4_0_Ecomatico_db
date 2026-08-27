@@ -59,7 +59,7 @@ BEGIN
 				IdEvento = e.Id,
 				StatoValore = IIF(e.[Data] < GETDATE(), 1, 0),
 				StatoDescrizione = e.Stato + IIF(e.[Data] < GETDATE(), ' - Scaduto', ''),
-				Testo = e.AvvisoTesto,
+				Testo = s.Descrizione,
 				e.[Data],
 				Tipo = t.Nome,
 				Sede = sd.Nome,
@@ -75,7 +75,7 @@ BEGIN
 				e.IdStato = 'D'
 				AND e.Avviso = 1
 				AND e.AvvisoData < @countData
-				AND (@Search IS NULL OR e.AvvisoTesto LIKE '%' + @Search + '%')
+				AND (@Search IS NULL OR s.Descrizione LIKE '%' + @Search + '%')
 		),
 		tblCount AS (SELECT COUNT(*) AS RowsCount FROM tbl)
 		SELECT

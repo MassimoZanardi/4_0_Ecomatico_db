@@ -46,6 +46,25 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Limita il numero massimo di certificati per dominio
+		DECLARE @rentriMax INT;
+		SELECT @rentriMax = ISNULL(RentriMax, 0)
+		FROM dbo.tblDomini
+		WHERE Id = @idDominio;
+
+		IF @rentriMax <= (
+			SELECT COUNT(*)
+			FROM dbo.tblRentriCertificati
+			WHERE
+				IdDominio = @idDominio
+				AND Lock = 0
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Numero massimo di certificati raggiunto (' + CAST(@rentriMax AS VARCHAR(10)) + ')';
+			GOTO BRANCH_END;
+		END
+
 		-- uspId_get FUORI dalla transazione
 		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
 

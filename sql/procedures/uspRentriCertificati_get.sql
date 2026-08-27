@@ -67,6 +67,7 @@ BEGIN
 			c.Id,
 			Nome = ISNULL(c.Nome, ''),
 			Identificativo = f.Identificativo,
+			f.Password,
 			c.DataScadenza,
 			c.Lock,
 			HasFile = CASE WHEN f.[File] IS NULL THEN CAST(0 AS BIT) ELSE CAST(1 AS BIT) END

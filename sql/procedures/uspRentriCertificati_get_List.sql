@@ -45,11 +45,13 @@ BEGIN
 		SELECT
 			c.Id,
 			c.Nome,
+			Identificativo = f.Identificativo,
 			c.DataScadenza,
 			RowsCount = COUNT(*) OVER ()
 		FROM
 			dbo.tblRentriCertificati c
 			INNER JOIN dbo.tblSessioni e ON c.IdDominio = e.IdDominio
+			LEFT JOIN [1_0_rentri]..tblCertificati f ON c.IdRentri = f.Id
 		WHERE
 			e.Id = @IdSessione
 			AND c.Lock = 0

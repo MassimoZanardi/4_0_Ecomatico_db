@@ -7,6 +7,7 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRentriCertificati_upd]
 	@IdSessione CHAR(16) = NULL,
 	@Nome VARCHAR(50) = NULL,
 	@Identificativo VARCHAR(20) = NULL,
+	@Password VARCHAR(20) = NULL,
 	@DataScadenza DATE = NULL
 AS
 BEGIN
@@ -94,13 +95,13 @@ BEGIN
 			IF @idRentri IS NULL
 			BEGIN
 				SET @idRentri = LOWER(REPLACE(LEFT(CONVERT(VARCHAR(36), NEWID()), 18), '-', ''));
-				INSERT INTO [1_0_rentri]..tblCertificati (Id, Identificativo)
-				VALUES (@idRentri, @Identificativo);
+				INSERT INTO [1_0_rentri]..tblCertificati (Id, Identificativo, Password)
+				VALUES (@idRentri, @Identificativo, @Password);
 			END
 			ELSE
 			BEGIN
 				UPDATE [1_0_rentri]..tblCertificati
-				SET Identificativo = @Identificativo
+				SET Identificativo = @Identificativo, Password = @Password
 				WHERE Id = @idRentri;
 			END
 

@@ -1,12 +1,12 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblModuliRelazioni](
-	[Id] [char](3) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdParent] [char](3) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[Id] [char](3) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdParent] [char](3) COLLATE Latin1_General_CI_AS NOT NULL,
  CONSTRAINT [PK_tblModuliRelazioni_1] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC,

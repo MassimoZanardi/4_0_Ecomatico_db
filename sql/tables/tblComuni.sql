@@ -1,15 +1,15 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblComuni](
-	[Id] [char](6) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdProvincia] [char](3) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Nome] [varchar](100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[CAP] [char](5) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[CodiceCatastale] [char](4) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](6) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdProvincia] [char](3) COLLATE Latin1_General_CI_AS NULL,
+	[Nome] [varchar](100) COLLATE Latin1_General_CI_AS NULL,
+	[CAP] [char](5) COLLATE Latin1_General_CI_AS NULL,
+	[CodiceCatastale] [char](4) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblComuni] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

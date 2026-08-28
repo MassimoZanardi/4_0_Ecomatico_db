@@ -1,12 +1,12 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblRifiutiRuoli](
-	[Id] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[Nome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[Eer] [bit] NULL,
 	[Targhe] [bit] NULL,
 	[Conducenti] [bit] NULL,

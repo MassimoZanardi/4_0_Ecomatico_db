@@ -1,14 +1,14 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblDomini](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdStato] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Nome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Riferimento] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdStato] [char](2) COLLATE Latin1_General_CI_AS NULL,
+	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+	[Riferimento] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[Registrazione] [smalldatetime] NULL,
 	[Scadenza] [date] NULL,
 	[ScadenzaAuto] [bit] NULL,
@@ -21,9 +21,9 @@ CREATE TABLE [dbo].[tblDomini](
 	[ServiziMax] [int] NULL,
 	[RentriMax] [int] NULL,
 	[Demo] [bit] NULL,
-	[Codice] [char](5) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Codice] [char](5) COLLATE Latin1_General_CI_AS NULL,
 	[Logo] [varbinary](max) NULL,
-	[Url] [varchar](200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Url] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
 	[Lock] [tinyint] NULL,
  CONSTRAINT [PK_tblDomini] PRIMARY KEY CLUSTERED 
 (

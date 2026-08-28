@@ -1,13 +1,13 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblRifiutiEer](
-	[Id] [char](6) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[Nome] [varchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Descrizione] [varchar](500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](6) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Nome] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
+	[Descrizione] [varchar](500) COLLATE Latin1_General_CI_AS NULL,
 	[Pericoloso] [bit] NULL,
  CONSTRAINT [PK_tblRifiutiEer] PRIMARY KEY CLUSTERED 
 (

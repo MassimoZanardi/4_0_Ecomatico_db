@@ -1,14 +1,14 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblScadenze](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdTipo] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdEvento] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Descrizione] [varchar](1000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdTipo] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdEvento] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[Descrizione] [varchar](1000) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblScadenze] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

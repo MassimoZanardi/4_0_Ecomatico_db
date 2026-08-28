@@ -1,17 +1,17 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblOggetti](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdSede] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdUnitaMisura] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdTipo] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Nome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Codice] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Descrizione] [varchar](500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdUnitaMisura] [char](2) COLLATE Latin1_General_CI_AS NULL,
+	[IdTipo] [char](2) COLLATE Latin1_General_CI_AS NULL,
+	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+	[Codice] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
+	[Descrizione] [varchar](500) COLLATE Latin1_General_CI_AS NULL,
 	[ImpiegabileServizi] [bit] NULL,
 	[Disabilitata] [bit] NULL,
 	[Lock] [tinyint] NULL,

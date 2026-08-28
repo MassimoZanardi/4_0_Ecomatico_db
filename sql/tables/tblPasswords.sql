@@ -1,13 +1,13 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblPasswords](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdUtente] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Password] [nvarchar](200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdUtente] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[Password] [nvarchar](200) COLLATE Latin1_General_CI_AS NULL,
 	[Temporanea] [bit] NULL,
 	[DataCreazione] [datetime2](0) NULL,
  CONSTRAINT [PK_tblPasswords] PRIMARY KEY CLUSTERED 

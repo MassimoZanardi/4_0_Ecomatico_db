@@ -1,17 +1,17 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblIndirizzi](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdComune] [char](6) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdNazione] [char](3) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Indirizzo] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[NumeroCivico] [varchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Localita] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[CAP] [varchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdComune] [char](6) COLLATE Latin1_General_CI_AS NULL,
+	[IdNazione] [char](3) COLLATE Latin1_General_CI_AS NULL,
+	[Indirizzo] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+	[NumeroCivico] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
+	[Localita] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+	[CAP] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblIndirizzi] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

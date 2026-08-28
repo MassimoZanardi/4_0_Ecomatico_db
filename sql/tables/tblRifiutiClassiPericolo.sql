@@ -1,13 +1,13 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblRifiutiClassiPericolo](
-	[Id] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[Codice] [char](4) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Nome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](2) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Codice] [char](4) COLLATE Latin1_General_CI_AS NULL,
+	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblRifiutiClassiPericolo] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

@@ -5,14 +5,14 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblRifiutiLimiti](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdSede] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdRegistro] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdUnitaMisura] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Nome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdRegistro] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdUnitaMisura] [char](2) COLLATE Latin1_General_CI_AS NULL,
+	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[Valore] [decimal](18, 2) NULL,
-	[Riferimento] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Intervallo] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Riferimento] [char](1) COLLATE Latin1_General_CI_AS NULL,
+	[Intervallo] [char](2) COLLATE Latin1_General_CI_AS NULL,
 	[Lock] [tinyint] NULL,
 	[VerificaPerRegistro] [bit] NULL,
  CONSTRAINT [PK_tblRifiutiLimiti] PRIMARY KEY CLUSTERED

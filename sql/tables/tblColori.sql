@@ -1,14 +1,14 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblColori](
-	[Id] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[Nome] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Css] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Hex] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Nome] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
+	[Css] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
+	[Hex] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblColori] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

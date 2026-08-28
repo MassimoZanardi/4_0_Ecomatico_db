@@ -1,19 +1,19 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblSessioni](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdUtente] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdUtente] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[Data] [smalldatetime] NULL,
-	[IdDominio] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdAzienda] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdSede] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdRegistro] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdMagazzino] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdCalendario] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdDominio] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdAzienda] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdRegistro] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdMagazzino] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdCalendario] [char](16) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblSessioni] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

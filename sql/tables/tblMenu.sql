@@ -1,14 +1,14 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblMenu](
-	[Id] [char](3) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdParent] [char](3) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdArea] [char](3) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdPagina] [char](3) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](3) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdParent] [char](3) COLLATE Latin1_General_CI_AS NULL,
+	[IdArea] [char](3) COLLATE Latin1_General_CI_AS NULL,
+	[IdPagina] [char](3) COLLATE Latin1_General_CI_AS NULL,
 	[Pos] [int] NULL,
  CONSTRAINT [PK_tblMenu] PRIMARY KEY CLUSTERED 
 (

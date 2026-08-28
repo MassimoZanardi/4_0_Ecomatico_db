@@ -1,13 +1,13 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblRicorrenze](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdParent] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdIntervallo] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdParent] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdIntervallo] [char](2) COLLATE Latin1_General_CI_AS NULL,
 	[Frequenza] [int] NULL,
 	[DataFine] [smalldatetime] NULL,
 	[Ripetizioni] [int] NULL,

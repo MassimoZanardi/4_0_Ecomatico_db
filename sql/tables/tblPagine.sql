@@ -1,15 +1,15 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblPagine](
-	[Id] [char](3) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdFunzione] [char](3) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[Nome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Url] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Note] [varchar](100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](3) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdFunzione] [char](3) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+	[Url] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+	[Note] [varchar](100) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblPagine] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

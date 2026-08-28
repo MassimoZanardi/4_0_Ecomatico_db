@@ -1,14 +1,14 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblUrlNavigazione](
-	[IdSessione] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[IdSessione] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Pos] [tinyint] NOT NULL,
-	[UrlPartenza] [varchar](2000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[UrlDestinazione] [varchar](2000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[UrlPartenza] [varchar](2000) COLLATE Latin1_General_CI_AS NULL,
+	[UrlDestinazione] [varchar](2000) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblUrlNavigazione] PRIMARY KEY CLUSTERED 
 (
 	[IdSessione] ASC,

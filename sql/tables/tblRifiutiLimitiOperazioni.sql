@@ -1,12 +1,12 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblRifiutiLimitiOperazioni](
-	[IdLimite] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdOperazione] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[IdLimite] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdOperazione] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
  CONSTRAINT [PK_tblRifiutiLimitiOperazioni] PRIMARY KEY CLUSTERED
 (
 	[IdLimite] ASC,

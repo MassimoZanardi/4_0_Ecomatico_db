@@ -1,21 +1,21 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblRifiutiOperazioni](
-	[Id] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[Operazione] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Codice] [varchar](5) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Nome] [varchar](100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Operazione] [char](1) COLLATE Latin1_General_CI_AS NULL,
+	[Codice] [varchar](5) COLLATE Latin1_General_CI_AS NULL,
+	[Nome] [varchar](100) COLLATE Latin1_General_CI_AS NULL,
 	[IsRentri] [bit] NULL,
 	[ProduttoreSede] [bit] NULL,
 	[TrasportatoreSede] [bit] NULL,
 	[DestinatarioSede] [bit] NULL,
 	[IntermediarioSede] [bit] NULL,
 	[Pos] [tinyint] NULL,
-	[OperazioneAuto] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[OperazioneAuto] [char](1) COLLATE Latin1_General_CI_AS NULL,
 	[IsFormulario] [bit] NULL,
 	[IsIntegrazioneFir] [bit] NULL,
 	[IsProduttore] [bit] NULL,

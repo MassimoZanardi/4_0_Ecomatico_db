@@ -1,14 +1,14 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblIdLog](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[Operazione] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Operazione] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Data] [datetime2](0) NOT NULL,
-	[IdUtente] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[IdUtente] [char](16) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblIdLog] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC,

@@ -1,12 +1,12 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblServiziOsepe](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdOsepe] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdOsepe] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Quantita] [decimal](18, 4) NULL,
  CONSTRAINT [PK_tblServiziOsepe] PRIMARY KEY CLUSTERED 
 (

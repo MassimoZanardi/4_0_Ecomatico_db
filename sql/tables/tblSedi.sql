@@ -1,23 +1,23 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblSedi](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdParent] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdAziendaInterna] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdTipo] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[InternaEsterna] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Nome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Cognome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[PartitaIva] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[CodiceFiscale] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IndirizzoCompleto] [varchar](200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[NomeCompleto] [varchar](200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Codice] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Note] [varchar](1000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdParent] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdAziendaInterna] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdTipo] [char](1) COLLATE Latin1_General_CI_AS NULL,
+	[InternaEsterna] [char](1) COLLATE Latin1_General_CI_AS NULL,
+	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+	[Cognome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+	[PartitaIva] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
+	[CodiceFiscale] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
+	[IndirizzoCompleto] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
+	[NomeCompleto] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
+	[Codice] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
+	[Note] [varchar](1000) COLLATE Latin1_General_CI_AS NULL,
 	[Disabilitata] [bit] NULL,
 	[Lock] [tinyint] NULL,
 	[UnitaLocale] [bit] NULL,

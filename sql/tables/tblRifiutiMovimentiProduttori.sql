@@ -1,12 +1,12 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblRifiutiMovimentiProduttori](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdAutorizzazione] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdAutorizzazione] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Pos] [tinyint] NOT NULL,
 	[Quantita] [decimal](18, 2) NULL,
  CONSTRAINT [PK_tblRifiutiMovimentiProduttori_1] PRIMARY KEY CLUSTERED 

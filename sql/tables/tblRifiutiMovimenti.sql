@@ -1,27 +1,27 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblRifiutiMovimenti](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdRegistro] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdOperazione] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdEer] [char](6) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdStatoFisico] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdAttivita] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdSedeProduttoreDetentore] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdSedeDestinatario] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdSedeTrasportatore1] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdSedeIntermediario1] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdUnitaMisura] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdProvenienza] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdRegistro] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdOperazione] [char](1) COLLATE Latin1_General_CI_AS NULL,
+	[IdEer] [char](6) COLLATE Latin1_General_CI_AS NULL,
+	[IdStatoFisico] [char](1) COLLATE Latin1_General_CI_AS NULL,
+	[IdAttivita] [char](2) COLLATE Latin1_General_CI_AS NULL,
+	[IdSedeProduttoreDetentore] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdSedeDestinatario] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdSedeTrasportatore1] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdSedeIntermediario1] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdUnitaMisura] [char](2) COLLATE Latin1_General_CI_AS NULL,
+	[IdProvenienza] [char](1) COLLATE Latin1_General_CI_AS NULL,
 	[Quantita] [decimal](18, 2) NULL,
-	[EerDescrizione] [varchar](200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[FormularioNumero] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[EerDescrizione] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
+	[FormularioNumero] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
 	[DataInizioTrasporto] [smalldatetime] NULL,
-	[Note] [varchar](500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Note] [varchar](500) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblRifiutiMovimenti] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

@@ -1,12 +1,12 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblIdCancellati](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdSessione] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdSessione] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Data] [smalldatetime] NULL,
 	[DataEccezione] [smalldatetime] NULL,
  CONSTRAINT [PK_tblIdCancellati] PRIMARY KEY CLUSTERED 

@@ -1,13 +1,13 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblSediRecapiti](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdRecapito] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[Valore] [varchar](100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdRecapito] [char](2) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Valore] [varchar](100) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblSediRecapiti] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC,

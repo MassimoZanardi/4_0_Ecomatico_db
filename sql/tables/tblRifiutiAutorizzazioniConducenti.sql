@@ -1,13 +1,13 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblRifiutiAutorizzazioniConducenti](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[Nome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[Cognome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Cognome] [varchar](50) COLLATE Latin1_General_CI_AS NOT NULL,
 	[ScadenzaPatente] [date] NULL,
 	[ScadenzaPatenteAdr] [date] NULL,
  CONSTRAINT [PK_tblRifiutiAutorizzazioniConducenti] PRIMARY KEY CLUSTERED 

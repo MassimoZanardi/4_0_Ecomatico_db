@@ -1,20 +1,20 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblEventi](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdCalendario] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdStato] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdTipo] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdCalendario] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdStato] [char](1) COLLATE Latin1_General_CI_AS NULL,
+	[IdTipo] [char](1) COLLATE Latin1_General_CI_AS NULL,
 	[Data] [smalldatetime] NULL,
 	[InGiornata] [bit] NULL,
 	[AvvisoAnticipo] [int] NULL,
-	[Avviso] [varchar](1000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Email] [varchar](1000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Etichette] [varchar](2000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Avviso] [varchar](1000) COLLATE Latin1_General_CI_AS NULL,
+	[Email] [varchar](1000) COLLATE Latin1_General_CI_AS NULL,
+	[Etichette] [varchar](2000) COLLATE Latin1_General_CI_AS NULL,
 	[Lock] [tinyint] NULL,
  CONSTRAINT [PK_tblEventi] PRIMARY KEY CLUSTERED 
 (

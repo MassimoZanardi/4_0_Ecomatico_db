@@ -1,28 +1,28 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblRifiutiFormulari](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdMovimento] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdImballo] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdAdr] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdAnalisiTipo] [char](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdMovimento] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdImballo] [char](2) COLLATE Latin1_General_CI_AS NULL,
+	[IdAdr] [char](2) COLLATE Latin1_General_CI_AS NULL,
+	[IdAnalisiTipo] [char](1) COLLATE Latin1_General_CI_AS NULL,
 	[TrasportoAdr] [bit] NULL,
 	[DataEmissione] [date] NULL,
 	[AnalisiData] [date] NULL,
-	[AnalisiNumero] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[AnalisiNumero] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[Detentore] [bit] NULL,
 	[LuogoDiProduzione] [bit] NULL,
 	[VerificatoInPartenza] [bit] NULL,
-	[NumeroOnu] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[AdrNote] [varchar](200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[ColliNumero] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[NumeroOnu] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
+	[AdrNote] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
+	[ColliNumero] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[AllaRinfusa] [bit] NULL,
-	[Note] [varchar](500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Etichette] [varchar](2000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Note] [varchar](500) COLLATE Latin1_General_CI_AS NULL,
+	[Etichette] [varchar](2000) COLLATE Latin1_General_CI_AS NULL,
 	[Lock] [tinyint] NULL,
  CONSTRAINT [PK_tblRifiutiFormulari] PRIMARY KEY CLUSTERED 
 (

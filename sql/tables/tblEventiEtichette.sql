@@ -1,12 +1,12 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblEventiEtichette](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdEtichetta] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdEtichetta] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
  CONSTRAINT [PK_tblEventiEtichette] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC,

@@ -1,21 +1,21 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblUtenti](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[IdDominio] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdRuolo] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[IdStato] [char](2) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Email] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdDominio] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdRuolo] [char](2) COLLATE Latin1_General_CI_AS NULL,
+	[IdStato] [char](2) COLLATE Latin1_General_CI_AS NULL,
+	[Email] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[Scadenza] [date] NULL,
 	[PasswordScadenzaGiorni] [int] NULL,
 	[PasswordPrecedenti] [int] NULL,
 	[PasswordLunghezzaMinima] [int] NULL,
 	[Master] [bit] NULL,
-	[TokenReset] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[TokenReset] [nvarchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[TokenResetScade] [datetime2](0) NULL,
 	[Lock] [tinyint] NULL,
  CONSTRAINT [PK_tblUtenti] PRIMARY KEY CLUSTERED 

@@ -1,16 +1,16 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[tblRifiutiFormulariTrasportiTerresti](
-	[Id] [char](16) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[TargaMotrice] [varchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[TargaRimorchio] [varchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[ConducenteNome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[ConducenteCognome] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Percorso] [varchar](200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[TargaMotrice] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
+	[TargaRimorchio] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
+	[ConducenteNome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+	[ConducenteCognome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+	[Percorso] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
 	[RimorchioPrecedente] [bit] NULL,
  CONSTRAINT [PK_tblRifiutiFormulariTrasportiTerresti] PRIMARY KEY CLUSTERED 
 (

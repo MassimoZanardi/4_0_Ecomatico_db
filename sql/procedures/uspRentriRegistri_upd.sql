@@ -110,7 +110,7 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblRentriRegistri r
-				INNER JOIN [1_0_rentri]..tblRegistri h ON r.IdRentri = h.Id
+				INNER JOIN [1_0_rentri]..tblRegistri h ON r.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
 			WHERE
 				r.Id <> @Id
 				AND h.Identificativo = @Identificativo

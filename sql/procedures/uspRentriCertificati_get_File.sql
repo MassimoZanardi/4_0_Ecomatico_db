@@ -61,7 +61,7 @@ BEGIN
 			f.[File]
 		FROM
 			dbo.tblRentriCertificati c
-			LEFT JOIN [1_0_rentri]..tblCertificati f ON c.IdRentri = f.Id
+			LEFT JOIN [1_0_rentri]..tblCertificati f ON c.IdRentri COLLATE DATABASE_DEFAULT = f.Id COLLATE DATABASE_DEFAULT
 		WHERE c.Id = @Id;
 
 	END TRY

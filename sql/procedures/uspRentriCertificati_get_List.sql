@@ -51,7 +51,7 @@ BEGIN
 		FROM
 			dbo.tblRentriCertificati c
 			INNER JOIN dbo.tblSessioni e ON c.IdDominio = e.IdDominio
-			LEFT JOIN [1_0_rentri]..tblCertificati f ON c.IdRentri = f.Id
+			LEFT JOIN [1_0_rentri]..tblCertificati f ON c.IdRentri COLLATE DATABASE_DEFAULT = f.Id COLLATE DATABASE_DEFAULT
 		WHERE
 			e.Id = @IdSessione
 			AND c.Lock = 0

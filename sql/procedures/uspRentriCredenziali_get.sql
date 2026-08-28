@@ -76,7 +76,7 @@ BEGIN
 			dbo.tblRentriCredenziali c
 			LEFT JOIN dbo.tblRentriCertificati f ON c.IdCertificato = f.Id
 			LEFT JOIN dbo.tblRentriAccreditamenti a ON c.IdAccreditamento = a.Id
-			LEFT JOIN [1_0_rentri]..tblCredenziali h ON c.IdRentri = h.Id
+			LEFT JOIN [1_0_rentri]..tblCredenziali h ON c.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
 		WHERE c.Id = @Id;
 
 	END TRY

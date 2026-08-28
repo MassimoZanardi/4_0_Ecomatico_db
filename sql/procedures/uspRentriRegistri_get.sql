@@ -73,8 +73,8 @@ BEGIN
 			dbo.tblRifiutiRegistri g
 			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
 			LEFT JOIN dbo.tblRentriRegistri r ON g.Id = r.Id
-			LEFT JOIN [1_0_rentri]..tblRegistri h ON r.IdRentri = h.Id
-			LEFT JOIN dbo.tblRentriCredenzialiSedi rcs ON rcs.IdRentri = h.IdSede
+			LEFT JOIN [1_0_rentri]..tblRegistri h ON r.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
+			LEFT JOIN dbo.tblRentriCredenzialiSedi rcs ON rcs.IdRentri COLLATE DATABASE_DEFAULT = h.IdSede COLLATE DATABASE_DEFAULT
 		WHERE g.Id = @Id;
 
 	END TRY

@@ -60,7 +60,7 @@ BEGIN
 		FROM
 			dbo.tblRentriCredenzialiSedi rcs
 			INNER JOIN dbo.tblRentriCredenziali c ON rcs.IdCredenziale = c.Id
-			LEFT JOIN [1_0_rentri]..tblSedi h ON rcs.IdRentri = h.Id
+			LEFT JOIN [1_0_rentri]..tblSedi h ON rcs.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
 		WHERE rcs.IdSede = @IdSede
 		ORDER BY rcs.Pos;
 

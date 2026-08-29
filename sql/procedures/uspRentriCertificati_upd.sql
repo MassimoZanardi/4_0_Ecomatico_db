@@ -40,6 +40,12 @@ BEGIN
 			SET @returnMessage = 'Il parametro @Nome non può essere vuoto';
 			GOTO BRANCH_END;
 		END
+		IF @DataScadenza IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @DataScadenza non può essere vuoto';
+			GOTO BRANCH_END;
+		END
 
 		-- Controlla il permesso sulla funzione
 		DECLARE @permesso TINYINT;

@@ -44,6 +44,16 @@ BEGIN
 
 		SELECT
 			c.Id,
+			StatoValore = CASE
+				WHEN c.DataScadenza < GETDATE() THEN 2
+				WHEN DATEDIFF(DAY, GETDATE(), c.DataScadenza) < 30 THEN 1
+				ELSE 0
+			END,
+			StatoDescrizione = CASE
+				WHEN c.DataScadenza < GETDATE() THEN 'Certificato scaduto'
+				WHEN DATEDIFF(DAY, GETDATE(), c.DataScadenza) < 30 THEN 'Certificato in scadenza'
+				ELSE 'OK'
+			END,
 			c.Nome,
 			Identificativo = f.Identificativo,
 			c.DataScadenza,

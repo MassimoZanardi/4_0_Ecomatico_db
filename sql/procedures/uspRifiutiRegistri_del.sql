@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistri_del]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistri_del]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Reset BIT = 0
@@ -125,6 +129,16 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			IF EXISTS (SELECT 1
+			FROM dbo.tblRentriRegistri
+			WHERE Id = @Id
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un registro con credenziali RENTRI associate non può essere cancellato';
+				GOTO BRANCH_END;
+			END
+
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblRifiutiRegistri
 				SET Lock = 4
@@ -171,6 +185,13 @@ BEGIN
 				UPDATE dbo.tblRifiutiLimiti
 				SET IdRegistro = NULL
 				WHERE IdRegistro = @Id;
+
+				-- tblRentriRegistri è 1:1 a chiave condivisa (Id NOT NULL, nessun ON DELETE CASCADE):
+				-- va rimosso prima, altrimenti la DELETE sottostante fallisce per violazione FK.
+				-- Ramo di fatto irraggiungibile in pratica (il blocco sopra su Lock=0 impedisce di
+				-- arrivare in bozza con credenziali RENTRI già associate), mantenuto per difesa.
+				DELETE dbo.tblRentriRegistri
+				WHERE Id = @Id;
 
 				DELETE dbo.tblRifiutiRegistri
 				WHERE Id = @Id;

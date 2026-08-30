@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspSedi_del_SediEsterne]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspSedi_del_SediEsterne]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Reset BIT = 0
@@ -149,6 +153,16 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			IF EXISTS (SELECT 1
+			FROM dbo.tblRentriCredenzialiSedi
+			WHERE IdSede = @Id
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con credenziali RENTRI associate non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblSedi
 				SET Lock = 4
@@ -218,6 +232,13 @@ BEGIN
 			BEGIN TRANSACTION;
 				DELETE dbo.tblAreeOsepe
 				WHERE IdOsepe = @Id;
+
+				-- tblRentriCredenzialiSedi: giunzione Sede/Credenziale RENTRI, IdSede NOT NULL. In
+				-- pratica non popolata per una sede esterna (blocco sopra su Lock=0 comunque già la
+				-- impedisce), mantenuta per difesa dalla FK NO_ACTION.
+				DELETE dbo.tblRentriCredenzialiSedi
+				WHERE IdSede = @Id;
+
 				DELETE dbo.tblSediEsterne
 				WHERE Id = @Id;
 				DELETE dbo.tblSedi

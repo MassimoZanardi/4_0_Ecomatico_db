@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspSedi_del_SediInterne]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspSedi_del_SediInterne]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Reset BIT = 0
@@ -287,6 +291,28 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			IF EXISTS (
+				SELECT 1
+				FROM dbo.tblRentriRegistri rr
+				INNER JOIN dbo.tblRifiutiRegistri r ON rr.Id = r.Id
+				WHERE r.IdSede = @Id
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con registri RENTRI associati non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (SELECT 1
+			FROM dbo.tblRentriCredenzialiSedi
+			WHERE IdSede = @Id
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con credenziali RENTRI associate non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblSedi
 				SET Lock = 4
@@ -409,6 +435,13 @@ BEGIN
 				DELETE dbo.tblRifiutiLimiti
 				WHERE IdSede = @Id;
 
+				-- tblRentriRegistri è 1:1 a chiave condivisa su tblRifiutiRegistri.Id (NOT NULL,
+				-- nessun ON DELETE CASCADE): va rimosso prima, altrimenti la DELETE sottostante
+				-- fallisce per FK. Ramo di fatto irraggiungibile in pratica (il blocco sopra su
+				-- Lock=0 impedisce di arrivare in bozza con registri RENTRI già associati).
+				DELETE dbo.tblRentriRegistri
+				WHERE Id IN (SELECT Id FROM dbo.tblRifiutiRegistri WHERE IdSede = @Id);
+
 				DELETE dbo.tblRifiutiRegistri
 				WHERE IdSede = @Id;
 				DELETE dbo.tblTipi
@@ -419,6 +452,14 @@ BEGIN
 				WHERE IdSede = @Id;
 				DELETE dbo.tblSediEsterne
 				WHERE IdSedeInterna = @Id;
+
+				-- tblRentriCredenzialiSedi: giunzione Sede/Credenziale RENTRI, IdSede NOT NULL
+				-- (nessuna colonna da azzerare) - si cancella la riga di associazione, mai
+				-- tblRentriCredenziali stessa. Ramo di fatto irraggiungibile in pratica (blocco
+				-- sopra su Lock=0), mantenuto per difesa dalla FK NO_ACTION.
+				DELETE dbo.tblRentriCredenzialiSedi
+				WHERE IdSede = @Id;
+
 				DELETE dbo.tblSediInterne
 				WHERE Id = @Id;
 				DELETE dbo.tblSedi

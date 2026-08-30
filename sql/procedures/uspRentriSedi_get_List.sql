@@ -55,6 +55,7 @@ BEGIN
 				ELSE 'OK'
 			END,
 			Nome = s.NomeCompleto,
+			s.IndirizzoCompleto,
 			CredenzialiCount = (SELECT COUNT(*) FROM dbo.tblRentriCredenzialiSedi rcs WHERE rcs.IdSede = s.Id),
 			RowsCount = COUNT(*) OVER ()
 		FROM

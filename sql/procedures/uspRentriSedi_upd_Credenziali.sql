@@ -5,9 +5,8 @@ GO
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriSedi_upd_Credenziali]
 	@IdSede CHAR(16) = NULL,
 	@IdCredenzialePrimaria CHAR(16) = NULL,
-	@IdentificativoPrimaria VARCHAR(30) = NULL,
 	@IdCredenzialeSecondaria CHAR(16) = NULL,
-	@IdentificativoSecondaria VARCHAR(30) = NULL,
+	@IdentificativoSede VARCHAR(30) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS
 BEGIN
@@ -19,9 +18,8 @@ BEGIN
 
 		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
 		SET @IdCredenzialePrimaria = NULLIF(LTRIM(RTRIM(@IdCredenzialePrimaria)), '');
-		SET @IdentificativoPrimaria = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@IdentificativoPrimaria, 0, 1));
 		SET @IdCredenzialeSecondaria = NULLIF(LTRIM(RTRIM(@IdCredenzialeSecondaria)), '');
-		SET @IdentificativoSecondaria = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@IdentificativoSecondaria, 0, 1));
+		SET @IdentificativoSede = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@IdentificativoSede, 0, 1));
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 
 		IF @IdCredenzialePrimaria = @idSediciZeri SET @IdCredenzialePrimaria = NULL;
@@ -123,21 +121,19 @@ BEGIN
 			END
 		END
 
-		-- La credenziale con accreditamento Delegato è sempre la primaria (Pos=0), indipendentemente dallo slot scelto in UI
+		-- La credenziale con accreditamento Delegato è sempre la primaria (Pos=0), indipendentemente dallo slot scelto in UI.
+		-- L'Identificativo Sede (dato reale, digitato dall'utente) va sempre sulla riga hub di Pos=0;
+		-- la riga hub di Pos=1 (se presente) è un dettaglio tecnico dell'hub, mai mostrato, valorizzato a caso.
 		DECLARE @idCredenzialePos0 CHAR(16) = @IdCredenzialePrimaria;
-		DECLARE @identificativoPos0 VARCHAR(30) = @IdentificativoPrimaria;
 		DECLARE @idRentriCredPos0 CHAR(16) = @idRentriPrimaria;
 		DECLARE @idCredenzialePos1 CHAR(16) = @IdCredenzialeSecondaria;
-		DECLARE @identificativoPos1 VARCHAR(30) = @IdentificativoSecondaria;
 		DECLARE @idRentriCredPos1 CHAR(16) = @idRentriSecondaria;
 
 		IF @IdCredenzialeSecondaria IS NOT NULL AND ISNULL(@accreditamentoSecondaria, '') = 'D' AND ISNULL(@accreditamentoPrimaria, '') <> 'D'
 		BEGIN
 			SET @idCredenzialePos0 = @IdCredenzialeSecondaria;
-			SET @identificativoPos0 = @IdentificativoSecondaria;
 			SET @idRentriCredPos0 = @idRentriSecondaria;
 			SET @idCredenzialePos1 = @IdCredenzialePrimaria;
-			SET @identificativoPos1 = @IdentificativoPrimaria;
 			SET @idRentriCredPos1 = @idRentriPrimaria;
 		END
 
@@ -160,7 +156,7 @@ BEGIN
 				AND IdCredenziale <> @idCredenzialePos0
 				AND (@idCredenzialePos1 IS NULL OR IdCredenziale <> @idCredenzialePos1);
 
-			-- Posizione 0 (primaria effettiva)
+			-- Posizione 0 (primaria effettiva): l'Identificativo Sede va sempre aggiornato qui
 			IF EXISTS (SELECT 1 FROM dbo.tblRentriCredenzialiSedi WHERE IdSede = @IdSede AND IdCredenziale = @idCredenzialePos0)
 			BEGIN
 				UPDATE dbo.tblRentriCredenzialiSedi
@@ -168,7 +164,7 @@ BEGIN
 				WHERE IdSede = @IdSede AND IdCredenziale = @idCredenzialePos0;
 
 				UPDATE h
-				SET Identificativo = @identificativoPos0
+				SET Identificativo = @IdentificativoSede
 				FROM [1_0_rentri]..tblSedi h
 				INNER JOIN dbo.tblRentriCredenzialiSedi rcs ON h.Id COLLATE DATABASE_DEFAULT = rcs.IdRentri COLLATE DATABASE_DEFAULT
 				WHERE rcs.IdSede = @IdSede AND rcs.IdCredenziale = @idCredenzialePos0;
@@ -178,13 +174,14 @@ BEGIN
 				DECLARE @idRentriAssocPos0 CHAR(16) = LOWER(REPLACE(LEFT(CONVERT(VARCHAR(36), NEWID()), 18), '-', ''));
 
 				INSERT INTO [1_0_rentri]..tblSedi (Id, IdCredenziale, Identificativo)
-				VALUES (@idRentriAssocPos0, @idRentriCredPos0, @identificativoPos0);
+				VALUES (@idRentriAssocPos0, @idRentriCredPos0, @IdentificativoSede);
 
 				INSERT INTO dbo.tblRentriCredenzialiSedi (IdSede, IdCredenziale, IdRentri, Pos)
 				VALUES (@IdSede, @idCredenzialePos0, @idRentriAssocPos0, 0);
 			END
 
-			-- Posizione 1 (secondaria effettiva, opzionale)
+			-- Posizione 1 (secondaria effettiva, opzionale): l'Identificativo hub è un dettaglio tecnico,
+			-- generato una sola volta alla creazione e mai più toccato/mostrato
 			IF @idCredenzialePos1 IS NOT NULL
 			BEGIN
 				IF EXISTS (SELECT 1 FROM dbo.tblRentriCredenzialiSedi WHERE IdSede = @IdSede AND IdCredenziale = @idCredenzialePos1)
@@ -192,19 +189,14 @@ BEGIN
 					UPDATE dbo.tblRentriCredenzialiSedi
 					SET Pos = 1
 					WHERE IdSede = @IdSede AND IdCredenziale = @idCredenzialePos1;
-
-					UPDATE h
-					SET Identificativo = @identificativoPos1
-					FROM [1_0_rentri]..tblSedi h
-					INNER JOIN dbo.tblRentriCredenzialiSedi rcs ON h.Id COLLATE DATABASE_DEFAULT = rcs.IdRentri COLLATE DATABASE_DEFAULT
-					WHERE rcs.IdSede = @IdSede AND rcs.IdCredenziale = @idCredenzialePos1;
 				END
 				ELSE
 				BEGIN
 					DECLARE @idRentriAssocPos1 CHAR(16) = LOWER(REPLACE(LEFT(CONVERT(VARCHAR(36), NEWID()), 18), '-', ''));
+					DECLARE @identificativoTecnicoPos1 VARCHAR(30) = LOWER(REPLACE(LEFT(CONVERT(VARCHAR(36), NEWID()), 18), '-', ''));
 
 					INSERT INTO [1_0_rentri]..tblSedi (Id, IdCredenziale, Identificativo)
-					VALUES (@idRentriAssocPos1, @idRentriCredPos1, @identificativoPos1);
+					VALUES (@idRentriAssocPos1, @idRentriCredPos1, @identificativoTecnicoPos1);
 
 					INSERT INTO dbo.tblRentriCredenzialiSedi (IdSede, IdCredenziale, IdRentri, Pos)
 					VALUES (@IdSede, @idCredenzialePos1, @idRentriAssocPos1, 1);

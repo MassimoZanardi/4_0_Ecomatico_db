@@ -54,7 +54,8 @@ BEGIN
 
 		SELECT
 			s.Id,
-			Nome = s.NomeCompleto
+			Nome = s.NomeCompleto,
+			s.IndirizzoCompleto
 		FROM dbo.tblSedi s
 		WHERE s.Id = @IdSede;
 

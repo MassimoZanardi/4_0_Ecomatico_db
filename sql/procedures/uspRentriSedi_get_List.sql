@@ -57,6 +57,7 @@ BEGIN
 			Nome = s.NomeCompleto,
 			s.IndirizzoCompleto,
 			Identificativo = idf.Identificativo,
+			CredenzialePrimariaNome = idf.CredenzialePrimariaNome,
 			CredenzialiCount = (SELECT COUNT(*) FROM dbo.tblRentriCredenzialiSedi rcs WHERE rcs.IdSede = s.Id),
 			RowsCount = COUNT(*) OVER ()
 		FROM
@@ -72,9 +73,12 @@ BEGIN
 				WHERE rcs.IdSede = s.Id
 			) sc
 			OUTER APPLY (
-				SELECT TOP 1 h.Identificativo
+				SELECT TOP 1
+					h.Identificativo,
+					CredenzialePrimariaNome = c.Nome
 				FROM
 					dbo.tblRentriCredenzialiSedi rcs
+					INNER JOIN dbo.tblRentriCredenziali c ON rcs.IdCredenziale = c.Id
 					INNER JOIN [1_0_rentri]..tblSedi h ON rcs.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
 				WHERE rcs.IdSede = s.Id AND rcs.Pos = 0
 			) idf

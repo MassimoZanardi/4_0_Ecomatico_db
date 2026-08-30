@@ -56,6 +56,7 @@ BEGIN
 			END,
 			Nome = s.NomeCompleto,
 			s.IndirizzoCompleto,
+			Identificativo = idf.Identificativo,
 			CredenzialiCount = (SELECT COUNT(*) FROM dbo.tblRentriCredenzialiSedi rcs WHERE rcs.IdSede = s.Id),
 			RowsCount = COUNT(*) OVER ()
 		FROM
@@ -70,6 +71,13 @@ BEGIN
 					LEFT JOIN dbo.tblRentriCertificati f ON c.IdCertificato = f.Id
 				WHERE rcs.IdSede = s.Id
 			) sc
+			OUTER APPLY (
+				SELECT TOP 1 h.Identificativo
+				FROM
+					dbo.tblRentriCredenzialiSedi rcs
+					INNER JOIN [1_0_rentri]..tblSedi h ON rcs.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
+				WHERE rcs.IdSede = s.Id AND rcs.Pos = 0
+			) idf
 		WHERE
 			ISNULL(s.Disabilitata, 0) = 0
 			AND i.IdAziendaInterna = e.IdAzienda

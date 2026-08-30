@@ -55,6 +55,7 @@ BEGIN
 				ELSE 'OK'
 			END,
 			c.Nome,
+			Identificativo = h.Identificativo,
 			CertificatoNome = f.Nome,
 			AccreditamentoNome = a.Nome,
 			RowsCount = COUNT(*) OVER ()
@@ -63,6 +64,7 @@ BEGIN
 			INNER JOIN dbo.tblSessioni e ON c.IdDominio = e.IdDominio
 			LEFT JOIN dbo.tblRentriCertificati f ON c.IdCertificato = f.Id
 			LEFT JOIN dbo.tblRentriAccreditamenti a ON c.IdAccreditamento = a.Id
+			LEFT JOIN [1_0_rentri]..tblCredenziali h ON c.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
 		WHERE
 			e.Id = @IdSessione
 			AND c.Lock = 0

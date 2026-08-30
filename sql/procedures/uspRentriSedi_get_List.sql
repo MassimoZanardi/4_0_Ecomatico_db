@@ -44,6 +44,16 @@ BEGIN
 
 		SELECT
 			s.Id,
+			StatoValore = CASE
+				WHEN sc.DataScadenza < GETDATE() THEN 2
+				WHEN DATEDIFF(DAY, GETDATE(), sc.DataScadenza) < 30 THEN 1
+				ELSE 0
+			END,
+			StatoDescrizione = CASE
+				WHEN sc.DataScadenza < GETDATE() THEN 'Certificato scaduto'
+				WHEN DATEDIFF(DAY, GETDATE(), sc.DataScadenza) < 30 THEN 'Certificato in scadenza'
+				ELSE 'OK'
+			END,
 			Nome = s.NomeCompleto,
 			CredenzialiCount = (SELECT COUNT(*) FROM dbo.tblRentriCredenzialiSedi rcs WHERE rcs.IdSede = s.Id),
 			RowsCount = COUNT(*) OVER ()
@@ -51,6 +61,14 @@ BEGIN
 			dbo.tblSedi s
 			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.Id = i.Id
 			INNER JOIN dbo.tblSessioni e ON e.Id = @IdSessione
+			OUTER APPLY (
+				SELECT MIN(f.DataScadenza) AS DataScadenza
+				FROM
+					dbo.tblRentriCredenzialiSedi rcs
+					INNER JOIN dbo.tblRentriCredenziali c ON rcs.IdCredenziale = c.Id AND c.Lock = 0
+					LEFT JOIN dbo.tblRentriCertificati f ON c.IdCertificato = f.Id
+				WHERE rcs.IdSede = s.Id
+			) sc
 		WHERE
 			ISNULL(s.Disabilitata, 0) = 0
 			AND i.IdAziendaInterna = e.IdAzienda

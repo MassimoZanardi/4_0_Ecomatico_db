@@ -135,7 +135,7 @@ BEGIN
 			)
 			BEGIN
 				SET @returnValue = -1;
-				SET @returnMessage = 'Un registro con credenziali RENTRI associate non può essere cancellato';
+				SET @returnMessage = 'Un registro associato/registrato su RENTRI non può essere cancellato';
 				GOTO BRANCH_END;
 			END
 
@@ -189,7 +189,7 @@ BEGIN
 				-- tblRentriRegistri è 1:1 a chiave condivisa (Id NOT NULL, nessun ON DELETE CASCADE):
 				-- va rimosso prima, altrimenti la DELETE sottostante fallisce per violazione FK.
 				-- Ramo di fatto irraggiungibile in pratica (il blocco sopra su Lock=0 impedisce di
-				-- arrivare in bozza con credenziali RENTRI già associate), mantenuto per difesa.
+				-- arrivare in bozza già registrata su RENTRI), mantenuto per difesa.
 				DELETE dbo.tblRentriRegistri
 				WHERE Id = @Id;
 

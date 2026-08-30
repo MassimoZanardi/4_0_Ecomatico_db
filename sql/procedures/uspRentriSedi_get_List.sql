@@ -50,8 +50,10 @@ BEGIN
 		FROM
 			dbo.tblSedi s
 			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.Id = i.Id
+			INNER JOIN dbo.tblSessioni e ON e.Id = @IdSessione
 		WHERE
 			ISNULL(s.Disabilitata, 0) = 0
+			AND i.IdAziendaInterna = e.IdAzienda
 			AND
 				(
 				@Search IS NULL

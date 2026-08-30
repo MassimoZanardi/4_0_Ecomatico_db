@@ -6,7 +6,9 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_ins]
 	@IdSessione CHAR(16) = NULL,
 	@IdOperazione CHAR(1) = NULL,
 	@IdModello CHAR(16) = NULL,
-	@IdFormulario CHAR(16) = NULL
+	@IdFormulario CHAR(16) = NULL,
+	@IdCopia CHAR(16) = NULL,
+	@IdRegistro CHAR(16) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -20,6 +22,8 @@ BEGIN
 		SET @IdOperazione = NULLIF(LTRIM(RTRIM(@IdOperazione)), '');
 		SET @IdModello = NULLIF(LTRIM(RTRIM(@IdModello)), '');
 		SET @IdFormulario = NULLIF(LTRIM(RTRIM(@IdFormulario)), '');
+		SET @IdCopia = NULLIF(LTRIM(RTRIM(@IdCopia)), '');
+		SET @IdRegistro = NULLIF(LTRIM(RTRIM(@IdRegistro)), '');
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -41,15 +45,31 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		DECLARE @idRegistro CHAR(16);
-		SELECT @idRegistro = IdRegistro
+		DECLARE @idRegistroFinale CHAR(16);
+		SELECT @idRegistroFinale = IdRegistro
 		FROM dbo.tblSessioni
 		WHERE Id = @IdSessione;
 
-		IF @idRegistro IS NULL AND @IdFormulario IS NULL
+		-- @IdRegistro esplicito (Copia/incolla su un Registro diverso da quello corrente di sessione) sovrascrive il default
+		IF @IdRegistro IS NOT NULL
+			SET @idRegistroFinale = @IdRegistro;
+
+		IF @idRegistroFinale IS NULL AND @IdFormulario IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Selezionare il registro nel quale inserire la nuova registrazione';
+			GOTO BRANCH_END;
+		END
+
+		IF @IdRegistro IS NOT NULL AND NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblRifiutiRegistri g
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+			WHERE g.Id = @IdRegistro)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
 			GOTO BRANCH_END;
 		END
 
@@ -101,6 +121,22 @@ BEGIN
 				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
 				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE m.Id = @IdModello)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF @IdFormulario IS NULL AND @IdCopia IS NOT NULL AND NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblRifiutiRegistrazioni r
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+			WHERE
+				r.Id = @IdCopia
+				AND r.Lock < 2)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
@@ -166,6 +202,83 @@ BEGIN
 				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 			WHERE m.Id = @IdModello;
 
+		-- Lettura unica della registrazione sorgente per "Copia/incolla": stesso schema del blocco Modello sopra,
+		-- ma dalla coppia Registrazione/Movimento esistente invece che da un Modello. Esclusi di proposito:
+		-- Data, Numero, FormularioNumero (mai impostati anche negli altri rami di _ins), Esito/QuantitaVerificata/
+		-- CausaleRespingimento*/QuantitaRespinta, DataFineTrasporto, VeicoloFuoriUso*, Quantita (dipende da
+		-- relazioni/giacenze), Lock/DataStampa e le relazioni scarico/carico (tblRifiutiRegistrazioniRelazioni,
+		-- mai copiate su richiesta esplicita).
+		DECLARE
+			@cIdMovimentoOrigine CHAR(16),
+			@cIdOperazione CHAR(1),
+			@cOperazione CHAR(1),
+			@cIdEer CHAR(6),
+			@cEerDescrizione VARCHAR(200),
+			@cIdStatoFisico CHAR(1),
+			@cIdAttivita CHAR(2),
+			@cIdUnitaMisura CHAR(2),
+			@cIdProvenienza CHAR(1),
+			@cNote VARCHAR(500),
+			@cIdAutorizzazioneProduttoreDetentore CHAR(16),
+			@cIdAutorizzazioneDestinatario CHAR(16),
+			@cIdAutorizzazioneTrasportatore1 CHAR(16),
+			@cIdAutorizzazioneTrasportatore2 CHAR(16),
+			@cIdAutorizzazioneTrasportatore3 CHAR(16),
+			@cIdTipoTrasporto1 CHAR(1),
+			@cIdTipoTrasporto2 CHAR(1),
+			@cIdTipoTrasporto3 CHAR(1),
+			@cIdAutorizzazioneIntermediario1 CHAR(16),
+			@cIdAutorizzazioneIntermediario2 CHAR(16),
+			@cIdAutorizzazioneIntermediario3 CHAR(16),
+			@cRegistrazioneNote VARCHAR(500),
+			@cIdRaee CHAR(1),
+			@cIdMateriale CHAR(2),
+			@cMaterialeDescrizione VARCHAR(200),
+			@cIdAttivitaProvenienza CHAR(1),
+			@cIdTrasportoTransfrontalieroTipo CHAR(1);
+
+		IF @IdFormulario IS NULL AND @IdCopia IS NOT NULL
+			SELECT
+				@cIdMovimentoOrigine = m.Id,
+				@cIdOperazione = m.IdOperazione,
+				@cOperazione = r.Operazione,
+				@cIdEer = m.IdEer,
+				@cEerDescrizione = m.EerDescrizione,
+				@cIdStatoFisico = m.IdStatoFisico,
+				@cIdAttivita = m.IdAttivita,
+				@cIdUnitaMisura = m.IdUnitaMisura,
+				@cIdProvenienza = m.IdProvenienza,
+				@cNote = m.Note,
+				@cIdAutorizzazioneProduttoreDetentore = p.IdAutorizzazione,
+				@cIdAutorizzazioneDestinatario = d.IdAutorizzazione,
+				@cIdAutorizzazioneTrasportatore1 = t1.IdAutorizzazione,
+				@cIdTipoTrasporto1 = t1.IdTipo,
+				@cIdAutorizzazioneTrasportatore2 = t2.IdAutorizzazione,
+				@cIdTipoTrasporto2 = t2.IdTipo,
+				@cIdAutorizzazioneTrasportatore3 = t3.IdAutorizzazione,
+				@cIdTipoTrasporto3 = t3.IdTipo,
+				@cIdAutorizzazioneIntermediario1 = i1.IdAutorizzazione,
+				@cIdAutorizzazioneIntermediario2 = i2.IdAutorizzazione,
+				@cIdAutorizzazioneIntermediario3 = i3.IdAutorizzazione,
+				@cRegistrazioneNote = r.Note,
+				@cIdRaee = r.IdRaee,
+				@cIdMateriale = r.IdMateriale,
+				@cMaterialeDescrizione = r.MaterialeDescrizione,
+				@cIdAttivitaProvenienza = r.IdAttivitaProvenienza,
+				@cIdTrasportoTransfrontalieroTipo = r.IdTrasportoTransfrontalieroTipo
+			FROM
+				dbo.tblRifiutiRegistrazioni r
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				LEFT JOIN dbo.tblRifiutiMovimentiProduttori p ON m.Id = p.Id AND p.Pos = 0
+				LEFT JOIN dbo.tblRifiutiMovimentiDestinatari d ON m.Id = d.Id AND d.Pos = 0
+				LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori t1 ON m.Id = t1.Id AND t1.Pos = 0
+				LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori t2 ON m.Id = t2.Id AND t2.Pos = 1
+				LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori t3 ON m.Id = t3.Id AND t3.Pos = 2
+				LEFT JOIN dbo.tblRifiutiMovimentiIntermediari i1 ON m.Id = i1.Id AND i1.Pos = 0
+				LEFT JOIN dbo.tblRifiutiMovimentiIntermediari i2 ON m.Id = i2.Id AND i2.Pos = 1
+				LEFT JOIN dbo.tblRifiutiMovimentiIntermediari i3 ON m.Id = i3.Id AND i3.Pos = 2
+			WHERE r.Id = @IdCopia;
+
 		DECLARE @idMovimento CHAR(16);
 
 		-- uspId_get gestisce la propria transazione internamente: chiamate FUORI dalla transazione
@@ -181,7 +294,7 @@ BEGIN
 				IF @IdOperazione IS NOT NULL
 				BEGIN
 					INSERT dbo.tblRifiutiMovimenti (Id, IdRegistro, IdOperazione)
-					VALUES (@idMovimento, @idRegistro, @IdOperazione);
+					VALUES (@idMovimento, @idRegistroFinale, @IdOperazione);
 
 					INSERT dbo.tblRifiutiRegistrazioni (Id, IdMovimento, Operazione, Lock)
 					SELECT @returnId, @idMovimento, Operazione, 2
@@ -193,7 +306,7 @@ BEGIN
 					INSERT dbo.tblRifiutiMovimenti
 						(Id, IdRegistro, IdOperazione, IdEer, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, Note)
 					VALUES
-						(@idMovimento, @idRegistro, @mIdOperazione, @mIdEer, @mIdStatoFisico, @mIdAttivita, @mIdUnitaMisura, @mIdProvenienza, @mUtenteNote);
+						(@idMovimento, @idRegistroFinale, @mIdOperazione, @mIdEer, @mIdStatoFisico, @mIdAttivita, @mIdUnitaMisura, @mIdProvenienza, @mUtenteNote);
 
 					IF @mIdAutorizzazioneProduttoreDetentore IS NOT NULL
 						INSERT dbo.tblRifiutiMovimentiProduttori (Id, IdAutorizzazione, Pos)
@@ -248,10 +361,68 @@ BEGIN
 						FROM dbo.tblRifiutiModelliEtichette
 						WHERE Id = @IdModello;
 				END
+				ELSE IF @IdCopia IS NOT NULL
+				BEGIN
+					INSERT dbo.tblRifiutiMovimenti
+						(Id, IdRegistro, IdOperazione, IdEer, EerDescrizione, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, Note)
+					VALUES
+						(@idMovimento, @idRegistroFinale, @cIdOperazione, @cIdEer, @cEerDescrizione, @cIdStatoFisico, @cIdAttivita, @cIdUnitaMisura, @cIdProvenienza, @cNote);
+
+					IF @cIdAutorizzazioneProduttoreDetentore IS NOT NULL
+						INSERT dbo.tblRifiutiMovimentiProduttori (Id, IdAutorizzazione, Pos)
+						VALUES (@idMovimento, @cIdAutorizzazioneProduttoreDetentore, 0);
+
+					IF @cIdAutorizzazioneDestinatario IS NOT NULL
+						INSERT dbo.tblRifiutiMovimentiDestinatari (Id, IdAutorizzazione, Pos)
+						VALUES (@idMovimento, @cIdAutorizzazioneDestinatario, 0);
+
+					IF @cIdAutorizzazioneTrasportatore1 IS NOT NULL
+						INSERT dbo.tblRifiutiMovimentiTrasportatori (Id, IdAutorizzazione, IdTipo, Pos)
+						VALUES (@idMovimento, @cIdAutorizzazioneTrasportatore1, @cIdTipoTrasporto1, 0);
+
+					IF @cIdAutorizzazioneTrasportatore2 IS NOT NULL
+						INSERT dbo.tblRifiutiMovimentiTrasportatori (Id, IdAutorizzazione, IdTipo, Pos)
+						VALUES (@idMovimento, @cIdAutorizzazioneTrasportatore2, @cIdTipoTrasporto2, 1);
+
+					IF @cIdAutorizzazioneTrasportatore3 IS NOT NULL
+						INSERT dbo.tblRifiutiMovimentiTrasportatori (Id, IdAutorizzazione, IdTipo, Pos)
+						VALUES (@idMovimento, @cIdAutorizzazioneTrasportatore3, @cIdTipoTrasporto3, 2);
+
+					IF @cIdAutorizzazioneIntermediario1 IS NOT NULL
+						INSERT dbo.tblRifiutiMovimentiIntermediari (Id, IdAutorizzazione, Pos)
+						VALUES (@idMovimento, @cIdAutorizzazioneIntermediario1, 0);
+
+					IF @cIdAutorizzazioneIntermediario2 IS NOT NULL
+						INSERT dbo.tblRifiutiMovimentiIntermediari (Id, IdAutorizzazione, Pos)
+						VALUES (@idMovimento, @cIdAutorizzazioneIntermediario2, 1);
+
+					IF @cIdAutorizzazioneIntermediario3 IS NOT NULL
+						INSERT dbo.tblRifiutiMovimentiIntermediari (Id, IdAutorizzazione, Pos)
+						VALUES (@idMovimento, @cIdAutorizzazioneIntermediario3, 2);
+
+					IF EXISTS (SELECT 1
+					FROM dbo.tblRifiutiMovimentiClassiPericolo
+					WHERE Id = @cIdMovimentoOrigine)
+						INSERT dbo.tblRifiutiMovimentiClassiPericolo (Id, IdClasse)
+						SELECT @idMovimento, IdClasse
+						FROM dbo.tblRifiutiMovimentiClassiPericolo
+						WHERE Id = @cIdMovimentoOrigine;
+
+					INSERT dbo.tblRifiutiRegistrazioni
+						(Id, IdMovimento, Operazione, Note, IdRaee, IdMateriale, MaterialeDescrizione, IdAttivitaProvenienza, IdTrasportoTransfrontalieroTipo, Lock)
+					VALUES
+						(@returnId, @idMovimento, @cOperazione, @cRegistrazioneNote, @cIdRaee, @cIdMateriale, @cMaterialeDescrizione, @cIdAttivitaProvenienza, @cIdTrasportoTransfrontalieroTipo, 2);
+
+					-- Nessuna copia delle relazioni scarico/carico (tblRifiutiRegistrazioniRelazioni): la nuova registrazione parte sempre senza relazioni
+					INSERT dbo.tblRifiutiRegistrazioniEtichette (Id, IdEtichetta)
+					SELECT @returnId, IdEtichetta
+					FROM dbo.tblRifiutiRegistrazioniEtichette
+					WHERE Id = @IdCopia;
+				END
 				ELSE
 				BEGIN
 					SET @returnValue = -1;
-					SET @returnMessage = 'Parametro per Operazione o Modello non disponibile';
+					SET @returnMessage = 'Parametro per Operazione, Modello o Copia non disponibile';
 					GOTO BRANCH_END;
 				END
 			END
@@ -296,3 +467,4 @@ BEGIN
 	END
 
 END;
+GO

@@ -75,10 +75,12 @@ BEGIN
 
 			SELECT
 				c.Id,
-				[Text] = c.Nome,
+				[Text] = c.Nome + ISNULL(' (' + a.Nome + ')', ''),
 				Selected = CAST(1 AS BIT),
 				Pos = 1
-			FROM dbo.tblRentriCredenziali c
+			FROM
+				dbo.tblRentriCredenziali c
+				LEFT JOIN dbo.tblRentriAccreditamenti a ON c.IdAccreditamento = a.Id
 			WHERE
 				c.Id = @IdSelected
 				AND c.IdDominio = @idDominio
@@ -87,10 +89,12 @@ BEGIN
 
 			SELECT
 				c.Id,
-				[Text] = c.Nome,
+				[Text] = c.Nome + ISNULL(' (' + a.Nome + ')', ''),
 				Selected = CAST(0 AS BIT),
 				Pos = 2
-			FROM dbo.tblRentriCredenziali c
+			FROM
+				dbo.tblRentriCredenziali c
+				LEFT JOIN dbo.tblRentriAccreditamenti a ON c.IdAccreditamento = a.Id
 			WHERE
 				c.IdDominio = @idDominio
 				AND c.Lock = 0

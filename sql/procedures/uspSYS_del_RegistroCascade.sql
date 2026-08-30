@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE dbo.uspSYS_del_RegistroCascade
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspSYS_del_RegistroCascade
     @IdRegistro CHAR(16)    = NULL,
     @Conferma   VARCHAR(50) = NULL
 AS
@@ -99,6 +103,10 @@ BEGIN
             DECLARE @limitiScollegati INT;
             UPDATE dbo.tblRifiutiLimiti SET IdRegistro = NULL WHERE IdRegistro = @IdRegistro;
             SET @limitiScollegati = @@ROWCOUNT;
+
+            -- tblRentriRegistri è 1:1 a chiave condivisa (Id NOT NULL, nessun ON DELETE CASCADE):
+            -- va rimosso prima, altrimenti la DELETE sottostante fallisce per violazione FK.
+            DELETE FROM dbo.tblRentriRegistri WHERE Id = @IdRegistro;
 
             DELETE FROM dbo.tblRifiutiRegistri WHERE Id = @IdRegistro;
 

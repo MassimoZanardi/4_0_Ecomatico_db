@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE dbo.uspSYS_del_SedeEsternaCascade
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspSYS_del_SedeEsternaCascade
     @IdSede   CHAR(16)    = NULL,
     @Conferma VARCHAR(50) = NULL
 AS
@@ -35,7 +39,10 @@ BEGIN
         -- differenza di una sede interna, da una sede esterna NON si scende mai tramite
         -- IdAziendaInterna (punta sempre in alto verso la sede interna che la gestisce, mai verso
         -- un'altra sede da cancellare) né tramite tblSediEsterne.IdSedeInterna (stesso concetto).
-        CREATE TABLE #Sedi (Id CHAR(16) NOT NULL PRIMARY KEY);
+        -- COLLATE DATABASE_DEFAULT esplicito: senza, la colonna erediterebbe la collation di tempdb
+        -- (non convertita insieme al DB, vedi project_collation_conversion), in conflitto con le
+        -- colonne CHAR(16) del database nei confronti/JOIN sottostanti.
+        CREATE TABLE #Sedi (Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY);
         INSERT INTO #Sedi (Id) VALUES (@IdSede);
 
         DECLARE @nuoveRighe INT = 1;
@@ -158,7 +165,13 @@ BEGIN
             DELETE FROM dbo.tblRifiutiRegistrazioni WHERE Id IN (SELECT Id FROM #RifiutiRegistrazioni);
 
             DELETE FROM dbo.tblRifiutiMovimenti WHERE Id IN (SELECT Id FROM #RifiutiMovimenti);
-            DELETE FROM dbo.tblRifiutiRegistri  WHERE Id IN (SELECT Id FROM #RifiutiRegistri);
+
+            -- tblRentriRegistri è 1:1 a chiave condivisa su tblRifiutiRegistri.Id (NOT NULL, nessun
+            -- ON DELETE CASCADE): va rimosso prima, altrimenti la DELETE sottostante fallisce per FK.
+            -- In pratica un Registro RENTRI appartiene sempre a una sede interna, ma la SP resta
+            -- generica per coerenza con la raccolta #RifiutiRegistri già fatta sopra.
+            DELETE FROM dbo.tblRentriRegistri  WHERE Id IN (SELECT Id FROM #RifiutiRegistri);
+            DELETE FROM dbo.tblRifiutiRegistri WHERE Id IN (SELECT Id FROM #RifiutiRegistri);
 
             DELETE FROM dbo.tblScadenzeOsepe
             WHERE Id      IN (SELECT Id FROM #Scadenze)
@@ -226,6 +239,11 @@ BEGIN
             DELETE asi FROM dbo.tblAreeSediInterne asi INNER JOIN #AreeSediInterne t ON t.Id = asi.Id AND t.IdSede  = asi.IdSede;
             DELETE ao  FROM dbo.tblAreeOsepe       ao  INNER JOIN #AreeOsepe       t ON t.Id = ao.Id  AND t.IdOsepe = ao.IdOsepe;
             DELETE FROM dbo.tblUtentiSediInterne WHERE IdSede IN (SELECT Id FROM #Sedi);
+
+            -- tblRentriCredenzialiSedi: giunzione Sede/Credenziale RENTRI, IdSede NOT NULL (nessuna
+            -- colonna da azzerare). In pratica associata solo a sedi interne, ma la SP resta generica
+            -- per lo stesso motivo della raccolta #RifiutiRegistri sopra.
+            DELETE FROM dbo.tblRentriCredenzialiSedi WHERE IdSede IN (SELECT Id FROM #Sedi);
 
             DELETE FROM dbo.tblSediIndirizzi WHERE Id IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediRecapiti  WHERE Id IN (SELECT Id FROM #Sedi);

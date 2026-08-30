@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE dbo.uspSYS_del_SedeInternaCascade
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspSYS_del_SedeInternaCascade
     @IdSede   CHAR(16)    = NULL,
     @Conferma VARCHAR(50) = NULL
 AS
@@ -35,7 +39,10 @@ BEGIN
         -- CTE ricorsiva: le tre relazioni unite possono formare cicli sui dati reali, e una CTE
         -- ricorsiva pura non deduplica tra un livello e l'altro, rischiando MAXRECURSION anche in
         -- assenza di un vero ciclo logico.
-        CREATE TABLE #Sedi (Id CHAR(16) NOT NULL PRIMARY KEY);
+        -- COLLATE DATABASE_DEFAULT esplicito: senza, la colonna erediterebbe la collation di tempdb
+        -- (non convertita insieme al DB, vedi project_collation_conversion), in conflitto con le
+        -- colonne CHAR(16) del database nei confronti/JOIN sottostanti.
+        CREATE TABLE #Sedi (Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY);
         INSERT INTO #Sedi (Id) VALUES (@IdSede);
 
         DECLARE @nuoveRighe INT = 1;
@@ -178,7 +185,11 @@ BEGIN
             DELETE FROM dbo.tblRifiutiLimiti           WHERE Id IN (SELECT Id FROM #RifiutiLimiti);
 
             DELETE FROM dbo.tblRifiutiMovimenti WHERE Id IN (SELECT Id FROM #RifiutiMovimenti);
-            DELETE FROM dbo.tblRifiutiRegistri  WHERE Id IN (SELECT Id FROM #RifiutiRegistri);
+
+            -- tblRentriRegistri è 1:1 a chiave condivisa su tblRifiutiRegistri.Id (NOT NULL, nessun
+            -- ON DELETE CASCADE): va rimosso prima, altrimenti la DELETE sottostante fallisce per FK.
+            DELETE FROM dbo.tblRentriRegistri  WHERE Id IN (SELECT Id FROM #RifiutiRegistri);
+            DELETE FROM dbo.tblRifiutiRegistri WHERE Id IN (SELECT Id FROM #RifiutiRegistri);
 
             DELETE FROM dbo.tblScadenzeOsepe
             WHERE Id      IN (SELECT Id FROM #Scadenze)
@@ -248,6 +259,10 @@ BEGIN
             DELETE asi FROM dbo.tblAreeSediInterne asi INNER JOIN #AreeSediInterne t ON t.Id = asi.Id AND t.IdSede  = asi.IdSede;
             DELETE ao  FROM dbo.tblAreeOsepe       ao  INNER JOIN #AreeOsepe       t ON t.Id = ao.Id  AND t.IdOsepe = ao.IdOsepe;
             DELETE FROM dbo.tblUtentiSediInterne WHERE IdSede IN (SELECT Id FROM #Sedi);
+
+            -- tblRentriCredenzialiSedi: giunzione Sede/Credenziale RENTRI, IdSede NOT NULL (nessuna
+            -- colonna da azzerare) - si cancella la riga di associazione, mai tblRentriCredenziali stessa.
+            DELETE FROM dbo.tblRentriCredenzialiSedi WHERE IdSede IN (SELECT Id FROM #Sedi);
 
             DELETE FROM dbo.tblSediIndirizzi WHERE Id IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediRecapiti  WHERE Id IN (SELECT Id FROM #Sedi);

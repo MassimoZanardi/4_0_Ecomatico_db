@@ -58,6 +58,7 @@ BEGIN
 			s.IndirizzoCompleto,
 			Identificativo = idf.Identificativo,
 			CredenzialePrimariaNome = idf.CredenzialePrimariaNome,
+			AccreditamentoNome = idf.AccreditamentoNome,
 			CredenzialiCount = (SELECT COUNT(*) FROM dbo.tblRentriCredenzialiSedi rcs WHERE rcs.IdSede = s.Id),
 			RowsCount = COUNT(*) OVER ()
 		FROM
@@ -75,10 +76,12 @@ BEGIN
 			OUTER APPLY (
 				SELECT TOP 1
 					h.Identificativo,
-					CredenzialePrimariaNome = c.Nome
+					CredenzialePrimariaNome = c.Nome,
+					AccreditamentoNome = a.Nome
 				FROM
 					dbo.tblRentriCredenzialiSedi rcs
 					INNER JOIN dbo.tblRentriCredenziali c ON rcs.IdCredenziale = c.Id
+					LEFT JOIN dbo.tblRentriAccreditamenti a ON c.IdAccreditamento = a.Id
 					INNER JOIN [1_0_rentri]..tblSedi h ON rcs.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
 				WHERE rcs.IdSede = s.Id AND rcs.Pos = 0
 			) idf

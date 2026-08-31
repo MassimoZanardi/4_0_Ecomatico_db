@@ -17,8 +17,11 @@
 
 	1) Rentri/Sedi/Edit: da elenco libero Credenziali a 2 slot fissi Primaria/Secondaria
 	   - DROP dbo.uspRentriSedi_ins_Credenziale, dbo.uspRentriSedi_del_Credenziale
-	     (sostituite dalla singola uspRentriSedi_upd_Credenziali sotto)
-	   - dbo.uspRentriSedi_upd_Credenziali (nuova): riceve i 2 slot in un colpo
+	     (sostituite dalla singola uspRentriSedi_upd sotto)
+	   - dbo.uspRentriSedi_upd (nuova, rinominata da uspRentriSedi_upd_Credenziali
+	     per coerenza con le altre SP _upd del modulo - mai esistita in
+	     produzione con il nome precedente, nessun DROP aggiuntivo necessario):
+	     riceve i 2 slot in un colpo
 	     solo, valida titolarita'/dominio/Lock=0/hub collegato su entrambe,
 	     applica lo swap automatico se una credenziale ha accreditamento
 	     Delegato (va sempre in Pos=0), blocca 2 credenziali entrambe Delegato,
@@ -74,13 +77,13 @@ DROP PROCEDURE IF EXISTS dbo.uspRentriSedi_del_Credenziale;
 GO
 
 --------------------------------------------------------------------------------
--- 1) dbo.uspRentriSedi_upd_Credenziali
+-- 1) dbo.uspRentriSedi_upd
 --------------------------------------------------------------------------------
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE OR ALTER PROCEDURE [dbo].[uspRentriSedi_upd_Credenziali]
+CREATE OR ALTER PROCEDURE [dbo].[uspRentriSedi_upd]
 	@IdSede CHAR(16) = NULL,
 	@IdCredenzialePrimaria CHAR(16) = NULL,
 	@IdCredenzialeSecondaria CHAR(16) = NULL,

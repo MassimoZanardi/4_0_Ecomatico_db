@@ -7,7 +7,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistri_upd]
 	@IdSessione CHAR(16) = NULL,
 	@Scollega BIT = 0,
 	@Identificativo VARCHAR(20) = NULL,
-	@BloccoFormulari VARCHAR(10) = NULL
+	@BloccoFormulari VARCHAR(10) = NULL,
+	@DataInizioInvio DATE = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -118,8 +119,8 @@ BEGIN
 			IF @idRentri IS NULL
 			BEGIN
 				SET @idRentri = LOWER(REPLACE(LEFT(CONVERT(VARCHAR(36), NEWID()), 18), '-', ''));
-				INSERT INTO [1_0_rentri]..tblRegistri (Id, IdSede, Identificativo, BloccoFormulari)
-				VALUES (@idRentri, @idRentriSede, @Identificativo, @BloccoFormulari);
+				INSERT INTO [1_0_rentri]..tblRegistri (Id, IdSede, Identificativo, BloccoFormulari, DataInizioInvio)
+				VALUES (@idRentri, @idRentriSede, @Identificativo, @BloccoFormulari, @DataInizioInvio);
 
 				INSERT INTO dbo.tblRentriRegistri (Id, IdRentri)
 				VALUES (@Id, @idRentri);
@@ -130,7 +131,8 @@ BEGIN
 				SET
 					IdSede = @idRentriSede,
 					Identificativo = @Identificativo,
-					BloccoFormulari = @BloccoFormulari
+					BloccoFormulari = @BloccoFormulari,
+					DataInizioInvio = @DataInizioInvio
 				WHERE Id = @idRentri;
 			END
 		COMMIT TRANSACTION;

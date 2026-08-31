@@ -69,6 +69,7 @@ BEGIN
 			s.IndirizzoCompleto,
 			Identificativo = h.Identificativo,
 			BloccoFormulari = h.BloccoFormulari,
+			DataInizioInvio = h.DataInizioInvio,
 			IsCollegato = CAST(IIF(r.IdRentri IS NULL, 0, 1) AS BIT)
 		FROM
 			dbo.tblRifiutiRegistri g

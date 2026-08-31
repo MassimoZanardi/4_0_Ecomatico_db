@@ -45,11 +45,13 @@ BEGIN
 		SELECT
 			g.Id,
 			StatoValore = CASE
+				WHEN h.Identificativo IS NULL THEN 2
 				WHEN sc.DataScadenza < GETDATE() THEN 2
 				WHEN DATEDIFF(DAY, GETDATE(), sc.DataScadenza) < 30 THEN 1
 				ELSE 0
 			END,
 			StatoDescrizione = CASE
+				WHEN h.Identificativo IS NULL THEN 'Registro senza identificativo'
 				WHEN sc.DataScadenza < GETDATE() THEN 'Certificato scaduto'
 				WHEN DATEDIFF(DAY, GETDATE(), sc.DataScadenza) < 30 THEN 'Certificato in scadenza'
 				ELSE 'OK'
@@ -57,6 +59,7 @@ BEGIN
 			g.Nome,
 			SedeNome = s.NomeCompleto,
 			s.IndirizzoCompleto,
+			Identificativo = h.Identificativo,
 			CredenzialePrimariaNome = idf.CredenzialePrimariaNome,
 			AccreditamentoNome = idf.AccreditamentoNome,
 			IsCollegato = CAST(IIF(r.IdRentri IS NULL, 0, 1) AS BIT),
@@ -67,6 +70,7 @@ BEGIN
 			INNER JOIN dbo.tblSessioni e ON e.Id = @IdSessione
 			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
 			LEFT JOIN dbo.tblRentriRegistri r ON g.Id = r.Id
+			LEFT JOIN [1_0_rentri]..tblRegistri h ON r.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
 			OUTER APPLY (
 				-- Il registro non ha una propria credenziale: eredita Primaria/Secondaria della Sede su cui si appoggia (worst-case, come uspRentriSedi_get_List)
 				SELECT MIN(f.DataScadenza) AS DataScadenza

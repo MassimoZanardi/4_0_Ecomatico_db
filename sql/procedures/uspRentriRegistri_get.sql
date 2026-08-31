@@ -67,7 +67,8 @@ BEGIN
 			g.IdSede,
 			SedeNome = s.NomeCompleto,
 			Identificativo = h.Identificativo,
-			BloccoFormulari = h.BloccoFormulari
+			BloccoFormulari = h.BloccoFormulari,
+			IsCollegato = CAST(IIF(r.IdRentri IS NULL, 0, 1) AS BIT)
 		FROM
 			dbo.tblRifiutiRegistri g
 			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id

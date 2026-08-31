@@ -2,7 +2,7 @@
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE OR ALTER PROCEDURE [dbo].[uspRentriSedi_upd_Credenziali]
+CREATE OR ALTER PROCEDURE [dbo].[uspRentriSedi_upd]
 	@IdSede CHAR(16) = NULL,
 	@IdCredenzialePrimaria CHAR(16) = NULL,
 	@IdCredenzialeSecondaria CHAR(16) = NULL,

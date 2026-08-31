@@ -65,13 +65,13 @@ BEGIN
 			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
 			LEFT JOIN dbo.tblRentriRegistri r ON g.Id = r.Id
 			OUTER APPLY (
-				SELECT TOP 1 f.DataScadenza
+				-- Il registro non ha una propria credenziale: eredita Primaria/Secondaria della Sede su cui si appoggia (worst-case, come uspRentriSedi_get_List)
+				SELECT MIN(f.DataScadenza) AS DataScadenza
 				FROM
-					[1_0_rentri]..tblRegistri hr
-					INNER JOIN dbo.tblRentriCredenzialiSedi rcs ON hr.IdSede COLLATE DATABASE_DEFAULT = rcs.IdRentri COLLATE DATABASE_DEFAULT
+					dbo.tblRentriCredenzialiSedi rcs
 					INNER JOIN dbo.tblRentriCredenziali c ON rcs.IdCredenziale = c.Id AND c.Lock = 0
 					LEFT JOIN dbo.tblRentriCertificati f ON c.IdCertificato = f.Id
-				WHERE hr.Id COLLATE DATABASE_DEFAULT = r.IdRentri COLLATE DATABASE_DEFAULT
+				WHERE rcs.IdSede = g.IdSede
 			) sc
 		WHERE
 			g.Lock = 0

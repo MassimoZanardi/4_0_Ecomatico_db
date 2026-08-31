@@ -44,6 +44,16 @@ BEGIN
 
 		SELECT
 			g.Id,
+			StatoValore = CASE
+				WHEN sc.DataScadenza < GETDATE() THEN 2
+				WHEN DATEDIFF(DAY, GETDATE(), sc.DataScadenza) < 30 THEN 1
+				ELSE 0
+			END,
+			StatoDescrizione = CASE
+				WHEN sc.DataScadenza < GETDATE() THEN 'Certificato scaduto'
+				WHEN DATEDIFF(DAY, GETDATE(), sc.DataScadenza) < 30 THEN 'Certificato in scadenza'
+				ELSE 'OK'
+			END,
 			g.Nome,
 			SedeNome = s.NomeCompleto,
 			IsCollegato = CAST(IIF(r.IdRentri IS NULL, 0, 1) AS BIT),
@@ -54,6 +64,15 @@ BEGIN
 			INNER JOIN dbo.tblSessioni e ON e.Id = @IdSessione
 			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
 			LEFT JOIN dbo.tblRentriRegistri r ON g.Id = r.Id
+			OUTER APPLY (
+				SELECT TOP 1 f.DataScadenza
+				FROM
+					[1_0_rentri]..tblRegistri hr
+					INNER JOIN dbo.tblRentriCredenzialiSedi rcs ON hr.IdSede COLLATE DATABASE_DEFAULT = rcs.IdRentri COLLATE DATABASE_DEFAULT
+					INNER JOIN dbo.tblRentriCredenziali c ON rcs.IdCredenziale = c.Id AND c.Lock = 0
+					LEFT JOIN dbo.tblRentriCertificati f ON c.IdCertificato = f.Id
+				WHERE hr.Id COLLATE DATABASE_DEFAULT = r.IdRentri COLLATE DATABASE_DEFAULT
+			) sc
 		WHERE
 			g.Lock = 0
 			AND i.IdAziendaInterna = e.IdAzienda

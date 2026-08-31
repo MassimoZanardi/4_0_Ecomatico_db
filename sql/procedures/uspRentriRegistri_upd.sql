@@ -5,7 +5,7 @@ GO
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistri_upd]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
-	@IdCredenziale CHAR(16) = NULL,
+	@Scollega BIT = 0,
 	@Identificativo VARCHAR(20) = NULL,
 	@BloccoFormulari VARCHAR(10) = NULL
 AS
@@ -17,7 +17,7 @@ BEGIN
 
 		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
-		SET @IdCredenziale = NULLIF(LTRIM(RTRIM(@IdCredenziale)), '');
+		SET @Scollega = ISNULL(@Scollega, 0);
 		SET @Identificativo = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@Identificativo, 0, 1));
 		SET @BloccoFormulari = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@BloccoFormulari, 0, 1));
 
@@ -69,8 +69,8 @@ BEGIN
 		FROM dbo.tblRentriRegistri
 		WHERE Id = @Id;
 
-		-- Scollegamento: nessun campo valorizzato
-		IF @IdCredenziale IS NULL AND @Identificativo IS NULL AND @BloccoFormulari IS NULL
+		-- Scollegamento esplicito
+		IF @Scollega = 1
 		BEGIN
 			IF @idRentri IS NOT NULL
 			BEGIN
@@ -83,25 +83,18 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Per collegare/aggiornare serve una credenziale associata alla sede del registro
-		IF @IdCredenziale IS NULL
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Selezionare la credenziale';
-			GOTO BRANCH_END;
-		END
-
+		-- Il registro non ha una propria credenziale: eredita sempre la Primaria (Pos=0) della Sede su cui si appoggia
 		DECLARE @idRentriSede CHAR(16);
 		SELECT @idRentriSede = IdRentri
 		FROM dbo.tblRentriCredenzialiSedi
 		WHERE
 			IdSede = @idSede
-			AND IdCredenziale = @IdCredenziale;
+			AND Pos = 0;
 
 		IF @idRentriSede IS NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'La credenziale selezionata non è associata a questa sede';
+			SET @returnMessage = 'La sede non ha ancora una credenziale primaria collegata a RENTRI';
 			GOTO BRANCH_END;
 		END
 

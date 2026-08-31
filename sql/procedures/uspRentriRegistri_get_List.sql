@@ -46,12 +46,14 @@ BEGIN
 			g.Id,
 			StatoValore = CASE
 				WHEN h.Identificativo IS NULL THEN 2
+				WHEN h.BloccoFormulari IS NULL THEN 2
 				WHEN sc.DataScadenza < GETDATE() THEN 2
 				WHEN DATEDIFF(DAY, GETDATE(), sc.DataScadenza) < 30 THEN 1
 				ELSE 0
 			END,
 			StatoDescrizione = CASE
 				WHEN h.Identificativo IS NULL THEN 'Registro senza identificativo'
+				WHEN h.BloccoFormulari IS NULL THEN 'Registro senza blocco formulari'
 				WHEN sc.DataScadenza < GETDATE() THEN 'Certificato scaduto'
 				WHEN DATEDIFF(DAY, GETDATE(), sc.DataScadenza) < 30 THEN 'Certificato in scadenza'
 				ELSE 'OK'

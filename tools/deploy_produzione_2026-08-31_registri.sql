@@ -42,12 +42,13 @@
 
 	4) dbo.uspRentriRegistri_get_List
 	   - Index: filtra sulla sola Azienda in contesto di sessione, colonne
-	     IndirizzoCompleto/Identificativo/CredenzialePrimariaNome/
-	     AccreditamentoNome/IsCollegato, Stato scadenza (rosso/giallo/verde)
-	     calcolato sul certificato della Credenziale Primaria/Secondaria
-	     ereditata dalla Sede (worst-case, stesso pattern di
-	     uspRentriSedi_get_List). Stato rosso anche se Identificativo o
-	     BloccoFormulari sono NULL (non solo su certificato scaduto).
+	     IndirizzoCompleto/Identificativo/BloccoFormulari/
+	     CredenzialePrimariaNome/AccreditamentoNome/IsCollegato, Stato
+	     scadenza (rosso/giallo/verde) calcolato sul certificato della
+	     Credenziale Primaria/Secondaria ereditata dalla Sede (worst-case,
+	     stesso pattern di uspRentriSedi_get_List). Stato rosso anche se
+	     Identificativo o BloccoFormulari sono NULL (non solo su
+	     certificato scaduto).
 
 	5) dbo.uspRentriRegistri_upd
 	   - Update/collegamento/scollegamento del Registro a RENTRI: eredita
@@ -399,6 +400,7 @@ BEGIN
 			SedeNome = s.NomeCompleto,
 			s.IndirizzoCompleto,
 			Identificativo = h.Identificativo,
+			BloccoFormulari = h.BloccoFormulari,
 			CredenzialePrimariaNome = idf.CredenzialePrimariaNome,
 			AccreditamentoNome = idf.AccreditamentoNome,
 			IsCollegato = CAST(IIF(r.IdRentri IS NULL, 0, 1) AS BIT),

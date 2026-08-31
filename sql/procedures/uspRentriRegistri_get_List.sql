@@ -51,10 +51,12 @@ BEGIN
 		FROM
 			dbo.tblRifiutiRegistri g
 			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+			INNER JOIN dbo.tblSessioni e ON e.Id = @IdSessione
 			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
 			LEFT JOIN dbo.tblRentriRegistri r ON g.Id = r.Id
 		WHERE
 			g.Lock = 0
+			AND i.IdAziendaInterna = e.IdAzienda
 			AND
 				(
 				@Search IS NULL

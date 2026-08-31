@@ -39,7 +39,8 @@
 	   - dbo.uspRentriSedi_get_List: filtra ora sulla sola Azienda in contesto
 	     di sessione (prima esponeva tutte le Aziende interne del Dominio ad
 	     un Admin), aggiunge le colonne IndirizzoCompleto, Identificativo
-	     (Nr. iscrizione dalla riga hub Pos=0) e CredenzialePrimariaNome.
+	     (Nr. iscrizione dalla riga hub Pos=0), CredenzialePrimariaNome e
+	     AccreditamentoNome (dalla stessa credenziale Primaria).
 	   - dbo.uspRentriSedi_get: aggiunge IndirizzoCompleto.
 	   - dbo.uspRentriCredenziali_get_List: aggiunge la colonna Identificativo
 	     (Nr. iscrizione, stesso join hub gia' usato da uspRentriCredenziali_get).
@@ -497,6 +498,7 @@ BEGIN
 			s.IndirizzoCompleto,
 			Identificativo = idf.Identificativo,
 			CredenzialePrimariaNome = idf.CredenzialePrimariaNome,
+			AccreditamentoNome = idf.AccreditamentoNome,
 			CredenzialiCount = (SELECT COUNT(*) FROM dbo.tblRentriCredenzialiSedi rcs WHERE rcs.IdSede = s.Id),
 			RowsCount = COUNT(*) OVER ()
 		FROM
@@ -514,10 +516,12 @@ BEGIN
 			OUTER APPLY (
 				SELECT TOP 1
 					h.Identificativo,
-					CredenzialePrimariaNome = c.Nome
+					CredenzialePrimariaNome = c.Nome,
+					AccreditamentoNome = a.Nome
 				FROM
 					dbo.tblRentriCredenzialiSedi rcs
 					INNER JOIN dbo.tblRentriCredenziali c ON rcs.IdCredenziale = c.Id
+					LEFT JOIN dbo.tblRentriAccreditamenti a ON c.IdAccreditamento = a.Id
 					INNER JOIN [1_0_rentri]..tblSedi h ON rcs.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
 				WHERE rcs.IdSede = s.Id AND rcs.Pos = 0
 			) idf

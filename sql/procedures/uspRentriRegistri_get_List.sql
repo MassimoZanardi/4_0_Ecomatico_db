@@ -56,6 +56,7 @@ BEGIN
 			END,
 			g.Nome,
 			SedeNome = s.NomeCompleto,
+			s.IndirizzoCompleto,
 			CredenzialePrimariaNome = idf.CredenzialePrimariaNome,
 			AccreditamentoNome = idf.AccreditamentoNome,
 			IsCollegato = CAST(IIF(r.IdRentri IS NULL, 0, 1) AS BIT),

@@ -1,3 +1,7 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER PROCEDURE [dbo].[uspSedi_upd]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -325,6 +329,21 @@ BEGIN
 			WHERE
 				s.Id = @Id
 				AND s.IdTipo IN ('A', 'G');
+
+			-- Propaga CodiceFiscale/PartitaIva alle sedi figlie già esistenti: l'UPDATE sopra
+			-- risincronizza solo @Id dal proprio genitore (utile se si sta modificando
+			-- direttamente una sede figlia A/G), ma se @Id è il genitore ad essere modificato
+			-- i suoi figli non venivano mai aggiornati.
+			UPDATE c
+			SET
+				CodiceFiscale = s.CodiceFiscale,
+				PartitaIva = s.PartitaIva
+			FROM dbo.tblSedi c
+			INNER JOIN dbo.tblSedi s ON c.IdParent = s.Id
+			WHERE
+				s.Id = @Id
+				AND c.IdTipo IN ('A', 'G')
+				AND c.Lock = 0;
 
 			IF @InternaEsterna = 'I'
 				UPDATE s

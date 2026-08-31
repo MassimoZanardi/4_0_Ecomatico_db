@@ -56,6 +56,8 @@ BEGIN
 			END,
 			g.Nome,
 			SedeNome = s.NomeCompleto,
+			CredenzialePrimariaNome = idf.CredenzialePrimariaNome,
+			AccreditamentoNome = idf.AccreditamentoNome,
 			IsCollegato = CAST(IIF(r.IdRentri IS NULL, 0, 1) AS BIT),
 			RowsCount = COUNT(*) OVER ()
 		FROM
@@ -73,6 +75,16 @@ BEGIN
 					LEFT JOIN dbo.tblRentriCertificati f ON c.IdCertificato = f.Id
 				WHERE rcs.IdSede = g.IdSede
 			) sc
+			OUTER APPLY (
+				SELECT TOP 1
+					CredenzialePrimariaNome = c.Nome,
+					AccreditamentoNome = a.Nome
+				FROM
+					dbo.tblRentriCredenzialiSedi rcs
+					INNER JOIN dbo.tblRentriCredenziali c ON rcs.IdCredenziale = c.Id
+					LEFT JOIN dbo.tblRentriAccreditamenti a ON c.IdAccreditamento = a.Id
+				WHERE rcs.IdSede = g.IdSede AND rcs.Pos = 0
+			) idf
 		WHERE
 			g.Lock = 0
 			AND i.IdAziendaInterna = e.IdAzienda

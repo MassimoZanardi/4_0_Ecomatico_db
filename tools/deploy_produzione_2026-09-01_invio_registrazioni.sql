@@ -24,8 +24,9 @@
 	     EsitoCausaleRespingimento/RespingimentoMotivo/RespingimentoQuantita e
 	     TransfrontalieroTipo hanno un equivalente reale in questo schema e sono popolate;
 	     rettifica/annullamento e secondo Intermediario restano NULL/0 (nessun concetto
-	     equivalente). La CASE che azzera Provenienza per certe causali in 3_1/2_0 non è
-	     replicata (nessuna mappatura univoca sulle causali di questo schema).
+	     equivalente). La CASE che azzera Provenienza per Trasporto/Intermediazione (equivalente
+	     delle causali CSF/CSM/CST/CSX/TRD di 3_1) è replicata filtrando su
+	     tblRifiutiOperazioni.Codice ('T*aT'/'TR', i codici RENTRI reali), confermato dall'utente.
 
 	2) dbo.uspRifiutiRegistrazioni_get_InvioControllo (nuova)
 	   - Pre-controllo di coerenza (sequenzialità, causale, quantità, Lock, autorizzazioni,
@@ -80,7 +81,9 @@ SELECT
     Eer                          = m.IdEer,
     EerDescrizione               = m.EerDescrizione,
     StatoFisico                  = sf.Codice,
-    Provenienza                  = ISNULL(m.IdProvenienza, 'S'),
+    -- Provenienza non applicabile per operazioni di Trasporto/Intermediazione (equivalente delle
+    -- causali CSF/CSM/CST/CSX/TRD di 3_1 - qui filtrate sul codice RENTRI o.Codice, non su Operazione)
+    Provenienza                  = CASE WHEN o.Codice IN ('T*aT', 'TR') THEN NULL ELSE ISNULL(m.IdProvenienza, 'S') END,
 
     Quantita                     = m.Quantita,
     UnitaMisura                  = LOWER(um.Codice),

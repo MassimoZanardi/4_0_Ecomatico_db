@@ -16,9 +16,10 @@ GO
 -- annullamento di una registrazione precedente (RettificaNumero/RettificaAnno/RettificaIdentificativo/
 -- RettificaIsAnnullata - nessuna tabella tblRentriRegistrazioniRettifiche o simile in questo schema) e il secondo
 -- Intermediario (Intermediario2* lato 31 - qui tblRifiutiMovimenti ha solo IdSedeIntermediario1, nessun supporto
--- multi-intermediario su Registrazioni). La logica di Provenienza=NULL per certe causali (CSF/CSM/CST/CSX/TRD in
--- 3_1, causali specifiche di quello schema) NON è replicata qui: la mappatura sulle causali di questo schema
--- (Operazione CHAR(1)) non è univoca, da chiarire con l'utente se serve in futuro - vedi Provenienza sotto.
+-- multi-intermediario su Registrazioni). La logica di Provenienza=NULL per le operazioni di Trasporto/
+-- Intermediazione (equivalente delle causali CSF/CSM/CST/CSX/TRD di 3_1) è replicata filtrando su
+-- tblRifiutiOperazioni.Codice ('T*aT'/'TR', i codici RENTRI reali - non su Operazione CHAR(1), che è solo una
+-- classificazione interna C/S/X senza mappatura univoca verso le causali di 3_1), confermato dall'utente.
 CREATE OR ALTER VIEW [dbo].[viewRentriRegistrazioni]
 AS
 SELECT
@@ -41,7 +42,9 @@ SELECT
     Eer                          = m.IdEer,
     EerDescrizione               = m.EerDescrizione,
     StatoFisico                  = sf.Codice,
-    Provenienza                  = ISNULL(m.IdProvenienza, 'S'),
+    -- Provenienza non applicabile per operazioni di Trasporto/Intermediazione (equivalente delle
+    -- causali CSF/CSM/CST/CSX/TRD di 3_1 - qui filtrate sul codice RENTRI o.Codice, non su Operazione)
+    Provenienza                  = CASE WHEN o.Codice IN ('T*aT', 'TR') THEN NULL ELSE ISNULL(m.IdProvenienza, 'S') END,
 
     Quantita                     = m.Quantita,
     UnitaMisura                  = LOWER(um.Codice),

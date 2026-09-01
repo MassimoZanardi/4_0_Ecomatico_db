@@ -46,7 +46,9 @@ SELECT
     -- causali CSF/CSM/CST/CSX/TRD di 3_1 - qui filtrate sul codice RENTRI o.Codice, non su Operazione)
     Provenienza                  = CASE WHEN o.Codice IN ('T*aT', 'TR') THEN NULL ELSE ISNULL(m.IdProvenienza, 'S') END,
 
-    Quantita                     = m.Quantita,
+    -- CAST a FLOAT: Registrazione.Quantita lato hub e' double, Dapper non converte DECIMAL->double/long
+    -- automaticamente (InvalidCastException in unboxing) - stesso motivo per QuantitaDestino/RespingimentoQuantita sotto.
+    Quantita                     = CAST(m.Quantita AS FLOAT),
     UnitaMisura                  = LOWER(um.Codice),
     ClassiPericolo               = cp.ClassiPericolo,
 
@@ -65,11 +67,11 @@ SELECT
     Esito                        = es.Codice,
     -- Stesso motivo di VeicoloFuoriUsoData: Registrazione.DataEsito e' DateTime non nullable lato hub.
     DataEsito                    = ISNULL(r.DataFineTrasporto, r.Data),
-    QuantitaDestino               = ISNULL(r.QuantitaVerificata, m.Quantita),
+    QuantitaDestino               = CAST(ISNULL(r.QuantitaVerificata, m.Quantita) AS BIGINT),
 
     EsitoCausaleRespingimento    = CASE WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL ELSE ISNULL(ecr.Codice, 'NC') END,
     RespingimentoMotivo          = CASE WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL ELSE ISNULL(r.CausaleRespingimentoAltro, 'Non conforme') END,
-    RespingimentoQuantita        = ISNULL(r.QuantitaRespinta, m.Quantita),
+    RespingimentoQuantita        = CAST(ISNULL(r.QuantitaRespinta, m.Quantita) AS FLOAT),
 
     Destinazione                 = attv.Codice,
 

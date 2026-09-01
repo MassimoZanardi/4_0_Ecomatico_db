@@ -124,11 +124,16 @@ SELECT
     Intermediario2Nazione         = CAST(NULL AS CHAR(2)),
     Intermediario2Autorizzazione  = CAST(NULL AS VARCHAR(20)),
 
-    -- ISNULL su tutti gli Is*: Registrazione lato hub li mappa su bool non nullable, o e' una LEFT JOIN
-    IsProduttore                  = ISNULL(o.IsProduttore, 0),
-    IsTrasportatore                = ISNULL(o.IsTrasportatore, 0),
-    IsDestinatario                 = ISNULL(o.IsDestinatario, 0),
-    IsIntermediario                = ISNULL(o.IsIntermediario, 0),
+    -- ISNULL su tutti gli Is*: Registrazione lato hub li mappa su bool non nullable, o e' una LEFT JOIN.
+    -- Il flag su tblRifiutiOperazioni indica solo che il TIPO di operazione ammette quel ruolo in
+    -- generale - va combinato con la presenza reale della Sede su QUESTA registrazione, altrimenti
+    -- l'hub include comunque il blocco anagrafica nel payload RENTRI (IsProduttore/Trasportatore/
+    -- Destinatario/Intermediario come gate in ApiRegistro.cs) con campi vuoti/NULL, respinto da
+    -- RENTRI (es. "[0].intermediario.codice_fiscale" su una registrazione senza alcun Intermediario).
+    IsProduttore                  = CAST(IIF(ISNULL(o.IsProduttore, 0)     = 1 AND m.IdSedeProduttoreDetentore IS NOT NULL, 1, 0) AS BIT),
+    IsTrasportatore                = CAST(IIF(ISNULL(o.IsTrasportatore, 0) = 1 AND m.IdSedeTrasportatore1      IS NOT NULL, 1, 0) AS BIT),
+    IsDestinatario                 = CAST(IIF(ISNULL(o.IsDestinatario, 0)  = 1 AND m.IdSedeDestinatario        IS NOT NULL, 1, 0) AS BIT),
+    IsIntermediario                = CAST(IIF(ISNULL(o.IsIntermediario, 0) = 1 AND m.IdSedeIntermediario1      IS NOT NULL, 1, 0) AS BIT),
     IsEsito                        = ISNULL(o.IsEsito, 0),
     IsFormulario                   = ISNULL(o.IsFormulario, 0),
     IsTransfrontaliero            = CAST(IIF(r.IdTrasportoTransfrontalieroTipo IS NOT NULL, 1, 0) AS BIT),

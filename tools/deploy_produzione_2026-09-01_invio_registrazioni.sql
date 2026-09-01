@@ -117,7 +117,11 @@ SELECT
 
     Destinazione                 = attv.Codice,
 
-    RegistrazioniAssociate       = IIF(o.Codice <> 'M', assocA.Registrazioni, assocB.Registrazioni),
+    -- Solo per gli Scarichi (o.Operazione = 'S', la classificazione C/S/X di tblRifiutiOperazioni,
+    -- non il codice RENTRI o.Codice): RENTRI rifiuta un riferimento_operazione su un Carico, e
+    -- accetta solo riferimenti a Carichi con Anno/Numero MINORE dello Scarico stesso (confermato
+    -- dall'utente - vincolo già applicato lato UI quando si associano le registrazioni).
+    RegistrazioniAssociate       = IIF(o.Operazione = 'S', assocA.Registrazioni, NULL),
 
     FormularioNumero              = m.FormularioNumero,
     FormularioDataInizioTrasporto = ISNULL(m.DataInizioTrasporto, r.Data),
@@ -235,23 +239,6 @@ FROM
             FOR JSON PATH
         )
     ) assocA
-    OUTER APPLY (
-        -- Registrazioni "scarico" (figlie) che hanno attinto da questa registrazione (carico/padre)
-        SELECT Registrazioni = (
-            SELECT
-                progressivo = rc.Numero,
-                anno = YEAR(rc.Data)
-            FROM
-                dbo.tblRifiutiRegistrazioniRelazioni rl
-                INNER JOIN dbo.tblRifiutiRegistrazioni rc ON rl.Id = rc.Id
-            WHERE
-                rl.IdParent = r.Id
-                AND rc.Lock = 0
-            ORDER BY
-                rc.Data, rc.Numero
-            FOR JSON PATH
-        )
-    ) assocB
 GO
 
 --------------------------------------------------------------------------------

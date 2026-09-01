@@ -37,7 +37,10 @@ SELECT
     RettificaIsAnnullata          = CAST(0 AS BIT),
 
     Data                         = r.Data,
-    Operazione                   = r.Operazione,
+    -- Il codice RENTRI reale (DT/aT/T*aT/RE/I/NP/M/TR/SI/T*) e' tblRifiutiOperazioni.Codice, non
+    -- r.Operazione (CHAR(1) C/S/X/..., solo una classificazione interna) - confermato confrontando
+    -- con l'esito di uspRegistrazioni_get_List sul DB gemello 3_1_ecomatico (causale_operazione='DT'/'aT').
+    Operazione                   = o.Codice,
 
     Eer                          = m.IdEer,
     EerDescrizione               = m.EerDescrizione,
@@ -75,7 +78,7 @@ SELECT
 
     Destinazione                 = attv.Codice,
 
-    RegistrazioniAssociate       = IIF(r.Operazione <> 'M', assocA.Registrazioni, assocB.Registrazioni),
+    RegistrazioniAssociate       = IIF(o.Codice <> 'M', assocA.Registrazioni, assocB.Registrazioni),
 
     FormularioNumero              = m.FormularioNumero,
     FormularioDataInizioTrasporto = ISNULL(m.DataInizioTrasporto, r.Data),

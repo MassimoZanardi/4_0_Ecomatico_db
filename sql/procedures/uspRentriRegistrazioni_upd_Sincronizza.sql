@@ -3,25 +3,30 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
--- Sincronizza una singola registrazione con un dato già presente su RENTRI ma non ancora
--- confermato lato app (invio asincrono: RENTRI ha ricevuto/elaborato la registrazione ma la
--- conferma non è mai arrivata/stata scritta sull'app, es. per un problema di rete o un crash
--- durante l'attesa). Usata da Rifiuti/Registrazioni/Index (checkbox "sincronizza" in modale 2)
--- dopo un confronto con l'elenco reale restituito da RENTRI - non chiamata direttamente
--- dall'utente, nessuna registrazione "nuova" viene mai creata qui, solo aggiornati
--- RentriIdentificativo/RentriData su una riga già esistente e mai confermata prima.
+-- Sincronizza in blocco un elenco di registrazioni con un dato già presente su RENTRI ma non
+-- ancora confermato lato app (invio asincrono: RENTRI ha ricevuto/elaborato le registrazioni
+-- ma la conferma non è mai arrivata/stata scritta sull'app, es. per un problema di rete o un
+-- crash durante l'attesa). Usata da Rifiuti/Registrazioni/Index (checkbox "sincronizza" in
+-- modale 2) dopo un confronto con l'elenco reale restituito da RENTRI - non chiamata
+-- direttamente dall'utente, nessuna registrazione "nuova" viene mai creata qui, solo
+-- aggiornati RentriIdentificativo/RentriData su righe già esistenti e mai confermate prima.
 -- RentriSincronizzata = 1 marca esplicitamente che la conferma è arrivata da questa
 -- sincronizzazione e non da un invio normale, per tracciabilità.
+-- @Registrazioni: JSON array [{numero, anno, identificativo}, ...]. @RentriData catturato
+-- una volta sola per l'intero blocco (stesso pattern di 1_0_rentri..uspRegistrazioni_upd_ByRegistrazioni,
+-- non per singola riga). Comportamento best-effort: una riga del JSON senza corrispondenza
+-- (già sincronizzata, Lock diverso da 0, ecc.) viene semplicemente saltata, non blocca le
+-- altre - il chiamante ha già verificato l'elenco momenti prima, un singolo mancato match
+-- non deve interrompere il resto del blocco. Ritorna il conteggio delle righe aggiornate.
 -- Rinominata da uspRentriRegistrazioni_upd (2026-09-01) per distinguerla chiaramente da un
 -- generico update della registrazione - lega nome SP, checkbox "sincronizza" e campo
--- RentriSincronizzata.
--- exec dbo.uspRentriRegistrazioni_upd_Sincronizza @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @Numero=3, @Anno=2026, @RentriIdentificativo='...', @RentriData='2026-08-15 10:30:00'
+-- RentriSincronizzata. Passata da chiamata singola a blocco JSON lo stesso giorno, per
+-- evitare N round-trip separati quando ci sono più registrazioni da sincronizzare.
+-- exec dbo.uspRentriRegistrazioni_upd_Sincronizza @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @Registrazioni='[{"numero":3,"anno":2026,"identificativo":"..."}]', @RentriData='2026-08-15 10:30:00'
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistrazioni_upd_Sincronizza]
 	@IdRegistro CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
-	@Numero INT = NULL,
-	@Anno INT = NULL,
-	@RentriIdentificativo VARCHAR(50) = NULL,
+	@Registrazioni NVARCHAR(MAX) = NULL,
 	@RentriData DATETIME2(0) = NULL
 AS
 BEGIN
@@ -30,12 +35,12 @@ BEGIN
 
 		DECLARE @returnValue INT = 0;
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
+		DECLARE @sincronizzate INT = 0;
 
 		SET @IdRegistro = NULLIF(LTRIM(RTRIM(@IdRegistro)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
-		SET @RentriIdentificativo = NULLIF(LTRIM(RTRIM(@RentriIdentificativo)), '');
 
-		IF @IdRegistro IS NULL OR @IdSessione IS NULL OR @Numero IS NULL OR @Anno IS NULL OR @RentriIdentificativo IS NULL OR @RentriData IS NULL
+		IF @IdRegistro IS NULL OR @IdSessione IS NULL OR @Registrazioni IS NULL OR @RentriData IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Parametri mancanti';
@@ -55,31 +60,52 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		UPDATE r
-		SET
-			RentriIdentificativo = @RentriIdentificativo,
-			RentriData = @RentriData,
-			RentriSincronizzata = 1
-		FROM
-			dbo.tblRifiutiRegistrazioni r
-			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-		WHERE
-			m.IdRegistro = @IdRegistro
-			AND r.Numero = @Numero
-			AND YEAR(r.[Data]) = @Anno
-			AND r.Lock = 0
-			AND r.RentriIdentificativo IS NULL
-			AND r.RentriData IS NULL;
+		DECLARE @Numero INT, @Anno INT, @Identificativo VARCHAR(50);
 
-		IF @@ROWCOUNT = 0
+		DECLARE c CURSOR LOCAL FAST_FORWARD FOR
+		SELECT Numero, Anno, Identificativo
+		FROM OPENJSON(@Registrazioni) WITH (
+			Numero INT '$.numero',
+			Anno INT '$.anno',
+			Identificativo VARCHAR(50) '$.identificativo'
+		);
+
+		OPEN c;
+		FETCH c INTO @Numero, @Anno, @Identificativo;
+
+		WHILE @@FETCH_STATUS = 0
 		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Registrazione N. ' + CAST(@Numero AS VARCHAR(20)) + '/' + CAST(@Anno AS VARCHAR(4)) + ' non trovata o già sincronizzata';
-			GOTO BRANCH_END;
+			UPDATE r
+			SET
+				RentriIdentificativo = @Identificativo,
+				RentriData = @RentriData,
+				RentriSincronizzata = 1
+			FROM
+				dbo.tblRifiutiRegistrazioni r
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			WHERE
+				m.IdRegistro = @IdRegistro
+				AND r.Numero = @Numero
+				AND YEAR(r.[Data]) = @Anno
+				AND r.Lock = 0
+				AND r.RentriIdentificativo IS NULL
+				AND r.RentriData IS NULL;
+
+			SET @sincronizzate = @sincronizzate + @@ROWCOUNT;
+
+			FETCH c INTO @Numero, @Anno, @Identificativo;
 		END
+
+		CLOSE c;
+		DEALLOCATE c;
 
 	END TRY
 	BEGIN CATCH
+		IF CURSOR_STATUS('local', 'c') >= -1
+		BEGIN
+			CLOSE c;
+			DEALLOCATE c;
+		END;
 		THROW;
 	END CATCH
 
@@ -93,7 +119,7 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 
-	SELECT ReturnValue = @returnValue;
+	SELECT Sincronizzate = @sincronizzate;
 
 END
 GO

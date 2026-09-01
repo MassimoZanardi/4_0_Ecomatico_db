@@ -14,8 +14,10 @@
 	   subito dopo RentriData (non in coda, come farebbe una ALTER TABLE ADD) - marca
 	   esplicitamente (=1) le registrazioni la cui conferma RENTRI e' arrivata tramite la
 	   sincronizzazione (checkbox 'sincronizza' in Rifiuti/Registrazioni/Index) invece che
-	   da un invio normale, per tracciabilita'. Il rebuild richiede: drop temporaneo delle 2
-	   funzioni WITH SCHEMABINDING che referenziano la tabella
+	   da un invio normale, per tracciabilita'. Corretta anche la precisione di RentriData
+	   da DATETIME2(6) (default implicito mai specificato esplicitamente) a DATETIME2(0),
+	   coerente col tipo parametro gia' usato dalle SP. Il rebuild richiede: drop temporaneo
+	   delle 2 funzioni WITH SCHEMABINDING che referenziano la tabella
 	   (ufnRifiutiRegistrazioni_get_IsQuantitaSuperiore, ufnRifiutiRegistrazioni_get_UltimoNumero)
 	   e delle 4 FK in entrata (tblEoWMovimenti, tblRifiutiRegistrazioniRelazioni x2,
 	   tblRifiutiRegistrazioniEtichette) - tutto ricreato identico a fine script, dentro
@@ -25,14 +27,22 @@
 	   uspRentriRegistrazioni_upd deployata dal precedente bundle
 	   deploy_produzione_2026-09-01_sincronizzazione_rentri.sql)
 	   - Nome piu' esplicito (lega SP, checkbox 'sincronizza' e campo RentriSincronizzata).
-	     Sincronizza una singola registrazione con un dato gia' presente su RENTRI ma non
-	     ancora confermato lato app. Imposta RentriIdentificativo/RentriData/RentriSincronizzata=1.
+	     Sincronizza in blocco un elenco di registrazioni (JSON @Registrazioni, stesso
+	     pattern OPENJSON gia' usato da 1_0_rentri..uspRegistrazioni_upd_ByRegistrazioni)
+	     invece di una singola registrazione per chiamata - una sola chiamata invece di N
+	     round-trip quando ci sono piu' registrazioni da sincronizzare, best-effort per riga
+	     (una corrispondenza non piu' valida viene solo saltata, non blocca le altre).
+	     Imposta RentriIdentificativo/RentriData/RentriSincronizzata=1, RentriData catturato
+	     una volta sola per l'intero blocco.
 	     La vecchia uspRentriRegistrazioni_upd viene droppata in fondo a questo script.
 
 	Verificato su DB dev: rebuild transazionale completato senza errori (18 righe invariate,
 	2 indici/8 FK uscita/4 FK entrata/2 funzioni schema-bound tutti ricreati correttamente,
-	colonna in posizione corretta), smoke test su funzioni schema-bound + view +
-	nuova SP con dati reali, vecchio nome SP droppato senza errori.
+	colonna in posizione corretta, precisione DATETIME2(0) confermata), smoke test su
+	funzioni schema-bound + view con dati reali, vecchio nome SP droppato senza errori.
+	SP a blocco JSON testata con 2 corrispondenze reali + 1 senza corrispondenza nello
+	stesso batch: le 2 valide sincronizzate correttamente (stesso RentriData condiviso),
+	quella senza corrispondenza saltata senza errori (conteggio di ritorno = 2).
 
 	Eseguire con:
 	  sqlcmd -S <server_produzione> -d "4_0_ecomatico" -E -f 65001 -i deploy_produzione_2026-09-01_rentri_sincronizzata_campo.sql
@@ -81,7 +91,7 @@ CREATE TABLE dbo.tblRifiutiRegistrazioni_new(
 	[VeicoloFuoriUsoData] [date] NULL,
 	[MaterialeDescrizione] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
 	[RentriIdentificativo] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
-	[RentriData] [datetime2](6) NULL,
+	[RentriData] [datetime2](0) NULL,
 	[RentriSincronizzata] [bit] NULL,
 	[Etichette] [varchar](2000) COLLATE Latin1_General_CI_AS NULL,
 	[Note] [varchar](500) COLLATE Latin1_General_CI_AS NULL,
@@ -318,25 +328,30 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
--- Sincronizza una singola registrazione con un dato già presente su RENTRI ma non ancora
--- confermato lato app (invio asincrono: RENTRI ha ricevuto/elaborato la registrazione ma la
--- conferma non è mai arrivata/stata scritta sull'app, es. per un problema di rete o un crash
--- durante l'attesa). Usata da Rifiuti/Registrazioni/Index (checkbox "sincronizza" in modale 2)
--- dopo un confronto con l'elenco reale restituito da RENTRI - non chiamata direttamente
--- dall'utente, nessuna registrazione "nuova" viene mai creata qui, solo aggiornati
--- RentriIdentificativo/RentriData su una riga già esistente e mai confermata prima.
+-- Sincronizza in blocco un elenco di registrazioni con un dato già presente su RENTRI ma non
+-- ancora confermato lato app (invio asincrono: RENTRI ha ricevuto/elaborato le registrazioni
+-- ma la conferma non è mai arrivata/stata scritta sull'app, es. per un problema di rete o un
+-- crash durante l'attesa). Usata da Rifiuti/Registrazioni/Index (checkbox "sincronizza" in
+-- modale 2) dopo un confronto con l'elenco reale restituito da RENTRI - non chiamata
+-- direttamente dall'utente, nessuna registrazione "nuova" viene mai creata qui, solo
+-- aggiornati RentriIdentificativo/RentriData su righe già esistenti e mai confermate prima.
 -- RentriSincronizzata = 1 marca esplicitamente che la conferma è arrivata da questa
 -- sincronizzazione e non da un invio normale, per tracciabilità.
+-- @Registrazioni: JSON array [{numero, anno, identificativo}, ...]. @RentriData catturato
+-- una volta sola per l'intero blocco (stesso pattern di 1_0_rentri..uspRegistrazioni_upd_ByRegistrazioni,
+-- non per singola riga). Comportamento best-effort: una riga del JSON senza corrispondenza
+-- (già sincronizzata, Lock diverso da 0, ecc.) viene semplicemente saltata, non blocca le
+-- altre - il chiamante ha già verificato l'elenco momenti prima, un singolo mancato match
+-- non deve interrompere il resto del blocco. Ritorna il conteggio delle righe aggiornate.
 -- Rinominata da uspRentriRegistrazioni_upd (2026-09-01) per distinguerla chiaramente da un
 -- generico update della registrazione - lega nome SP, checkbox "sincronizza" e campo
--- RentriSincronizzata.
--- exec dbo.uspRentriRegistrazioni_upd_Sincronizza @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @Numero=3, @Anno=2026, @RentriIdentificativo='...', @RentriData='2026-08-15 10:30:00'
+-- RentriSincronizzata. Passata da chiamata singola a blocco JSON lo stesso giorno, per
+-- evitare N round-trip separati quando ci sono più registrazioni da sincronizzare.
+-- exec dbo.uspRentriRegistrazioni_upd_Sincronizza @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @Registrazioni='[{"numero":3,"anno":2026,"identificativo":"..."}]', @RentriData='2026-08-15 10:30:00'
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistrazioni_upd_Sincronizza]
 	@IdRegistro CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
-	@Numero INT = NULL,
-	@Anno INT = NULL,
-	@RentriIdentificativo VARCHAR(50) = NULL,
+	@Registrazioni NVARCHAR(MAX) = NULL,
 	@RentriData DATETIME2(0) = NULL
 AS
 BEGIN
@@ -345,12 +360,12 @@ BEGIN
 
 		DECLARE @returnValue INT = 0;
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
+		DECLARE @sincronizzate INT = 0;
 
 		SET @IdRegistro = NULLIF(LTRIM(RTRIM(@IdRegistro)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
-		SET @RentriIdentificativo = NULLIF(LTRIM(RTRIM(@RentriIdentificativo)), '');
 
-		IF @IdRegistro IS NULL OR @IdSessione IS NULL OR @Numero IS NULL OR @Anno IS NULL OR @RentriIdentificativo IS NULL OR @RentriData IS NULL
+		IF @IdRegistro IS NULL OR @IdSessione IS NULL OR @Registrazioni IS NULL OR @RentriData IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Parametri mancanti';
@@ -370,31 +385,52 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		UPDATE r
-		SET
-			RentriIdentificativo = @RentriIdentificativo,
-			RentriData = @RentriData,
-			RentriSincronizzata = 1
-		FROM
-			dbo.tblRifiutiRegistrazioni r
-			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-		WHERE
-			m.IdRegistro = @IdRegistro
-			AND r.Numero = @Numero
-			AND YEAR(r.[Data]) = @Anno
-			AND r.Lock = 0
-			AND r.RentriIdentificativo IS NULL
-			AND r.RentriData IS NULL;
+		DECLARE @Numero INT, @Anno INT, @Identificativo VARCHAR(50);
 
-		IF @@ROWCOUNT = 0
+		DECLARE c CURSOR LOCAL FAST_FORWARD FOR
+		SELECT Numero, Anno, Identificativo
+		FROM OPENJSON(@Registrazioni) WITH (
+			Numero INT '$.numero',
+			Anno INT '$.anno',
+			Identificativo VARCHAR(50) '$.identificativo'
+		);
+
+		OPEN c;
+		FETCH c INTO @Numero, @Anno, @Identificativo;
+
+		WHILE @@FETCH_STATUS = 0
 		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Registrazione N. ' + CAST(@Numero AS VARCHAR(20)) + '/' + CAST(@Anno AS VARCHAR(4)) + ' non trovata o già sincronizzata';
-			GOTO BRANCH_END;
+			UPDATE r
+			SET
+				RentriIdentificativo = @Identificativo,
+				RentriData = @RentriData,
+				RentriSincronizzata = 1
+			FROM
+				dbo.tblRifiutiRegistrazioni r
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			WHERE
+				m.IdRegistro = @IdRegistro
+				AND r.Numero = @Numero
+				AND YEAR(r.[Data]) = @Anno
+				AND r.Lock = 0
+				AND r.RentriIdentificativo IS NULL
+				AND r.RentriData IS NULL;
+
+			SET @sincronizzate = @sincronizzate + @@ROWCOUNT;
+
+			FETCH c INTO @Numero, @Anno, @Identificativo;
 		END
+
+		CLOSE c;
+		DEALLOCATE c;
 
 	END TRY
 	BEGIN CATCH
+		IF CURSOR_STATUS('local', 'c') >= -1
+		BEGIN
+			CLOSE c;
+			DEALLOCATE c;
+		END;
 		THROW;
 	END CATCH
 
@@ -408,7 +444,7 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 
-	SELECT ReturnValue = @returnValue;
+	SELECT Sincronizzate = @sincronizzate;
 
 END
 GO

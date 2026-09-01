@@ -26,7 +26,7 @@ CREATE TABLE [dbo].[tblRifiutiRegistrazioni](
 	[VeicoloFuoriUsoData] [date] NULL,
 	[MaterialeDescrizione] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
 	[RentriIdentificativo] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
-	[RentriData] [datetime2](6) NULL,
+	[RentriData] [datetime2](0) NULL,
 	[RentriSincronizzata] [bit] NULL,
 	[Etichette] [varchar](2000) COLLATE Latin1_General_CI_AS NULL,
 	[Note] [varchar](500) COLLATE Latin1_General_CI_AS NULL,

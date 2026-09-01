@@ -18,11 +18,14 @@
 	idempotente, nessuna modifica di schema/dati oltre a quanto segue):
 
 	1) dbo.viewRentriRegistrazioni (nuova - prima vista del progetto)
-	   - Mappa lo schema di questa app alle colonne attese dall'hub (stesso sottoinsieme
-	     consumato dal branch gemello @App='31'). ClassiPericolo e RegistrazioniAssociate
-	     hanno un equivalente reale in questo schema e sono popolate (rispettivamente da
-	     tblRifiutiMovimentiClassiPericolo e tblRifiutiRegistrazioniRelazioni); rettifica/
-	     annullamento e secondo Intermediario restano NULL/0 (nessun concetto equivalente).
+	   - Mappa lo schema di questa app alle colonne attese dall'hub, allineate alla versione
+	     più aggiornata (produzione) del branch gemello @App='31', fornita dall'utente il
+	     2026-09-01. ClassiPericolo, RegistrazioniAssociate, MaterialeSecondarioDescrizione,
+	     EsitoCausaleRespingimento/RespingimentoMotivo/RespingimentoQuantita e
+	     TransfrontalieroTipo hanno un equivalente reale in questo schema e sono popolate;
+	     rettifica/annullamento e secondo Intermediario restano NULL/0 (nessun concetto
+	     equivalente). La CASE che azzera Provenienza per certe causali in 3_1/2_0 non è
+	     replicata (nessuna mappatura univoca sulle causali di questo schema).
 
 	2) dbo.uspRifiutiRegistrazioni_get_InvioControllo (nuova)
 	   - Pre-controllo di coerenza (sequenzialità, causale, quantità, Lock, autorizzazioni,
@@ -90,10 +93,15 @@ SELECT
     CategorieAee                 = raee.Codice,
 
     MaterialeSecondario           = mat.Codice,
+    MaterialeSecondarioDescrizione = r.MaterialeDescrizione,
 
     Esito                        = es.Codice,
     DataEsito                    = r.DataFineTrasporto,
     QuantitaDestino               = ISNULL(r.QuantitaVerificata, m.Quantita),
+
+    EsitoCausaleRespingimento    = CASE WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL ELSE ISNULL(ecr.Codice, 'NC') END,
+    RespingimentoMotivo          = CASE WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL ELSE ISNULL(r.CausaleRespingimentoAltro, 'Non conforme') END,
+    RespingimentoQuantita        = ISNULL(r.QuantitaRespinta, m.Quantita),
 
     Destinazione                 = attv.Codice,
 
@@ -101,6 +109,7 @@ SELECT
 
     FormularioNumero              = m.FormularioNumero,
     FormularioDataInizioTrasporto = ISNULL(m.DataInizioTrasporto, r.Data),
+    TransfrontalieroTipo         = tt.Codice,
 
     ProduttoreNome                = sp.NomeCompleto,
     ProduttoreCodiceFiscale       = ISNULL(sp.CodiceFiscale, sp.PartitaIva),
@@ -124,6 +133,12 @@ SELECT
     IntermediarioCodiceFiscale    = ISNULL(si.CodiceFiscale, si.PartitaIva),
     IntermediarioNazione          = nzi.Sigla,
     IntermediarioAutorizzazione   = ai.Numero,
+
+    -- Nessun supporto multi-intermediario su Registrazioni in questo schema (solo IdSedeIntermediario1)
+    Intermediario2Nome            = CAST(NULL AS VARCHAR(200)),
+    Intermediario2CodiceFiscale   = CAST(NULL AS VARCHAR(20)),
+    Intermediario2Nazione         = CAST(NULL AS CHAR(2)),
+    Intermediario2Autorizzazione  = CAST(NULL AS VARCHAR(20)),
 
     IsProduttore                  = o.IsProduttore,
     IsTrasportatore                = o.IsTrasportatore,
@@ -149,6 +164,8 @@ FROM
     LEFT  JOIN dbo.tblRifiutiRaee                      raee ON r.IdRaee                    = raee.Id
     LEFT  JOIN dbo.tblRifiutiMateriali                 mat  ON r.IdMateriale               = mat.Id
     LEFT  JOIN dbo.tblRifiutiRegistrazioniEsiti        es   ON r.IdEsito                   = es.Id
+    LEFT  JOIN dbo.tblRifiutiRegistrazioniEsitiCausaliRespingimento ecr ON r.IdCausaleRespingimento = ecr.Id
+    LEFT  JOIN dbo.tblRifiutiTrasportiTransfrontalieriTipi tt ON r.IdTrasportoTransfrontalieroTipo = tt.Id
 
     LEFT  JOIN dbo.tblSedi                             sp   ON m.IdSedeProduttoreDetentore = sp.Id
     LEFT  JOIN dbo.tblSediIndirizzi                    sip  ON sp.Id                       = sip.Id

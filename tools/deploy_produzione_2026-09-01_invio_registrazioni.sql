@@ -117,11 +117,16 @@ SELECT
 
     Destinazione                 = attv.Codice,
 
-    -- Solo per gli Scarichi (o.Operazione = 'S', la classificazione C/S/X di tblRifiutiOperazioni,
-    -- non il codice RENTRI o.Codice): RENTRI rifiuta un riferimento_operazione su un Carico, e
-    -- accetta solo riferimenti a Carichi con Anno/Numero MINORE dello Scarico stesso (confermato
-    -- dall'utente - vincolo già applicato lato UI quando si associano le registrazioni).
-    RegistrazioniAssociate       = IIF(o.Operazione = 'S', assocA.Registrazioni, NULL),
+    -- Scarico (o.Operazione = 'S', classificazione C/S/X, non il codice RENTRI o.Codice): riferimento
+    -- ai Carichi (Anno/Numero MINORE) da cui ha attinto - RENTRI rifiuta un riferimento su un Carico
+    -- o su Anno/Numero maggiore (confermato dall'utente, vincolo già applicato lato UI). Materiale
+    -- (o.Codice = 'M', operazione Carico "K"): comportamento inverso confermato dall'utente uguale a
+    -- 3_1 - riferimento agli Scarichi che hanno alimentato la produzione di quel materiale secondario.
+    RegistrazioniAssociate       = CASE
+        WHEN o.Operazione = 'S' THEN assocA.Registrazioni
+        WHEN o.Codice = 'M' THEN assocB.Registrazioni
+        ELSE NULL
+    END,
 
     FormularioNumero              = m.FormularioNumero,
     FormularioDataInizioTrasporto = ISNULL(m.DataInizioTrasporto, r.Data),
@@ -239,6 +244,24 @@ FROM
             FOR JSON PATH
         )
     ) assocA
+    OUTER APPLY (
+        -- Registrazioni "scarico" (figlie) che hanno attinto da questa registrazione (carico/padre) -
+        -- usato solo per il Materiale (o.Codice = 'M'), riferimento agli Scarichi che l'hanno prodotto
+        SELECT Registrazioni = (
+            SELECT
+                progressivo = rc.Numero,
+                anno = YEAR(rc.Data)
+            FROM
+                dbo.tblRifiutiRegistrazioniRelazioni rl
+                INNER JOIN dbo.tblRifiutiRegistrazioni rc ON rl.Id = rc.Id
+            WHERE
+                rl.IdParent = r.Id
+                AND rc.Lock = 0
+            ORDER BY
+                rc.Data, rc.Numero
+            FOR JSON PATH
+        )
+    ) assocB
 GO
 
 --------------------------------------------------------------------------------

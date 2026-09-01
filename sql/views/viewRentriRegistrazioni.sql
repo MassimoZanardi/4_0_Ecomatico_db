@@ -5,15 +5,20 @@ GO
 
 -- Vista consumata dall'hub condiviso 1_0_rentri (branch @App='40' di uspRegistrazioni_get_List/uspRegistrazioni_upd_ByRegistrazioni),
 -- referenziata letteralmente come [4_0_ecomatico]..viewRentriRegistrazioni: nome e insieme di colonne NON sono
--- rinominabili/estendibili senza coordinarsi con l'hub. Colonne allineate esattamente a quelle consumate dal
--- branch gemello @App='31' (3_1_ecomatico..viewRentriRegistrazioni, verificata contro lo script più aggiornato
--- fornito dall'utente) - stesso sottoinsieme, non di più. ClassiPericolo (tblRifiutiMovimentiClassiPericolo) e
--- RegistrazioniAssociate (tblRifiutiRegistrazioniRelazioni, Id=figlio/scarico, IdParent=padre/carico) hanno un
--- equivalente reale in questo schema e sono implementate. Restano invece a NULL/0 (nessun concetto equivalente,
--- l'hub li gestisce già con ISNULL/CASE lato C#): rettifica/annullamento di una registrazione precedente
--- (RettificaNumero/RettificaAnno/RettificaIdentificativo/RettificaIsAnnullata - nessuna tabella tblRentriRegistrazioniRettifiche
--- o simile in questo schema) e il secondo Intermediario (IntermediarioAutorizzazione2 lato 31 - qui tblRifiutiMovimenti
--- ha solo IdSedeIntermediario1, nessun supporto multi-intermediario su Registrazioni).
+-- rinominabili/estendibili senza coordinarsi con l'hub. Colonne allineate alla versione più aggiornata (produzione)
+-- del branch gemello @App='31' (3_1_ecomatico..viewRentriRegistrazioni, fornita dall'utente il 2026-09-01) - stesso
+-- sottoinsieme, non di più. Hanno un equivalente reale in questo schema e sono implementate: ClassiPericolo
+-- (tblRifiutiMovimentiClassiPericolo), RegistrazioniAssociate (tblRifiutiRegistrazioniRelazioni, Id=figlio/scarico,
+-- IdParent=padre/carico), MaterialeSecondarioDescrizione (tblRifiutiRegistrazioni.MaterialeDescrizione),
+-- EsitoCausaleRespingimento/RespingimentoMotivo/RespingimentoQuantita (IdCausaleRespingimento/
+-- CausaleRespingimentoAltro/QuantitaRespinta), TransfrontalieroTipo (IdTrasportoTransfrontalieroTipo). Restano
+-- invece a NULL/0 (nessun concetto equivalente, l'hub li gestisce già con ISNULL/CASE lato C#): rettifica/
+-- annullamento di una registrazione precedente (RettificaNumero/RettificaAnno/RettificaIdentificativo/
+-- RettificaIsAnnullata - nessuna tabella tblRentriRegistrazioniRettifiche o simile in questo schema) e il secondo
+-- Intermediario (Intermediario2* lato 31 - qui tblRifiutiMovimenti ha solo IdSedeIntermediario1, nessun supporto
+-- multi-intermediario su Registrazioni). La logica di Provenienza=NULL per certe causali (CSF/CSM/CST/CSX/TRD in
+-- 3_1, causali specifiche di quello schema) NON è replicata qui: la mappatura sulle causali di questo schema
+-- (Operazione CHAR(1)) non è univoca, da chiarire con l'utente se serve in futuro - vedi Provenienza sotto.
 CREATE OR ALTER VIEW [dbo].[viewRentriRegistrazioni]
 AS
 SELECT
@@ -49,10 +54,15 @@ SELECT
     CategorieAee                 = raee.Codice,
 
     MaterialeSecondario           = mat.Codice,
+    MaterialeSecondarioDescrizione = r.MaterialeDescrizione,
 
     Esito                        = es.Codice,
     DataEsito                    = r.DataFineTrasporto,
     QuantitaDestino               = ISNULL(r.QuantitaVerificata, m.Quantita),
+
+    EsitoCausaleRespingimento    = CASE WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL ELSE ISNULL(ecr.Codice, 'NC') END,
+    RespingimentoMotivo          = CASE WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL ELSE ISNULL(r.CausaleRespingimentoAltro, 'Non conforme') END,
+    RespingimentoQuantita        = ISNULL(r.QuantitaRespinta, m.Quantita),
 
     Destinazione                 = attv.Codice,
 
@@ -60,6 +70,7 @@ SELECT
 
     FormularioNumero              = m.FormularioNumero,
     FormularioDataInizioTrasporto = ISNULL(m.DataInizioTrasporto, r.Data),
+    TransfrontalieroTipo         = tt.Codice,
 
     ProduttoreNome                = sp.NomeCompleto,
     ProduttoreCodiceFiscale       = ISNULL(sp.CodiceFiscale, sp.PartitaIva),
@@ -83,6 +94,12 @@ SELECT
     IntermediarioCodiceFiscale    = ISNULL(si.CodiceFiscale, si.PartitaIva),
     IntermediarioNazione          = nzi.Sigla,
     IntermediarioAutorizzazione   = ai.Numero,
+
+    -- Nessun supporto multi-intermediario su Registrazioni in questo schema (solo IdSedeIntermediario1)
+    Intermediario2Nome            = CAST(NULL AS VARCHAR(200)),
+    Intermediario2CodiceFiscale   = CAST(NULL AS VARCHAR(20)),
+    Intermediario2Nazione         = CAST(NULL AS CHAR(2)),
+    Intermediario2Autorizzazione  = CAST(NULL AS VARCHAR(20)),
 
     IsProduttore                  = o.IsProduttore,
     IsTrasportatore                = o.IsTrasportatore,
@@ -108,6 +125,8 @@ FROM
     LEFT  JOIN dbo.tblRifiutiRaee                      raee ON r.IdRaee                    = raee.Id
     LEFT  JOIN dbo.tblRifiutiMateriali                 mat  ON r.IdMateriale               = mat.Id
     LEFT  JOIN dbo.tblRifiutiRegistrazioniEsiti        es   ON r.IdEsito                   = es.Id
+    LEFT  JOIN dbo.tblRifiutiRegistrazioniEsitiCausaliRespingimento ecr ON r.IdCausaleRespingimento = ecr.Id
+    LEFT  JOIN dbo.tblRifiutiTrasportiTransfrontalieriTipi tt ON r.IdTrasportoTransfrontalieroTipo = tt.Id
 
     LEFT  JOIN dbo.tblSedi                             sp   ON m.IdSedeProduttoreDetentore = sp.Id
     LEFT  JOIN dbo.tblSediIndirizzi                    sip  ON sp.Id                       = sip.Id

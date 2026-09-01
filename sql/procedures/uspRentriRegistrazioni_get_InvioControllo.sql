@@ -7,9 +7,11 @@ GO
 -- 3_1_ecomatico.uspRentriRegistrazioni_get_InvioControllo (fornita dall'utente). Si ferma al
 -- primo problema trovato (non un elenco cumulativo). Riusa dbo.viewRentriRegistrazioni: stessa
 -- vista consumata dall'hub, quindi valida esattamente ciò che verrà davvero inviato.
--- exec dbo.uspRifiutiRegistrazioni_get_InvioControllo @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @AllaData='20501231'
--- exec dbo.uspRifiutiRegistrazioni_get_InvioControllo @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @AlNumero=10, @Anno=2026
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_InvioControllo]
+-- Rinominata da uspRifiutiRegistrazioni_get_InvioControllo (2026-09-01) per coerenza col
+-- prefisso Rentri delle altre SP dedicate al RENTRI (uspRentriSedi_*, uspRentriRegistri_*, ecc.).
+-- exec dbo.uspRentriRegistrazioni_get_InvioControllo @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @AllaData='20501231'
+-- exec dbo.uspRentriRegistrazioni_get_InvioControllo @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @AlNumero=10, @Anno=2026
+CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistrazioni_get_InvioControllo]
 	@IdRegistro CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@AllaData DATE = NULL,

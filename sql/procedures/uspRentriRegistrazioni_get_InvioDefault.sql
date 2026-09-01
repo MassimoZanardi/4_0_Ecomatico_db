@@ -6,8 +6,10 @@ GO
 -- Valori di default per la modale "Invio registrazioni" (Rifiuti/Registrazioni/Index): data e
 -- numero/anno dell'ultima registrazione non ancora inviata al RENTRI del Registro indicato.
 -- Nessuna riga se il Registro non ha ancora registrazioni non inviate (Lock=0, RentriIdentificativo NULL).
--- exec dbo.uspRifiutiRegistrazioni_get_InvioDefault @IdRegistro='fd73e743a19b44c0', @IdSessione='...'
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_InvioDefault]
+-- Rinominata da uspRifiutiRegistrazioni_get_InvioDefault (2026-09-01) per coerenza col prefisso
+-- Rentri delle altre SP dedicate al RENTRI (uspRentriSedi_*, uspRentriRegistri_*, ecc.).
+-- exec dbo.uspRentriRegistrazioni_get_InvioDefault @IdRegistro='fd73e743a19b44c0', @IdSessione='...'
+CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistrazioni_get_InvioDefault]
 	@IdRegistro CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS

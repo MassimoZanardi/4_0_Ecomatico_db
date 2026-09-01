@@ -25,7 +25,6 @@ CREATE TABLE [dbo].[tblRifiutiRegistrazioni](
 	[VeicoloFuoriUsoNumero] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[VeicoloFuoriUsoData] [date] NULL,
 	[MaterialeDescrizione] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
-	[DataStampa] [smalldatetime] NULL,
 	[Etichette] [varchar](2000) COLLATE Latin1_General_CI_AS NULL,
 	[Note] [varchar](500) COLLATE Latin1_General_CI_AS NULL,
 	[Lock] [tinyint] NULL,
@@ -56,7 +55,7 @@ CREATE NONCLUSTERED INDEX [IX_RifiutiRegistrazioni_IdMovimento_Data_Numero_Lock]
 	[Data] ASC,
 	[Numero] ASC
 )
-INCLUDE([QuantitaVerificata],[DataFineTrasporto],[IdTrasportoTransfrontalieroTipo],[Note],[Operazione],[DataStampa],[Etichette]) 
+INCLUDE([QuantitaVerificata],[DataFineTrasporto],[IdTrasportoTransfrontalieroTipo],[Note],[Operazione],[Etichette])
 WHERE ([Lock]<(2))
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO

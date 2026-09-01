@@ -206,7 +206,7 @@ BEGIN
 		-- ma dalla coppia Registrazione/Movimento esistente invece che da un Modello. Esclusi di proposito:
 		-- Data, Numero, FormularioNumero (mai impostati anche negli altri rami di _ins), Esito/QuantitaVerificata/
 		-- CausaleRespingimento*/QuantitaRespinta, DataFineTrasporto, VeicoloFuoriUso*, Quantita (dipende da
-		-- relazioni/giacenze), Lock/DataStampa e le relazioni scarico/carico (tblRifiutiRegistrazioniRelazioni,
+		-- relazioni/giacenze), Lock e le relazioni scarico/carico (tblRifiutiRegistrazioniRelazioni,
 		-- mai copiate su richiesta esplicita).
 		DECLARE
 			@cIdMovimentoOrigine CHAR(16),

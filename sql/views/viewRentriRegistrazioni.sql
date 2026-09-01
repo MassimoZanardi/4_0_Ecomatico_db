@@ -84,8 +84,8 @@ SELECT
     -- (o.Codice = 'M', operazione Carico "K"): comportamento inverso confermato dall'utente uguale a
     -- 3_1 - riferimento agli Scarichi che hanno alimentato la produzione di quel materiale secondario.
     RegistrazioniAssociate       = CASE
-        WHEN o.Operazione = 'S' THEN assocA.Registrazioni
-        WHEN o.Codice = 'M' THEN assocB.Registrazioni
+        WHEN o.Operazione = 'S' THEN assocB.Registrazioni
+        WHEN o.Codice = 'M' THEN assocA.Registrazioni
         ELSE NULL
     END,
 

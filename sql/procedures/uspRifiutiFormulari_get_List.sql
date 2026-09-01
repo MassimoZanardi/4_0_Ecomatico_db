@@ -1,3 +1,8 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_get_List]
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,

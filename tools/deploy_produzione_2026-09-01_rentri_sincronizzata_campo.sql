@@ -116,7 +116,7 @@ SELECT
 	IdMateriale, IdAttivitaProvenienza, IdUnitaMisuraQuantitaRespinta, CausaleRespingimentoAltro,
 	QuantitaRespinta, DataFineTrasporto, Operazione, Data, Numero, QuantitaVerificata,
 	VeicoloFuoriUso, VeicoloFuoriUsoNumero, VeicoloFuoriUsoData, MaterialeDescrizione,
-	RentriIdentificativo, RentriData, RentriSincronizzata, Etichette, Note, Lock
+	RentriIdentificativo, RentriData, CAST(NULL AS BIT), Etichette, Note, Lock
 FROM dbo.tblRifiutiRegistrazioni;
 
 -- 5) Verifica conteggio righe invariato

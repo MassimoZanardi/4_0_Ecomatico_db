@@ -691,7 +691,6 @@ BEGIN
 				WHERE
 					r.Lock < 2
 					AND m.IdRegistro = @idRegistro
-					AND r.DataStampa IS NULL
 					AND
 						(
 						r.[Data] > @RegistrazioneData

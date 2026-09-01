@@ -1,0 +1,133 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+-- Vista consumata dall'hub condiviso 1_0_rentri (branch @App='40' di uspRegistrazioni_get_List/uspRegistrazioni_upd_ByRegistrazioni),
+-- referenziata letteralmente come [4_0_ecomatico]..viewRentriRegistrazioni: nome e insieme di colonne NON sono
+-- rinominabili/estendibili senza coordinarsi con l'hub. Colonne allineate esattamente a quelle consumate dal
+-- branch gemello @App='31' (3_1_ecomatico..viewRentriRegistrazioni) - stesso sottoinsieme, non di più: le colonne
+-- di rettifica/annullamento (RettificaNumero/RettificaAnno/RettificaIdentificativo/RettificaIsAnnullata),
+-- ClassiPericolo e RegistrazioniAssociate sono fuori scope v1 (nessun concetto equivalente in questo schema) e
+-- restano a NULL/0 - l'hub li gestisce già con ISNULL/CASE lato C#.
+CREATE OR ALTER VIEW [dbo].[viewRentriRegistrazioni]
+AS
+SELECT
+    IDRegistro                  = g.Id,
+    IDRentri                    = z.IdRentri,
+
+    IdRegistrazione             = r.Id,
+    RentriIdentificativo        = r.RentriIdentificativo,
+    Numero                      = r.Numero,
+    Anno                        = YEAR(r.Data),
+
+    RettificaNumero              = 0,
+    RettificaAnno                 = 0,
+    RettificaIdentificativo      = CAST(NULL AS VARCHAR(50)),
+    RettificaIsAnnullata          = CAST(0 AS BIT),
+
+    Data                         = r.Data,
+    Operazione                   = r.Operazione,
+
+    Eer                          = m.IdEer,
+    EerDescrizione               = m.EerDescrizione,
+    StatoFisico                  = sf.Codice,
+    Provenienza                  = ISNULL(m.IdProvenienza, 'S'),
+
+    Quantita                     = m.Quantita,
+    UnitaMisura                  = LOWER(um.Codice),
+    ClassiPericolo               = CAST(NULL AS VARCHAR(200)),
+
+    VeicoloFuoriUso               = ISNULL(r.VeicoloFuoriUso, 0),
+    VeicoloFuoriUsoNumero        = r.VeicoloFuoriUsoNumero,
+    VeicoloFuoriUsoData          = r.VeicoloFuoriUsoData,
+
+    CategorieAee                 = raee.Codice,
+
+    MaterialeSecondario           = mat.Codice,
+
+    Esito                        = es.Codice,
+    DataEsito                    = r.DataFineTrasporto,
+    QuantitaDestino               = ISNULL(r.QuantitaVerificata, m.Quantita),
+
+    Destinazione                 = attv.Codice,
+
+    RegistrazioniAssociate       = CAST(NULL AS VARCHAR(MAX)),
+
+    FormularioNumero              = m.FormularioNumero,
+    FormularioDataInizioTrasporto = ISNULL(m.DataInizioTrasporto, r.Data),
+
+    ProduttoreNome                = sp.NomeCompleto,
+    ProduttoreCodiceFiscale       = ISNULL(sp.CodiceFiscale, sp.PartitaIva),
+    ProduttoreNazione             = nzp.Sigla,
+    ProduttoreIdComune            = ip.IdComune,
+    ProduttoreIndirizzo           = ip.Indirizzo,
+    ProduttoreCAP                 = ip.CAP,
+    ProduttoreLocalita            = ip.Localita,
+
+    TrasportatoreNome             = st.NomeCompleto,
+    TrasportatoreCodiceFiscale    = ISNULL(st.CodiceFiscale, st.PartitaIva),
+    TrasportatoreNazione          = nzt.Sigla,
+    TrasportatoreAutorizzazione   = at.Numero,
+
+    DestinatarioNome               = sd.NomeCompleto,
+    DestinatarioCodiceFiscale     = ISNULL(sd.CodiceFiscale, sd.PartitaIva),
+    DestinatarioNazione           = nzd.Sigla,
+    DestinatarioAutorizzazione    = ad.Numero,
+
+    IntermediarioNome              = si.NomeCompleto,
+    IntermediarioCodiceFiscale    = ISNULL(si.CodiceFiscale, si.PartitaIva),
+    IntermediarioNazione          = nzi.Sigla,
+    IntermediarioAutorizzazione   = ai.Numero,
+
+    IsProduttore                  = o.IsProduttore,
+    IsTrasportatore                = o.IsTrasportatore,
+    IsDestinatario                 = o.IsDestinatario,
+    IsIntermediario                = o.IsIntermediario,
+    IsEsito                        = o.IsEsito,
+    IsFormulario                   = o.IsFormulario,
+    IsTransfrontaliero            = CAST(IIF(r.IdTrasportoTransfrontalieroTipo IS NOT NULL, 1, 0) AS BIT),
+    IsStoccaggioIstantaneo        = o.IsStoccaggioIstantaneo,
+
+    Lock                          = r.Lock,
+
+    Note                          = LEFT(r.Note, 500)
+FROM
+    dbo.tblRifiutiRegistrazioni                        r
+    INNER JOIN dbo.tblRifiutiMovimenti                 m    ON r.IdMovimento               = m.Id
+    INNER JOIN dbo.tblRifiutiRegistri                  g    ON m.IdRegistro                = g.Id
+    LEFT  JOIN dbo.tblRentriRegistri                   z    ON g.Id                        = z.Id
+    LEFT  JOIN dbo.tblRifiutiOperazioni                o    ON m.IdOperazione              = o.Id
+    LEFT  JOIN dbo.tblRifiutiStatiFisici               sf   ON m.IdStatoFisico             = sf.Id
+    LEFT  JOIN dbo.tblUnitaMisura                      um   ON m.IdUnitaMisura             = um.Id
+    LEFT  JOIN dbo.tblRifiutiAttivitaRecuperoSmaltimento attv ON m.IdAttivita              = attv.Id
+    LEFT  JOIN dbo.tblRifiutiRaee                      raee ON r.IdRaee                    = raee.Id
+    LEFT  JOIN dbo.tblRifiutiMateriali                 mat  ON r.IdMateriale               = mat.Id
+    LEFT  JOIN dbo.tblRifiutiRegistrazioniEsiti        es   ON r.IdEsito                   = es.Id
+
+    LEFT  JOIN dbo.tblSedi                             sp   ON m.IdSedeProduttoreDetentore = sp.Id
+    LEFT  JOIN dbo.tblSediIndirizzi                    sip  ON sp.Id                       = sip.Id
+    LEFT  JOIN dbo.tblIndirizzi                        ip   ON sip.IdIndirizzo             = ip.Id
+    LEFT  JOIN dbo.tblNazioni                          nzp  ON ip.IdNazione                = nzp.Id
+
+    LEFT  JOIN dbo.tblSedi                             st   ON m.IdSedeTrasportatore1      = st.Id
+    LEFT  JOIN dbo.tblSediIndirizzi                    sit  ON st.Id                       = sit.Id
+    LEFT  JOIN dbo.tblIndirizzi                        it_  ON sit.IdIndirizzo             = it_.Id
+    LEFT  JOIN dbo.tblNazioni                          nzt  ON it_.IdNazione               = nzt.Id
+    LEFT  JOIN dbo.tblRifiutiMovimentiTrasportatori    mt   ON m.Id                        = mt.Id AND mt.Pos = 0
+    LEFT  JOIN dbo.tblRifiutiAutorizzazioni            at   ON mt.IdAutorizzazione         = at.Id
+
+    LEFT  JOIN dbo.tblSedi                             sd   ON m.IdSedeDestinatario        = sd.Id
+    LEFT  JOIN dbo.tblSediIndirizzi                    sid  ON sd.Id                       = sid.Id
+    LEFT  JOIN dbo.tblIndirizzi                        id_  ON sid.IdIndirizzo             = id_.Id
+    LEFT  JOIN dbo.tblNazioni                          nzd  ON id_.IdNazione               = nzd.Id
+    LEFT  JOIN dbo.tblRifiutiMovimentiDestinatari      md   ON m.Id                        = md.Id AND md.Pos = 0
+    LEFT  JOIN dbo.tblRifiutiAutorizzazioni            ad   ON md.IdAutorizzazione         = ad.Id
+
+    LEFT  JOIN dbo.tblSedi                             si   ON m.IdSedeIntermediario1      = si.Id
+    LEFT  JOIN dbo.tblSediIndirizzi                    sii  ON si.Id                       = sii.Id
+    LEFT  JOIN dbo.tblIndirizzi                        ii_  ON sii.IdIndirizzo             = ii_.Id
+    LEFT  JOIN dbo.tblNazioni                          nzi  ON ii_.IdNazione               = nzi.Id
+    LEFT  JOIN dbo.tblRifiutiMovimentiIntermediari     mi   ON m.Id                        = mi.Id AND mi.Pos = 0
+    LEFT  JOIN dbo.tblRifiutiAutorizzazioni            ai   ON mi.IdAutorizzazione         = ai.Id
+GO

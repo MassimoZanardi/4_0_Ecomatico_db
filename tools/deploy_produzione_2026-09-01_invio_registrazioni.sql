@@ -91,7 +91,10 @@ SELECT
 
     VeicoloFuoriUso               = ISNULL(r.VeicoloFuoriUso, 0),
     VeicoloFuoriUsoNumero        = r.VeicoloFuoriUsoNumero,
-    VeicoloFuoriUsoData          = r.VeicoloFuoriUsoData,
+    -- Non NULL: il modello C# lato hub (Registrazione.VeicoloFuoriUsoData) e' un DateTime non nullable,
+    -- Dapper lancia un'eccezione non gestita (500 generico) se la colonna arriva NULL. Il valore e'
+    -- comunque irrilevante quando VeicoloFuoriUso=0 (non inviato/non consumato dall'hub in quel caso).
+    VeicoloFuoriUsoData          = ISNULL(r.VeicoloFuoriUsoData, r.Data),
 
     CategorieAee                 = raee.Codice,
 
@@ -99,7 +102,8 @@ SELECT
     MaterialeSecondarioDescrizione = r.MaterialeDescrizione,
 
     Esito                        = es.Codice,
-    DataEsito                    = r.DataFineTrasporto,
+    -- Stesso motivo di VeicoloFuoriUsoData: Registrazione.DataEsito e' DateTime non nullable lato hub.
+    DataEsito                    = ISNULL(r.DataFineTrasporto, r.Data),
     QuantitaDestino               = ISNULL(r.QuantitaVerificata, m.Quantita),
 
     EsitoCausaleRespingimento    = CASE WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL ELSE ISNULL(ecr.Codice, 'NC') END,
@@ -143,14 +147,15 @@ SELECT
     Intermediario2Nazione         = CAST(NULL AS CHAR(2)),
     Intermediario2Autorizzazione  = CAST(NULL AS VARCHAR(20)),
 
-    IsProduttore                  = o.IsProduttore,
-    IsTrasportatore                = o.IsTrasportatore,
-    IsDestinatario                 = o.IsDestinatario,
-    IsIntermediario                = o.IsIntermediario,
-    IsEsito                        = o.IsEsito,
-    IsFormulario                   = o.IsFormulario,
+    -- ISNULL su tutti gli Is*: Registrazione lato hub li mappa su bool non nullable, o e' una LEFT JOIN
+    IsProduttore                  = ISNULL(o.IsProduttore, 0),
+    IsTrasportatore                = ISNULL(o.IsTrasportatore, 0),
+    IsDestinatario                 = ISNULL(o.IsDestinatario, 0),
+    IsIntermediario                = ISNULL(o.IsIntermediario, 0),
+    IsEsito                        = ISNULL(o.IsEsito, 0),
+    IsFormulario                   = ISNULL(o.IsFormulario, 0),
     IsTransfrontaliero            = CAST(IIF(r.IdTrasportoTransfrontalieroTipo IS NOT NULL, 1, 0) AS BIT),
-    IsStoccaggioIstantaneo        = o.IsStoccaggioIstantaneo,
+    IsStoccaggioIstantaneo        = ISNULL(o.IsStoccaggioIstantaneo, 0),
 
     Lock                          = r.Lock,
 

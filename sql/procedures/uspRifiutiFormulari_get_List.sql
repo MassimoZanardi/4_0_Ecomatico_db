@@ -83,6 +83,9 @@ BEGIN
                 DestinatarioSede        = sd.NomeCompleto + '' - '' + sd.IndirizzoCompleto,
                 Intermediario1Sede      = si.NomeCompleto + '' - '' + si.IndirizzoCompleto,
                 f.Etichette,
+                IsRentriCollegato       = CAST(IIF(z.Id IS NOT NULL, 1, 0) AS BIT),
+                r.RentriIdentificativo,
+                r.RentriData,
                 RowsCount               = COUNT(*) OVER ()
             FROM
                 dbo.tblRifiutiFormulari                      f
@@ -99,6 +102,7 @@ BEGIN
                 LEFT  JOIN dbo.tblSedi                       st ON m.IdSedeTrasportatore1      = st.Id
                 LEFT  JOIN dbo.tblSedi                       sd ON m.IdSedeDestinatario        = sd.Id
                 LEFT  JOIN dbo.tblSedi                       si ON m.IdSedeIntermediario1      = si.Id
+                LEFT  JOIN dbo.tblRentriRegistri             z  ON g.Id                        = z.Id
             WHERE
                 e.Id    = @IdSessione
                 AND f.Lock < 2
@@ -164,6 +168,7 @@ BEGIN
             tbl.ProduttoreDetentoreSede, tbl.Trasportatore1Sede,
             tbl.DestinatarioSede, tbl.Intermediario1Sede,
             tbl.Etichette,
+            tbl.IsRentriCollegato, tbl.RentriIdentificativo, tbl.RentriData,
             tbl.RowsCount
         FROM tbl
         ORDER BY tbl.FormularioDataEmissione DESC, tbl.FormularioNumero DESC

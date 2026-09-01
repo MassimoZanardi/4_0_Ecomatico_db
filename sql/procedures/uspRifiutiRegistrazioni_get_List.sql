@@ -84,7 +84,10 @@ BEGIN
                 Trasportatore1Sede       = st.NomeCompleto + '' - '' + st.IndirizzoCompleto,
                 DestinatarioSede         = sd.NomeCompleto + '' - '' + sd.IndirizzoCompleto,
                 Intermediario1Sede       = si.NomeCompleto + '' - '' + si.IndirizzoCompleto,
-                r.Etichette
+                r.Etichette,
+                IsRentriCollegato        = CAST(IIF(z.Id IS NOT NULL, 1, 0) AS BIT),
+                r.RentriIdentificativo,
+                r.RentriData
             FROM
                 dbo.tblRifiutiRegistrazioni                  r
                 INNER JOIN dbo.tblRifiutiMovimenti           m  ON r.IdMovimento               = m.Id
@@ -100,6 +103,7 @@ BEGIN
                 LEFT  JOIN dbo.tblSedi                       st ON m.IdSedeTrasportatore1      = st.Id
                 LEFT  JOIN dbo.tblSedi                       sd ON m.IdSedeDestinatario        = sd.Id
                 LEFT  JOIN dbo.tblSedi                       si ON m.IdSedeIntermediario1      = si.Id
+                LEFT  JOIN dbo.tblRentriRegistri             z  ON g.Id                        = z.Id
             WHERE
                 e.Id      = @IdSessione
                 AND r.Lock < 2
@@ -161,6 +165,7 @@ BEGIN
             tbl.AttivitaRsCodice, tbl.AttivitaRsNome,
             tbl.FormularioNumero, tbl.ProduttoreDetentoreSede, tbl.Trasportatore1Sede, tbl.DestinatarioSede, tbl.Intermediario1Sede,
             tbl.Etichette,
+            tbl.IsRentriCollegato, tbl.RentriIdentificativo, tbl.RentriData,
             RowsCount = COUNT(*) OVER ()
         FROM tbl
         ORDER BY tbl.RegistrazioneData DESC, tbl.RegistrazioneNumero DESC

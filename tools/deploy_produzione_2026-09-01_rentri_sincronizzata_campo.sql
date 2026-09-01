@@ -1,5 +1,5 @@
 /*
-	Deploy produzione - 2026-09-01 - Campo RentriSincronizzata (tracciabilita' sincronizzazione RENTRI)
+	Deploy produzione - 2026-09-01 - Campo RentriSincronizzata + rinomina SP sincronizzazione RENTRI
 
 	Contenuto di questo script (solo 4_0_ecomatico, verificato su dev, idempotente):
 
@@ -8,11 +8,16 @@
 	     conferma RENTRI e' arrivata tramite la sincronizzazione (checkbox 'sincronizza' in
 	     Rifiuti/Registrazioni/Index) invece che da un invio normale - per tracciabilita'.
 
-	2) dbo.uspRentriRegistrazioni_upd (esistente, modificata)
-	   - Ora imposta anche RentriSincronizzata = 1 oltre a RentriIdentificativo/RentriData.
+	2) Rinomina dbo.uspRentriRegistrazioni_upd -> dbo.uspRentriRegistrazioni_upd_Sincronizza
+	   - Nome piu' esplicito (lega SP, checkbox 'sincronizza' e campo RentriSincronizzata),
+	     invece di un generico '_upd'. Ora imposta anche RentriSincronizzata = 1 oltre a
+	     RentriIdentificativo/RentriData. La vecchia SP uspRentriRegistrazioni_upd (deployata
+	     col precedente bundle deploy_produzione_2026-09-01_sincronizzazione_rentri.sql) viene
+	     droppata in fondo a questo script, dopo la CREATE della nuova.
 
-	Verificato su DB dev: colonna aggiunta, SP redeployata e testata con dati reali
-	(RentriSincronizzata = 1 dopo la sincronizzazione, dati di test poi ripuliti).
+	Verificato su DB dev: colonna aggiunta, SP rinominata e testata con dati reali
+	(RentriSincronizzata = 1 dopo la sincronizzazione, dati di test poi ripuliti), vecchio
+	nome droppato senza errori.
 
 	Eseguire con:
 	  sqlcmd -S <server_produzione> -d "4_0_ecomatico" -E -f 65001 -i deploy_produzione_2026-09-01_rentri_sincronizzata_campo.sql
@@ -27,7 +32,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tblRif
 GO
 
 --------------------------------------------------------------------------------
--- 2) dbo.uspRentriRegistrazioni_upd
+-- 2) dbo.uspRentriRegistrazioni_upd_Sincronizza (rinominata da uspRentriRegistrazioni_upd)
 --------------------------------------------------------------------------------
 SET ANSI_NULLS ON
 GO
@@ -43,8 +48,11 @@ GO
 -- RentriIdentificativo/RentriData su una riga già esistente e mai confermata prima.
 -- RentriSincronizzata = 1 marca esplicitamente che la conferma è arrivata da questa
 -- sincronizzazione e non da un invio normale, per tracciabilità.
--- exec dbo.uspRentriRegistrazioni_upd @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @Numero=3, @Anno=2026, @RentriIdentificativo='...', @RentriData='2026-08-15 10:30:00'
-CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistrazioni_upd]
+-- Rinominata da uspRentriRegistrazioni_upd (2026-09-01) per distinguerla chiaramente da un
+-- generico update della registrazione - lega nome SP, checkbox "sincronizza" e campo
+-- RentriSincronizzata.
+-- exec dbo.uspRentriRegistrazioni_upd_Sincronizza @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @Numero=3, @Anno=2026, @RentriIdentificativo='...', @RentriData='2026-08-15 10:30:00'
+CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistrazioni_upd_Sincronizza]
 	@IdRegistro CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Numero INT = NULL,
@@ -124,4 +132,10 @@ BEGIN
 	SELECT ReturnValue = @returnValue;
 
 END
+GO
+
+--------------------------------------------------------------------------------
+-- DROP del vecchio nome (dopo aver verificato che la CREATE sopra sia andata a buon fine)
+--------------------------------------------------------------------------------
+DROP PROCEDURE IF EXISTS dbo.uspRentriRegistrazioni_upd;
 GO

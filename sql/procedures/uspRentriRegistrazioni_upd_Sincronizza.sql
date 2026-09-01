@@ -12,8 +12,11 @@ GO
 -- RentriIdentificativo/RentriData su una riga già esistente e mai confermata prima.
 -- RentriSincronizzata = 1 marca esplicitamente che la conferma è arrivata da questa
 -- sincronizzazione e non da un invio normale, per tracciabilità.
--- exec dbo.uspRentriRegistrazioni_upd @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @Numero=3, @Anno=2026, @RentriIdentificativo='...', @RentriData='2026-08-15 10:30:00'
-CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistrazioni_upd]
+-- Rinominata da uspRentriRegistrazioni_upd (2026-09-01) per distinguerla chiaramente da un
+-- generico update della registrazione - lega nome SP, checkbox "sincronizza" e campo
+-- RentriSincronizzata.
+-- exec dbo.uspRentriRegistrazioni_upd_Sincronizza @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @Numero=3, @Anno=2026, @RentriIdentificativo='...', @RentriData='2026-08-15 10:30:00'
+CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistrazioni_upd_Sincronizza]
 	@IdRegistro CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Numero INT = NULL,

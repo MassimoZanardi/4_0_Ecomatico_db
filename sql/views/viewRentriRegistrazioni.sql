@@ -8,8 +8,9 @@ GO
 -- rinominabili/estendibili senza coordinarsi con l'hub. Colonne allineate alla versione più aggiornata (produzione)
 -- del branch gemello @App='31' (3_1_ecomatico..viewRentriRegistrazioni, fornita dall'utente il 2026-09-01) - stesso
 -- sottoinsieme, non di più. Hanno un equivalente reale in questo schema e sono implementate: ClassiPericolo
--- (tblRifiutiMovimentiClassiPericolo), RegistrazioniAssociate (tblRifiutiRegistrazioniRelazioni, Id=figlio/scarico,
--- IdParent=padre/carico), MaterialeSecondarioDescrizione (tblRifiutiRegistrazioni.MaterialeDescrizione),
+-- (tblRifiutiMovimentiClassiPericolo), RegistrazioniAssociate (tblRifiutiRegistrazioniRelazioni: la
+-- registrazione con RegistrazioniAssociate e' sempre in ruolo IdParent, le referenziate in ruolo Id -
+-- verificato empiricamente sia per Scarico che per Materiale), MaterialeSecondarioDescrizione (tblRifiutiRegistrazioni.MaterialeDescrizione),
 -- EsitoCausaleRespingimento/RespingimentoMotivo/RespingimentoQuantita (IdCausaleRespingimento/
 -- CausaleRespingimentoAltro/QuantitaRespinta), TransfrontalieroTipo (IdTrasportoTransfrontalieroTipo). Restano
 -- invece a NULL/0 (nessun concetto equivalente, l'hub li gestisce già con ISNULL/CASE lato C#): rettifica/
@@ -78,14 +79,15 @@ SELECT
 
     Destinazione                 = attv.Codice,
 
-    -- Scarico (o.Operazione = 'S', classificazione C/S/X, non il codice RENTRI o.Codice): riferimento
-    -- ai Carichi (Anno/Numero MINORE) da cui ha attinto - RENTRI rifiuta un riferimento su un Carico
-    -- o su Anno/Numero maggiore (confermato dall'utente, vincolo già applicato lato UI). Materiale
-    -- (o.Codice = 'M', operazione Carico "K"): comportamento inverso confermato dall'utente uguale a
-    -- 3_1 - riferimento agli Scarichi che hanno alimentato la produzione di quel materiale secondario.
+    -- Scarico (o.Operazione = 'S') e Materiale (o.Codice = 'M', operazione Carico "K") usano LO STESSO
+    -- verso della relazione: la registrazione che deve esporre il riferimento è sempre quella in ruolo
+    -- IdParent, le registrazioni referenziate sono quelle in ruolo Id (assocB) - verificato con 2 casi
+    -- reali indipendenti (uno Scarico, uno Materiale) prima di questa versione: in entrambi assocA dava
+    -- NULL e assocB dava il riferimento corretto. La distinzione di verso ipotizzata inizialmente
+    -- (dedotta da IDCarico/IDScarico di 3_1) non si applica così com'era a questo schema - assocA non è
+    -- mai risultato necessario, lasciato solo come riferimento/documentazione della query "opposta".
     RegistrazioniAssociate       = CASE
-        WHEN o.Operazione = 'S' THEN assocB.Registrazioni
-        WHEN o.Codice = 'M' THEN assocA.Registrazioni
+        WHEN o.Operazione = 'S' OR o.Codice = 'M' THEN assocB.Registrazioni
         ELSE NULL
     END,
 
@@ -188,26 +190,9 @@ FROM
     ) cp ON m.Id = cp.Id
 
     OUTER APPLY (
-        -- Registrazioni "carico" (padre) da cui questa registrazione (scarico/figlio) ha attinto
-        SELECT Registrazioni = (
-            SELECT
-                progressivo = rp.Numero,
-                anno = YEAR(rp.Data)
-            FROM
-                dbo.tblRifiutiRegistrazioniRelazioni rl
-                INNER JOIN dbo.tblRifiutiRegistrazioni rp ON rl.IdParent = rp.Id
-            WHERE
-                rl.Id = r.Id
-                AND rl.Quantita > 0
-                AND rp.Lock = 0
-            ORDER BY
-                rp.Data, rp.Numero
-            FOR JSON PATH
-        )
-    ) assocA
-    OUTER APPLY (
-        -- Registrazioni "scarico" (figlie) che hanno attinto da questa registrazione (carico/padre) -
-        -- usato solo per il Materiale (o.Codice = 'M'), riferimento agli Scarichi che l'hanno prodotto
+        -- Registrazioni referenziate da questa registrazione (r in ruolo IdParent nella relazione) -
+        -- usato sia per Scarico (o.Operazione='S') che per Materiale (o.Codice='M'), vedi commento su
+        -- RegistrazioniAssociate sopra.
         SELECT Registrazioni = (
             SELECT
                 progressivo = rc.Numero,

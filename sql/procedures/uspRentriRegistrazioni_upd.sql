@@ -10,6 +10,8 @@ GO
 -- dopo un confronto con l'elenco reale restituito da RENTRI - non chiamata direttamente
 -- dall'utente, nessuna registrazione "nuova" viene mai creata qui, solo aggiornati
 -- RentriIdentificativo/RentriData su una riga già esistente e mai confermata prima.
+-- RentriSincronizzata = 1 marca esplicitamente che la conferma è arrivata da questa
+-- sincronizzazione e non da un invio normale, per tracciabilità.
 -- exec dbo.uspRentriRegistrazioni_upd @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @Numero=3, @Anno=2026, @RentriIdentificativo='...', @RentriData='2026-08-15 10:30:00'
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistrazioni_upd]
 	@IdRegistro CHAR(16) = NULL,
@@ -53,7 +55,8 @@ BEGIN
 		UPDATE r
 		SET
 			RentriIdentificativo = @RentriIdentificativo,
-			RentriData = @RentriData
+			RentriData = @RentriData,
+			RentriSincronizzata = 1
 		FROM
 			dbo.tblRifiutiRegistrazioni r
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id

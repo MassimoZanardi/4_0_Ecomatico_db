@@ -6,10 +6,14 @@ GO
 -- Vista consumata dall'hub condiviso 1_0_rentri (branch @App='40' di uspRegistrazioni_get_List/uspRegistrazioni_upd_ByRegistrazioni),
 -- referenziata letteralmente come [4_0_ecomatico]..viewRentriRegistrazioni: nome e insieme di colonne NON sono
 -- rinominabili/estendibili senza coordinarsi con l'hub. Colonne allineate esattamente a quelle consumate dal
--- branch gemello @App='31' (3_1_ecomatico..viewRentriRegistrazioni) - stesso sottoinsieme, non di più: le colonne
--- di rettifica/annullamento (RettificaNumero/RettificaAnno/RettificaIdentificativo/RettificaIsAnnullata),
--- ClassiPericolo e RegistrazioniAssociate sono fuori scope v1 (nessun concetto equivalente in questo schema) e
--- restano a NULL/0 - l'hub li gestisce già con ISNULL/CASE lato C#.
+-- branch gemello @App='31' (3_1_ecomatico..viewRentriRegistrazioni, verificata contro lo script più aggiornato
+-- fornito dall'utente) - stesso sottoinsieme, non di più. ClassiPericolo (tblRifiutiMovimentiClassiPericolo) e
+-- RegistrazioniAssociate (tblRifiutiRegistrazioniRelazioni, Id=figlio/scarico, IdParent=padre/carico) hanno un
+-- equivalente reale in questo schema e sono implementate. Restano invece a NULL/0 (nessun concetto equivalente,
+-- l'hub li gestisce già con ISNULL/CASE lato C#): rettifica/annullamento di una registrazione precedente
+-- (RettificaNumero/RettificaAnno/RettificaIdentificativo/RettificaIsAnnullata - nessuna tabella tblRentriRegistrazioniRettifiche
+-- o simile in questo schema) e il secondo Intermediario (IntermediarioAutorizzazione2 lato 31 - qui tblRifiutiMovimenti
+-- ha solo IdSedeIntermediario1, nessun supporto multi-intermediario su Registrazioni).
 CREATE OR ALTER VIEW [dbo].[viewRentriRegistrazioni]
 AS
 SELECT
@@ -36,7 +40,7 @@ SELECT
 
     Quantita                     = m.Quantita,
     UnitaMisura                  = LOWER(um.Codice),
-    ClassiPericolo               = CAST(NULL AS VARCHAR(200)),
+    ClassiPericolo               = cp.ClassiPericolo,
 
     VeicoloFuoriUso               = ISNULL(r.VeicoloFuoriUso, 0),
     VeicoloFuoriUsoNumero        = r.VeicoloFuoriUsoNumero,
@@ -52,7 +56,7 @@ SELECT
 
     Destinazione                 = attv.Codice,
 
-    RegistrazioniAssociate       = CAST(NULL AS VARCHAR(MAX)),
+    RegistrazioniAssociate       = IIF(r.Operazione <> 'M', assocA.Registrazioni, assocB.Registrazioni),
 
     FormularioNumero              = m.FormularioNumero,
     FormularioDataInizioTrasporto = ISNULL(m.DataInizioTrasporto, r.Data),
@@ -130,4 +134,51 @@ FROM
     LEFT  JOIN dbo.tblNazioni                          nzi  ON ii_.IdNazione               = nzi.Id
     LEFT  JOIN dbo.tblRifiutiMovimentiIntermediari     mi   ON m.Id                        = mi.Id AND mi.Pos = 0
     LEFT  JOIN dbo.tblRifiutiAutorizzazioni            ai   ON mi.IdAutorizzazione         = ai.Id
+
+    LEFT JOIN (
+        SELECT
+            mc.Id,
+            ClassiPericolo = STRING_AGG(c.Codice, ';') WITHIN GROUP (ORDER BY c.Codice)
+        FROM
+            dbo.tblRifiutiMovimentiClassiPericolo mc
+            LEFT JOIN dbo.tblRifiutiClassiPericolo c ON mc.IdClasse = c.Id
+        GROUP BY
+            mc.Id
+    ) cp ON m.Id = cp.Id
+
+    OUTER APPLY (
+        -- Registrazioni "carico" (padre) da cui questa registrazione (scarico/figlio) ha attinto
+        SELECT Registrazioni = (
+            SELECT
+                progressivo = rp.Numero,
+                anno = YEAR(rp.Data)
+            FROM
+                dbo.tblRifiutiRegistrazioniRelazioni rl
+                INNER JOIN dbo.tblRifiutiRegistrazioni rp ON rl.IdParent = rp.Id
+            WHERE
+                rl.Id = r.Id
+                AND rl.Quantita > 0
+                AND rp.Lock = 0
+            ORDER BY
+                rp.Data, rp.Numero
+            FOR JSON PATH
+        )
+    ) assocA
+    OUTER APPLY (
+        -- Registrazioni "scarico" (figlie) che hanno attinto da questa registrazione (carico/padre)
+        SELECT Registrazioni = (
+            SELECT
+                progressivo = rc.Numero,
+                anno = YEAR(rc.Data)
+            FROM
+                dbo.tblRifiutiRegistrazioniRelazioni rl
+                INNER JOIN dbo.tblRifiutiRegistrazioni rc ON rl.Id = rc.Id
+            WHERE
+                rl.IdParent = r.Id
+                AND rc.Lock = 0
+            ORDER BY
+                rc.Data, rc.Numero
+            FOR JSON PATH
+        )
+    ) assocB
 GO

@@ -12,22 +12,24 @@ GO
 -- aggiornati RentriIdentificativo/RentriData su righe già esistenti e mai confermate prima.
 -- RentriSincronizzata = 1 marca esplicitamente che la conferma è arrivata da questa
 -- sincronizzazione e non da un invio normale, per tracciabilità.
--- @Registrazioni: JSON array [{numero, anno, identificativo}, ...]. @RentriData catturato
--- una volta sola per l'intero blocco (stesso pattern di 1_0_rentri..uspRegistrazioni_upd_ByRegistrazioni,
--- non per singola riga). Comportamento best-effort: una riga del JSON senza corrispondenza
--- (già sincronizzata, Lock diverso da 0, ecc.) viene semplicemente saltata, non blocca le
--- altre - il chiamante ha già verificato l'elenco momenti prima, un singolo mancato match
--- non deve interrompere il resto del blocco. Ritorna il conteggio delle righe aggiornate.
+-- @Registrazioni: JSON array [{numero, anno, identificativo, rentriData}, ...] - rentriData e'
+-- la data/ora reale della registrazione su RENTRI (non "adesso"/il momento della
+-- sincronizzazione, che potrebbe essere molto successivo al vero invio: la sincronizzazione
+-- serve proprio a recuperare un invio confermato da RENTRI molto prima ma mai scritto
+-- sull'app), quindi per riga e non condivisa per l'intero blocco. Comportamento best-effort:
+-- una riga del JSON senza corrispondenza (già sincronizzata, Lock diverso da 0, ecc.) viene
+-- semplicemente saltata, non blocca le altre - il chiamante ha già verificato l'elenco
+-- momenti prima, un singolo mancato match non deve interrompere il resto del blocco.
+-- Ritorna il conteggio delle righe aggiornate.
 -- Rinominata da uspRentriRegistrazioni_upd (2026-09-01) per distinguerla chiaramente da un
 -- generico update della registrazione - lega nome SP, checkbox "sincronizza" e campo
 -- RentriSincronizzata. Passata da chiamata singola a blocco JSON lo stesso giorno, per
 -- evitare N round-trip separati quando ci sono più registrazioni da sincronizzare.
--- exec dbo.uspRentriRegistrazioni_upd_Sincronizza @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @Registrazioni='[{"numero":3,"anno":2026,"identificativo":"..."}]', @RentriData='2026-08-15 10:30:00'
+-- exec dbo.uspRentriRegistrazioni_upd_Sincronizza @IdRegistro='fd73e743a19b44c0', @IdSessione='...', @Registrazioni='[{"numero":3,"anno":2026,"identificativo":"...","rentriData":"2026-08-15 10:30:00"}]'
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistrazioni_upd_Sincronizza]
 	@IdRegistro CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
-	@Registrazioni NVARCHAR(MAX) = NULL,
-	@RentriData DATETIME2(0) = NULL
+	@Registrazioni NVARCHAR(MAX) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -40,7 +42,7 @@ BEGIN
 		SET @IdRegistro = NULLIF(LTRIM(RTRIM(@IdRegistro)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 
-		IF @IdRegistro IS NULL OR @IdSessione IS NULL OR @Registrazioni IS NULL OR @RentriData IS NULL
+		IF @IdRegistro IS NULL OR @IdSessione IS NULL OR @Registrazioni IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Parametri mancanti';
@@ -60,40 +62,44 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		DECLARE @Numero INT, @Anno INT, @Identificativo VARCHAR(50);
+		DECLARE @Numero INT, @Anno INT, @Identificativo VARCHAR(50), @RentriData DATETIME2(0);
 
 		DECLARE c CURSOR LOCAL FAST_FORWARD FOR
-		SELECT Numero, Anno, Identificativo
+		SELECT Numero, Anno, Identificativo, RentriData
 		FROM OPENJSON(@Registrazioni) WITH (
 			Numero INT '$.numero',
 			Anno INT '$.anno',
-			Identificativo VARCHAR(50) '$.identificativo'
+			Identificativo VARCHAR(50) '$.identificativo',
+			RentriData DATETIME2(0) '$.rentriData'
 		);
 
 		OPEN c;
-		FETCH c INTO @Numero, @Anno, @Identificativo;
+		FETCH c INTO @Numero, @Anno, @Identificativo, @RentriData;
 
 		WHILE @@FETCH_STATUS = 0
 		BEGIN
-			UPDATE r
-			SET
-				RentriIdentificativo = @Identificativo,
-				RentriData = @RentriData,
-				RentriSincronizzata = 1
-			FROM
-				dbo.tblRifiutiRegistrazioni r
-				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-			WHERE
-				m.IdRegistro = @IdRegistro
-				AND r.Numero = @Numero
-				AND YEAR(r.[Data]) = @Anno
-				AND r.Lock = 0
-				AND r.RentriIdentificativo IS NULL
-				AND r.RentriData IS NULL;
+			IF @Identificativo IS NOT NULL AND @RentriData IS NOT NULL
+			BEGIN
+				UPDATE r
+				SET
+					RentriIdentificativo = @Identificativo,
+					RentriData = @RentriData,
+					RentriSincronizzata = 1
+				FROM
+					dbo.tblRifiutiRegistrazioni r
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				WHERE
+					m.IdRegistro = @IdRegistro
+					AND r.Numero = @Numero
+					AND YEAR(r.[Data]) = @Anno
+					AND r.Lock = 0
+					AND r.RentriIdentificativo IS NULL
+					AND r.RentriData IS NULL;
 
-			SET @sincronizzate = @sincronizzate + @@ROWCOUNT;
+				SET @sincronizzate = @sincronizzate + @@ROWCOUNT;
+			END
 
-			FETCH c INTO @Numero, @Anno, @Identificativo;
+			FETCH c INTO @Numero, @Anno, @Identificativo, @RentriData;
 		END
 
 		CLOSE c;

@@ -80,14 +80,16 @@ SELECT
     Destinazione                 = attv.Codice,
 
     -- Scarico (o.Operazione = 'S') e Materiale (o.Codice = 'M', operazione Carico "K") usano LO STESSO
-    -- verso della relazione: la registrazione che deve esporre il riferimento è sempre quella in ruolo
-    -- IdParent, le registrazioni referenziate sono quelle in ruolo Id (assocB) - verificato con 2 casi
-    -- reali indipendenti (uno Scarico, uno Materiale) prima di questa versione: in entrambi assocA dava
-    -- NULL e assocB dava il riferimento corretto. La distinzione di verso ipotizzata inizialmente
-    -- (dedotta da IDCarico/IDScarico di 3_1) non si applica così com'era a questo schema - assocA non è
-    -- mai risultato necessario, lasciato solo come riferimento/documentazione della query "opposta".
+    -- verso della relazione: in tblRifiutiRegistrazioniRelazioni, IdParent e' sempre il record
+    -- successivo/dipendente (chi ha attinto), Id e' sempre il record precedente/sorgente (da cui si e'
+    -- attinto) - a prescindere dal tipo di operazione. Quindi "cosa ha attinto QUESTA registrazione" e'
+    -- sempre "le righe con IdParent = r.Id, prendi il lato Id" (assocRiferimenti). La distinzione di
+    -- verso ipotizzata inizialmente (dedotta da IDCarico/IDScarico di 3_1, Scarico/Materiale su colonne
+    -- diverse) non si applica a questo schema - provato sulla registrazione reale N.3 (Scarico): la
+    -- stessa riga di relazione letta nel verso "opposto" avrebbe dato un riferimento ad un Numero
+    -- SUPERIORE al proprio, che RENTRI rifiuta esplicitamente (vedi vincolo Anno/Progressivo sotto).
     RegistrazioniAssociate       = CASE
-        WHEN o.Operazione = 'S' OR o.Codice = 'M' THEN assocB.Registrazioni
+        WHEN o.Operazione = 'S' OR o.Codice = 'M' THEN assocRiferimenti.Registrazioni
         ELSE NULL
     END,
 
@@ -190,22 +192,22 @@ FROM
     ) cp ON m.Id = cp.Id
 
     OUTER APPLY (
-        -- Registrazioni referenziate da questa registrazione (r in ruolo IdParent nella relazione) -
-        -- usato sia per Scarico (o.Operazione='S') che per Materiale (o.Codice='M'), vedi commento su
-        -- RegistrazioniAssociate sopra.
+        -- Registrazioni sorgente (r e' in ruolo IdParent, il record dipendente) da cui questa
+        -- registrazione ha attinto - usato sia per Scarico (o.Operazione='S') che per Materiale
+        -- (o.Codice='M'), vedi commento su RegistrazioniAssociate sopra.
         SELECT Registrazioni = (
             SELECT
-                progressivo = rc.Numero,
-                anno = YEAR(rc.Data)
+                progressivo = rif.Numero,
+                anno = YEAR(rif.Data)
             FROM
                 dbo.tblRifiutiRegistrazioniRelazioni rl
-                INNER JOIN dbo.tblRifiutiRegistrazioni rc ON rl.Id = rc.Id
+                INNER JOIN dbo.tblRifiutiRegistrazioni rif ON rl.Id = rif.Id
             WHERE
                 rl.IdParent = r.Id
-                AND rc.Lock = 0
+                AND rif.Lock = 0
             ORDER BY
-                rc.Data, rc.Numero
+                rif.Data, rif.Numero
             FOR JSON PATH
         )
-    ) assocB
+    ) assocRiferimenti
 GO

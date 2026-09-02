@@ -93,7 +93,9 @@ BEGIN
                 IsRentriCollegato        = CAST(IIF(z.Id IS NOT NULL, 1, 0) AS BIT),
                 r.RentriIdentificativo,
                 r.RentriData,
-                IsRettifica              = CAST(IIF(rett.Id IS NOT NULL, 1, 0) AS BIT)
+                IsRettifica              = CAST(IIF(rett.Id IS NOT NULL, 1, 0) AS BIT),
+                RettificaRegistrazioneNumero = ro.Numero,
+                RettificaRegistrazioneData   = ro.Data
             FROM
                 dbo.tblRifiutiRegistrazioni                  r
                 INNER JOIN dbo.tblRifiutiMovimenti           m  ON r.IdMovimento               = m.Id
@@ -111,6 +113,7 @@ BEGIN
                 LEFT  JOIN dbo.tblSedi                       si ON m.IdSedeIntermediario1      = si.Id
                 LEFT  JOIN dbo.tblRentriRegistri             z  ON g.Id                        = z.Id
                 LEFT  JOIN dbo.tblRentriRegistrazioniRettifiche rett ON rett.IdRettifica        = r.Id
+                LEFT  JOIN dbo.tblRifiutiRegistrazioni       ro ON rett.Id                       = ro.Id
             WHERE
                 e.Id      = @IdSessione
                 AND r.Lock < 2
@@ -173,7 +176,7 @@ BEGIN
             tbl.FormularioNumero, tbl.ProduttoreDetentoreSede, tbl.Trasportatore1Sede, tbl.DestinatarioSede, tbl.Intermediario1Sede,
             tbl.Etichette,
             tbl.IsRentriCollegato, tbl.RentriIdentificativo, tbl.RentriData,
-            tbl.IsRettifica,
+            tbl.IsRettifica, tbl.RettificaRegistrazioneNumero, tbl.RettificaRegistrazioneData,
             RowsCount = COUNT(*) OVER ()
         FROM tbl
         ORDER BY tbl.RegistrazioneData DESC, tbl.RegistrazioneNumero DESC

@@ -32,12 +32,15 @@ SELECT
     Anno                        = YEAR(r.Data),
 
     -- Registrazione di rettifica (tblRentriRegistrazioniRettifiche.IdRettifica = r.Id): riferimento alla
-    -- registrazione originale corretta, letta dal JOIN rett/ro sotto. Nessun concetto di
-    -- "annullamento" in questo schema (solo correzione), RettificaIsAnnullata resta sempre 0.
+    -- registrazione originale rettificata/annullata, letta dal JOIN rett/ro sotto. RettificaIsAnnullata
+    -- (tblRentriRegistrazioniRettifiche.Annullata) distingue le due sotto-tipologie per l'hub condiviso
+    -- (1_0_RentriApi, Api/ApiRegistro.cs + RegistrazioneService.cs): 0 = rettifica di correzione (payload
+    -- movimento completo con numero_registrazione_rettifica), 1 = rettifica di annullamento (payload
+    -- ridotto, solo riferimento alla registrazione annullata + data + annotazioni).
     RettificaNumero              = ISNULL(ro.Numero, 0),
     RettificaAnno                 = ISNULL(YEAR(ro.Data), 0),
     RettificaIdentificativo      = ro.RentriIdentificativo,
-    RettificaIsAnnullata          = CAST(0 AS BIT),
+    RettificaIsAnnullata          = CAST(ISNULL(rett.Annullata, 0) AS BIT),
 
     Data                         = r.Data,
     -- Il codice RENTRI reale (DT/aT/T*aT/RE/I/NP/M/TR/SI/T*) e' tblRifiutiOperazioni.Codice, non

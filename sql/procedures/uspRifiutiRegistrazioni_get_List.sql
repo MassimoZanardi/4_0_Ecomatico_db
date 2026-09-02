@@ -94,6 +94,7 @@ BEGIN
                 r.RentriIdentificativo,
                 r.RentriData,
                 IsRettifica              = CAST(IIF(rett.Id IS NOT NULL, 1, 0) AS BIT),
+                IsAnnullamento           = CAST(ISNULL(rett.Annullata, 0) AS BIT),
                 RettificaRegistrazioneNumero = ro.Numero,
                 RettificaRegistrazioneData   = ro.Data
             FROM
@@ -177,7 +178,7 @@ BEGIN
             tbl.FormularioNumero, tbl.ProduttoreDetentoreSede, tbl.Trasportatore1Sede, tbl.DestinatarioSede, tbl.Intermediario1Sede,
             tbl.Etichette,
             tbl.IsRentriCollegato, tbl.RentriIdentificativo, tbl.RentriData,
-            tbl.IsRettifica, tbl.RettificaRegistrazioneNumero, tbl.RettificaRegistrazioneData,
+            tbl.IsRettifica, tbl.IsAnnullamento, tbl.RettificaRegistrazioneNumero, tbl.RettificaRegistrazioneData,
             RowsCount = COUNT(*) OVER ()
         FROM tbl
         ORDER BY tbl.RegistrazioneData DESC, tbl.RegistrazioneNumero DESC

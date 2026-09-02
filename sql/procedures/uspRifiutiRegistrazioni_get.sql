@@ -187,6 +187,7 @@ BEGIN
 			RettificaRegistrazioneNumero = ro.Numero,
 			RettificaRegistrazioneData = ro.Data,
 			IsRettifica = CAST(IIF(rett.Id IS NOT NULL, 1, 0) AS BIT),
+			IsAnnullamento = CAST(ISNULL(rett.Annullata, 0) AS BIT),
 			IsRettificaCampiBloccati = CAST(IIF(rett.Id IS NOT NULL AND EXISTS (
 				SELECT 1
 				FROM

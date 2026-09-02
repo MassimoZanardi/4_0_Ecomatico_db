@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
@@ -12,6 +12,12 @@ GO
 -- Una rettifica non puo' mai rettificare un'altra rettifica: vincolo applicato in
 -- uspRifiutiRegistrazioni_ins (non a DB), verificando che @IdRettifica non compaia gia' come
 -- IdRettifica in questa tabella.
+-- Annullata: distingue le due sotto-tipologie di rettifica (stessa tabella/tracking per entrambe,
+-- vincolo "una alla volta per originale" condiviso). 0/NULL = rettifica di correzione (comportamento
+-- storico, sovrascrive/propaga i campi rifiuto sull'originale). 1 = rettifica di annullamento: la
+-- registrazione rettifica non modifica mai l'originale, l'hub RENTRI (1_0_RentriApi) la traduce in un
+-- "AnnullamentoMovimento" invece che in un movimento di correzione (vedi viewRentriRegistrazioni,
+-- colonna RettificaIsAnnullata).
 CREATE TABLE [dbo].[tblRentriRegistrazioniRettifiche](
 	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdRettifica] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
@@ -20,6 +26,7 @@ CREATE TABLE [dbo].[tblRentriRegistrazioniRettifiche](
 	[IdStatoFisico] [char](1) COLLATE Latin1_General_CI_AS NULL,
 	[Quantita] [decimal](18, 2) NULL,
 	[EerDescrizione] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
+	[Annullata] [bit] NULL,
  CONSTRAINT [PK_tblRentriRegistrazioniRettifiche] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC,

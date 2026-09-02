@@ -9,7 +9,11 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_ins]
 	@IdFormulario CHAR(16) = NULL,
 	@IdCopia CHAR(16) = NULL,
 	@IdRegistro CHAR(16) = NULL,
-	@IdRettifica CHAR(16) = NULL
+	@IdRettifica CHAR(16) = NULL,
+	-- Sotto-tipo di rettifica quando @IdRettifica è valorizzato: 0 = correzione (default, comportamento
+	-- storico), 1 = annullamento (la registrazione risultante non modifica mai l'originale, vedi
+	-- uspRifiutiRegistrazioni_upd_Annullamento e tblRentriRegistrazioniRettifiche.Annullata)
+	@IsAnnullamento BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -183,25 +187,49 @@ BEGIN
 			)
 			BEGIN
 				SET @returnValue = -1;
-				SET @returnMessage = 'Solo una registrazione già inviata al RENTRI può essere rettificata';
+				SET @returnMessage = IIF(@IsAnnullamento = 1,
+					'Solo una registrazione già inviata al RENTRI può essere annullata',
+					'Solo una registrazione già inviata al RENTRI può essere rettificata');
 				GOTO BRANCH_END;
 			END
 
-			-- Punto 8: una rettifica non può rettificare un'altra rettifica
+			-- Punto 8: una rettifica (di correzione o di annullamento) non può rettificare/annullare un'altra rettifica
 			IF EXISTS (SELECT 1
 			FROM dbo.tblRentriRegistrazioniRettifiche
 			WHERE IdRettifica = @IdRettifica)
 			BEGIN
 				SET @returnValue = -1;
-				SET @returnMessage = 'Una registrazione di rettifica non può essere a sua volta rettificata';
+				SET @returnMessage = 'Una registrazione di rettifica non può essere a sua volta rettificata o annullata';
 				GOTO BRANCH_END;
 			END
 
-			-- Punto 7: una rettifica alla volta per registrazione (la successiva solo dopo che questa è stata
-			-- inviata o cancellata). NON filtrare su Lock < 2: una rettifica appena creata resta Lock = 2
-			-- (bozza non ancora salvata) finché l'utente non la conferma da Edit - deve comunque bloccare una
-			-- seconda rettifica. L'unico stato che libera il vincolo è "inviata" (RentriIdentificativo valorizzato);
-			-- una rettifica cancellata viene sempre hard-deleted insieme alla sua riga di tracking (mai Lock = 4).
+			-- Un originale già annullato (annullamento confermato, inviato al RENTRI) resta annullato per
+			-- sempre: non può essere annullato una seconda volta né rettificato con una correzione. La riga
+			-- di tracking di un annullamento non ancora inviato viene invece hard-deleted se cancellato
+			-- (mai Lock = 4), quindi qui basta verificare l'esistenza di una riga Annullata = 1 già inviata.
+			IF EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblRentriRegistrazioniRettifiche t
+					INNER JOIN dbo.tblRifiutiRegistrazioni rr ON t.IdRettifica = rr.Id
+				WHERE
+					t.Id = @IdRettifica
+					AND t.Annullata = 1
+					AND rr.RentriIdentificativo IS NOT NULL
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'La registrazione è già stata annullata e non può essere annullata o rettificata nuovamente';
+				GOTO BRANCH_END;
+			END
+
+			-- Punto 7: una rettifica alla volta per registrazione, di correzione O di annullamento (la
+			-- successiva solo dopo che questa è stata inviata o cancellata) - le due sotto-tipologie
+			-- condividono lo stesso tracking e sono quindi mutuamente esclusive. NON filtrare su Lock < 2:
+			-- una rettifica appena creata resta Lock = 2 (bozza non ancora salvata) finché l'utente non la
+			-- conferma da Edit - deve comunque bloccare una seconda rettifica/annullamento. L'unico stato che
+			-- libera il vincolo è "inviata" (RentriIdentificativo valorizzato); una rettifica cancellata viene
+			-- sempre hard-deleted insieme alla sua riga di tracking (mai Lock = 4).
 			IF EXISTS (
 				SELECT 1
 				FROM
@@ -213,7 +241,7 @@ BEGIN
 			)
 			BEGIN
 				SET @returnValue = -1;
-				SET @returnMessage = 'Esiste già una rettifica non ancora inviata al RENTRI per questa registrazione';
+				SET @returnMessage = 'Esiste già una rettifica o un annullamento non ancora inviato al RENTRI per questa registrazione';
 				GOTO BRANCH_END;
 			END
 		END
@@ -511,9 +539,9 @@ BEGIN
 					-- di rettifica viene cancellata prima di essere inviata al RENTRI (punto 6).
 					IF @IdRettifica IS NOT NULL
 						INSERT dbo.tblRentriRegistrazioniRettifiche
-							(Id, IdRettifica, IdEer, EerDescrizione, IdStatoFisico, IdUnitaMisura, Quantita)
+							(Id, IdRettifica, IdEer, EerDescrizione, IdStatoFisico, IdUnitaMisura, Quantita, Annullata)
 						VALUES
-							(@IdRettifica, @returnId, @cIdEer, @cEerDescrizione, @cIdStatoFisico, @cIdUnitaMisura, @cQuantitaOriginale);
+							(@IdRettifica, @returnId, @cIdEer, @cEerDescrizione, @cIdStatoFisico, @cIdUnitaMisura, @cQuantitaOriginale, @IsAnnullamento);
 				END
 				ELSE
 				BEGIN

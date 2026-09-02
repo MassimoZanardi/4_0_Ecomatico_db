@@ -12,15 +12,14 @@ GO
 -- registrazione con RegistrazioniAssociate e' sempre in ruolo IdParent, le referenziate in ruolo Id -
 -- verificato empiricamente sia per Scarico che per Materiale), MaterialeSecondarioDescrizione (tblRifiutiRegistrazioni.MaterialeDescrizione),
 -- EsitoCausaleRespingimento/RespingimentoMotivo/RespingimentoQuantita (IdCausaleRespingimento/
--- CausaleRespingimentoAltro/QuantitaRespinta), TransfrontalieroTipo (IdTrasportoTransfrontalieroTipo). Restano
--- invece a NULL/0 (nessun concetto equivalente, l'hub li gestisce già con ISNULL/CASE lato C#): rettifica/
--- annullamento di una registrazione precedente (RettificaNumero/RettificaAnno/RettificaIdentificativo/
--- RettificaIsAnnullata - nessuna tabella tblRentriRegistrazioniRettifiche o simile in questo schema) e il secondo
--- Intermediario (Intermediario2* lato 31 - qui tblRifiutiMovimenti ha solo IdSedeIntermediario1, nessun supporto
--- multi-intermediario su Registrazioni). La logica di Provenienza=NULL per le operazioni di Trasporto/
--- Intermediazione (equivalente delle causali CSF/CSM/CST/CSX/TRD di 3_1) è replicata filtrando su
--- tblRifiutiOperazioni.Codice ('T*aT'/'TR', i codici RENTRI reali - non su Operazione CHAR(1), che è solo una
--- classificazione interna C/S/X senza mappatura univoca verso le causali di 3_1), confermato dall'utente.
+-- CausaleRespingimentoAltro/QuantitaRespinta), TransfrontalieroTipo (IdTrasportoTransfrontalieroTipo),
+-- Rettifica* (tblRentriRegistrazioniRettifiche - vedi sotto). Resta invece a NULL/0 (nessun concetto
+-- equivalente, l'hub lo gestisce già con ISNULL/CASE lato C#): il secondo Intermediario (Intermediario2* lato
+-- 31 - qui tblRifiutiMovimenti ha solo IdSedeIntermediario1, nessun supporto multi-intermediario su
+-- Registrazioni). La logica di Provenienza=NULL per le operazioni di Trasporto/Intermediazione (equivalente
+-- delle causali CSF/CSM/CST/CSX/TRD di 3_1) è replicata filtrando su tblRifiutiOperazioni.Codice ('T*aT'/'TR',
+-- i codici RENTRI reali - non su Operazione CHAR(1), che è solo una classificazione interna C/S/X senza
+-- mappatura univoca verso le causali di 3_1), confermato dall'utente.
 CREATE OR ALTER VIEW [dbo].[viewRentriRegistrazioni]
 AS
 SELECT
@@ -32,9 +31,12 @@ SELECT
     Numero                      = r.Numero,
     Anno                        = YEAR(r.Data),
 
-    RettificaNumero              = 0,
-    RettificaAnno                 = 0,
-    RettificaIdentificativo      = CAST(NULL AS VARCHAR(50)),
+    -- Registrazione di rettifica (tblRentriRegistrazioniRettifiche.IdRettifica = r.Id): riferimento alla
+    -- registrazione originale corretta, letta dal JOIN rett/rOriginale sotto. Nessun concetto di
+    -- "annullamento" in questo schema (solo correzione), RettificaIsAnnullata resta sempre 0.
+    RettificaNumero              = ISNULL(rOriginale.Numero, 0),
+    RettificaAnno                 = ISNULL(YEAR(rOriginale.Data), 0),
+    RettificaIdentificativo      = rOriginale.RentriIdentificativo,
     RettificaIsAnnullata          = CAST(0 AS BIT),
 
     Data                         = r.Data,
@@ -160,6 +162,8 @@ FROM
     LEFT  JOIN dbo.tblRifiutiRegistrazioniEsiti        es   ON r.IdEsito                   = es.Id
     LEFT  JOIN dbo.tblRifiutiRegistrazioniEsitiCausaliRespingimento ecr ON r.IdCausaleRespingimento = ecr.Id
     LEFT  JOIN dbo.tblRifiutiTrasportiTransfrontalieriTipi tt ON r.IdTrasportoTransfrontalieroTipo = tt.Id
+    LEFT  JOIN dbo.tblRentriRegistrazioniRettifiche    rett ON r.Id                        = rett.IdRettifica
+    LEFT  JOIN dbo.tblRifiutiRegistrazioni             rOriginale ON rett.Id                = rOriginale.Id
 
     LEFT  JOIN dbo.tblSedi                             sp   ON m.IdSedeProduttoreDetentore = sp.Id
     LEFT  JOIN dbo.tblSediIndirizzi                    sip  ON sp.Id                       = sip.Id

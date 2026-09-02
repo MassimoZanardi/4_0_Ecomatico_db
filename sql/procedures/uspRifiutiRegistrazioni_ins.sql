@@ -8,7 +8,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_ins]
 	@IdModello CHAR(16) = NULL,
 	@IdFormulario CHAR(16) = NULL,
 	@IdCopia CHAR(16) = NULL,
-	@IdRegistro CHAR(16) = NULL
+	@IdRegistro CHAR(16) = NULL,
+	@IdRettifica CHAR(16) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -24,6 +25,7 @@ BEGIN
 		SET @IdFormulario = NULLIF(LTRIM(RTRIM(@IdFormulario)), '');
 		SET @IdCopia = NULLIF(LTRIM(RTRIM(@IdCopia)), '');
 		SET @IdRegistro = NULLIF(LTRIM(RTRIM(@IdRegistro)), '');
+		SET @IdRettifica = NULLIF(LTRIM(RTRIM(@IdRettifica)), '');
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -53,6 +55,15 @@ BEGIN
 		-- @IdRegistro esplicito (Copia/incolla su un Registro diverso da quello corrente di sessione) sovrascrive il default
 		IF @IdRegistro IS NOT NULL
 			SET @idRegistroFinale = @IdRegistro;
+
+		-- Rettifica: nessuna scelta di registro, sempre lo stesso registro della registrazione rettificata
+		-- (sovrascrive sia il default di sessione che un eventuale @IdRegistro, che il chiamante non deve passare)
+		IF @IdRettifica IS NOT NULL
+			SELECT @idRegistroFinale = m.IdRegistro
+			FROM
+				dbo.tblRifiutiRegistrazioni r
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			WHERE r.Id = @IdRettifica;
 
 		IF @idRegistroFinale IS NULL AND @IdFormulario IS NULL
 		BEGIN
@@ -143,6 +154,66 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Rettifica: titolarità (stesso pattern di Copia) + regole di business dedicate (punti 2/7/8 della specifica)
+		IF @IdFormulario IS NULL AND @IdRettifica IS NOT NULL
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblRifiutiRegistrazioni r
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+					INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+				WHERE
+					r.Id = @IdRettifica
+					AND r.Lock < 2)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Non si dispone dei diritti necessari';
+				GOTO BRANCH_END;
+			END
+
+			IF NOT EXISTS (SELECT 1
+			FROM dbo.tblRifiutiRegistrazioni
+			WHERE
+				Id = @IdRettifica
+				AND RentriIdentificativo IS NOT NULL)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Solo una registrazione già inviata al RENTRI può essere rettificata';
+				GOTO BRANCH_END;
+			END
+
+			-- Punto 8: una rettifica non può rettificare un'altra rettifica
+			IF EXISTS (SELECT 1
+			FROM dbo.tblRentriRegistrazioniRettifiche
+			WHERE IdRettifica = @IdRettifica)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una registrazione di rettifica non può essere a sua volta rettificata';
+				GOTO BRANCH_END;
+			END
+
+			-- Punto 7: una rettifica alla volta per registrazione (la successiva solo dopo che questa è stata
+			-- inviata o cancellata). NON filtrare su Lock < 2: una rettifica appena creata resta Lock = 2
+			-- (bozza non ancora salvata) finché l'utente non la conferma da Edit - deve comunque bloccare una
+			-- seconda rettifica. L'unico stato che libera il vincolo è "inviata" (RentriIdentificativo valorizzato);
+			-- una rettifica cancellata viene sempre hard-deleted insieme alla sua riga di tracking (mai Lock = 4).
+			IF EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblRentriRegistrazioniRettifiche t
+					INNER JOIN dbo.tblRifiutiRegistrazioni rr ON t.IdRettifica = rr.Id
+				WHERE
+					t.Id = @IdRettifica
+					AND rr.RentriIdentificativo IS NULL)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Esiste già una rettifica non ancora inviata al RENTRI per questa registrazione';
+				GOTO BRANCH_END;
+			END
+		END
+
 		-- Lettura unica del modello (era ripetuta fino a 16 volte più sotto, una per ogni campo/EXISTS):
 		-- valorizzata solo quando il ramo sottostante userà @IdModello, riusata da tutti i suoi INSERT
 		DECLARE
@@ -202,12 +273,15 @@ BEGIN
 				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 			WHERE m.Id = @IdModello;
 
-		-- Lettura unica della registrazione sorgente per "Copia/incolla": stesso schema del blocco Modello sopra,
-		-- ma dalla coppia Registrazione/Movimento esistente invece che da un Modello. Esclusi di proposito:
-		-- Data, Numero, FormularioNumero (mai impostati anche negli altri rami di _ins), Esito/QuantitaVerificata/
+		-- Lettura unica della registrazione sorgente per "Copia/incolla" e "Rettifica" (@IdCopia/@IdRettifica sono
+		-- mutuamente esclusivi, mai valorizzati insieme dal chiamante): stesso schema del blocco Modello sopra, ma
+		-- dalla coppia Registrazione/Movimento esistente invece che da un Modello. Esclusi di proposito: Data,
+		-- Numero, FormularioNumero (mai impostati anche negli altri rami di _ins), Esito/QuantitaVerificata/
 		-- CausaleRespingimento*/QuantitaRespinta, DataFineTrasporto, VeicoloFuoriUso*, Quantita (dipende da
-		-- relazioni/giacenze), Lock e le relazioni scarico/carico (tblRifiutiRegistrazioniRelazioni,
-		-- mai copiate su richiesta esplicita).
+		-- relazioni/giacenze - per la Rettifica viene comunque copiata pari pari dall'originale più sotto, dato
+		-- che l'eventuale modifica avviene solo in fase di salvataggio, vedi uspRifiutiRegistrazioni_upd_Rettifica),
+		-- Lock/DataStampa e le relazioni scarico/carico (tblRifiutiRegistrazioniRelazioni, mai copiate: per Copia
+		-- su richiesta esplicita, per Rettifica perché il vincolo resta sempre sulla registrazione originale, punto 3).
 		DECLARE
 			@cIdMovimentoOrigine CHAR(16),
 			@cIdOperazione CHAR(1),
@@ -235,9 +309,10 @@ BEGIN
 			@cIdMateriale CHAR(2),
 			@cMaterialeDescrizione VARCHAR(200),
 			@cIdAttivitaProvenienza CHAR(1),
-			@cIdTrasportoTransfrontalieroTipo CHAR(1);
+			@cIdTrasportoTransfrontalieroTipo CHAR(1),
+			@cQuantitaOriginale DECIMAL(18, 2);
 
-		IF @IdFormulario IS NULL AND @IdCopia IS NOT NULL
+		IF @IdFormulario IS NULL AND (@IdCopia IS NOT NULL OR @IdRettifica IS NOT NULL)
 			SELECT
 				@cIdMovimentoOrigine = m.Id,
 				@cIdOperazione = m.IdOperazione,
@@ -245,6 +320,7 @@ BEGIN
 				@cIdEer = m.IdEer,
 				@cEerDescrizione = m.EerDescrizione,
 				@cIdStatoFisico = m.IdStatoFisico,
+				@cQuantitaOriginale = m.Quantita,
 				@cIdAttivita = m.IdAttivita,
 				@cIdUnitaMisura = m.IdUnitaMisura,
 				@cIdProvenienza = m.IdProvenienza,
@@ -277,7 +353,7 @@ BEGIN
 				LEFT JOIN dbo.tblRifiutiMovimentiIntermediari i1 ON m.Id = i1.Id AND i1.Pos = 0
 				LEFT JOIN dbo.tblRifiutiMovimentiIntermediari i2 ON m.Id = i2.Id AND i2.Pos = 1
 				LEFT JOIN dbo.tblRifiutiMovimentiIntermediari i3 ON m.Id = i3.Id AND i3.Pos = 2
-			WHERE r.Id = @IdCopia;
+			WHERE r.Id = ISNULL(@IdCopia, @IdRettifica);
 
 		DECLARE @idMovimento CHAR(16);
 
@@ -361,7 +437,7 @@ BEGIN
 						FROM dbo.tblRifiutiModelliEtichette
 						WHERE Id = @IdModello;
 				END
-				ELSE IF @IdCopia IS NOT NULL
+				ELSE IF @IdCopia IS NOT NULL OR @IdRettifica IS NOT NULL
 				BEGIN
 					INSERT dbo.tblRifiutiMovimenti
 						(Id, IdRegistro, IdOperazione, IdEer, EerDescrizione, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, Note)
@@ -417,7 +493,17 @@ BEGIN
 					INSERT dbo.tblRifiutiRegistrazioniEtichette (Id, IdEtichetta)
 					SELECT @returnId, IdEtichetta
 					FROM dbo.tblRifiutiRegistrazioniEtichette
-					WHERE Id = @IdCopia;
+					WHERE Id = ISNULL(@IdCopia, @IdRettifica);
+
+					-- Traccia il collegamento rettifica -> originale, con lo snapshot corrente dei valori
+					-- dell'originale (prima di qualunque modifica): serve sia da guardia per "una rettifica
+					-- alla volta" (punto 7, controllata sopra) sia da backup per il ripristino se questa bozza
+					-- di rettifica viene cancellata prima di essere inviata al RENTRI (punto 6).
+					IF @IdRettifica IS NOT NULL
+						INSERT dbo.tblRentriRegistrazioniRettifiche
+							(Id, IdRettifica, IdEer, EerDescrizione, IdStatoFisico, IdUnitaMisura, Quantita)
+						VALUES
+							(@IdRettifica, @returnId, @cIdEer, @cEerDescrizione, @cIdStatoFisico, @cIdUnitaMisura, @cQuantitaOriginale);
 				END
 				ELSE
 				BEGIN

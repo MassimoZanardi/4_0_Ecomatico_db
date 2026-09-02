@@ -6,7 +6,8 @@ GO
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_del]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
-	@Reset BIT = 0
+	@Reset BIT = 0,
+	@IsMultipla BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -48,6 +49,12 @@ BEGIN
 		FROM dbo.tblRifiutiRegistrazioni
 		WHERE Id = @Id);
 
+		-- Se @Id è una registrazione di rettifica, @idOriginaleRettifica è l'Id della registrazione
+		-- rettificata (tblRentriRegistrazioniRettifiche.Id) - NULL per una registrazione normale.
+		DECLARE @idOriginaleRettifica CHAR(16) = (SELECT Id
+		FROM dbo.tblRentriRegistrazioniRettifiche
+		WHERE IdRettifica = @Id);
+
 		IF @lock IS NULL
 		BEGIN
 			-- Idempotenza: registrazione mai esistita o già cancellata (es. doppio invio della
@@ -73,6 +80,21 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Una registrazione di rettifica non ancora inviata al RENTRI è sempre cancellata in modo
+		-- irreversibile (mai soft-delete/Undo, vedi sotto) tramite una modale dedicata con conferma
+		-- esplicita: la cancellazione multipla (checkbox in elenco) non è ammessa su di essa.
+		IF @IsMultipla = 1 AND @idOriginaleRettifica IS NOT NULL AND NOT EXISTS (
+			SELECT 1
+			FROM dbo.tblRifiutiRegistrazioni
+			WHERE
+				Id = @Id
+				AND RentriIdentificativo IS NOT NULL)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Una registrazione di rettifica non ancora inviata al RENTRI va cancellata singolarmente';
+			GOTO BRANCH_END;
+		END
+
 		DECLARE @idMovimento CHAR(16);
 		DECLARE @idFormulario CHAR(16);
 		DECLARE @operazione CHAR(1);
@@ -81,14 +103,14 @@ BEGIN
 		DECLARE @rentriIdentificativo VARCHAR(20);
 		DECLARE @rentriData DATETIME2(0);
 
-		-- ── CASO 1: registrazione attiva (Lock = 0) → soft delete ────────────
+		-- ── CASO 1: registrazione attiva (Lock = 0) → soft delete, o hard delete se è una rettifica ──
 		IF @lock = 0
 		BEGIN
 			SELECT @rentriIdentificativo = RentriIdentificativo, @rentriData = RentriData
 			FROM dbo.tblRifiutiRegistrazioni
 			WHERE Id = @Id;
 
-			-- Una registrazione già trasmessa a RENTRI non può più essere cancellata
+			-- Una registrazione già trasmessa a RENTRI non può più essere cancellata (vale anche per una rettifica)
 			IF @rentriIdentificativo IS NOT NULL OR @rentriData IS NOT NULL
 			BEGIN
 				SET @returnValue = -1;
@@ -122,34 +144,125 @@ BEGIN
 				LEFT JOIN dbo.tblRifiutiFormulari f ON m.Id = f.IdMovimento
 			WHERE r.Id = @Id;
 
-			BEGIN TRANSACTION;
-				UPDATE dbo.tblRifiutiRegistrazioni
-				SET Lock = 4
-				WHERE
-					Id = @Id
-					AND Lock = 0;
+			IF @idOriginaleRettifica IS NOT NULL
+			BEGIN
+				-- Rettifica confermata (Lock = 0) ma non ancora inviata al RENTRI: cancellazione sempre
+				-- irreversibile (punto 6 della specifica, mai passa da Lock = 4/Undo). Ripristina prima
+				-- sull'originale i valori precedenti la rettifica (no-op se non erano mai stati modificati,
+				-- caso in cui l'originale aveva relazioni carico/scarico attive - punto 4), poi hard delete
+				-- completo della rettifica, stessa sequenza del CASO 3 sotto.
+				BEGIN TRANSACTION;
 
-				IF @@ROWCOUNT = 0
-				BEGIN
-					ROLLBACK TRANSACTION;
-					SET @returnValue = -1;
-					SET @returnMessage = 'Registrazione non trovata o già eliminata';
-					GOTO BRANCH_END;
-				END
+					UPDATE mo
+					SET
+						IdEer = t.IdEer,
+						EerDescrizione = t.EerDescrizione,
+						IdStatoFisico = t.IdStatoFisico,
+						IdUnitaMisura = t.IdUnitaMisura,
+						Quantita = t.Quantita
+					FROM
+						dbo.tblRentriRegistrazioniRettifiche t
+						INNER JOIN dbo.tblRifiutiRegistrazioni ro ON t.Id = ro.Id
+						INNER JOIN dbo.tblRifiutiMovimenti mo ON ro.IdMovimento = mo.Id
+					WHERE
+						t.Id = @idOriginaleRettifica
+						AND t.IdRettifica = @Id;
 
-				IF @Reset = 1
-					DELETE dbo.tblIdCancellati
-					WHERE IdSessione = @IdSessione;
-				ELSE
-					DELETE dbo.tblIdCancellati
+					DELETE dbo.tblRifiutiRegistrazioniRelazioni
+					WHERE
+						Id = @Id
+						OR IdParent = @Id;
+					DELETE dbo.tblRifiutiMovimentiClassiPericolo
+					WHERE
+						Id = @idMovimento
+						AND @idFormulario IS NULL;
+					DELETE dbo.tblRifiutiMovimentiProduttori
+					WHERE
+						Id = @idMovimento
+						AND @idFormulario IS NULL;
+					DELETE dbo.tblRifiutiMovimentiDestinatari
+					WHERE
+						Id = @idMovimento
+						AND @idFormulario IS NULL;
+					DELETE dbo.tblRifiutiMovimentiTrasportatori
+					WHERE
+						Id = @idMovimento
+						AND @idFormulario IS NULL;
+					DELETE dbo.tblRifiutiMovimentiIntermediari
+					WHERE
+						Id = @idMovimento
+						AND @idFormulario IS NULL;
+					DELETE dbo.tblRifiutiMovimentiLog
+					WHERE
+						Id = @idMovimento
+						AND @idFormulario IS NULL;
+					DELETE dbo.tblRifiutiRegistrazioniEtichette
 					WHERE Id = @Id;
+					UPDATE dbo.tblEoWMovimenti SET IdRegistrazione = NULL WHERE IdRegistrazione = @Id;
+					DELETE dbo.tblRentriRegistrazioniRettifiche
+					WHERE
+						Id = @idOriginaleRettifica
+						AND IdRettifica = @Id;
+					DELETE dbo.tblRifiutiRegistrazioni
+					WHERE Id = @Id;
+					DELETE dbo.tblRifiutiFormulari
+					WHERE
+						IdMovimento = @idMovimento
+						AND @idFormulario IS NULL;
+					DELETE dbo.tblRifiutiMovimenti
+					WHERE
+						Id = @idMovimento
+						AND @idFormulario IS NULL;
+					DELETE dbo.tblIdLog
+					WHERE
+						Id = @Id
+						OR
+							(
+							Id = @idMovimento
+							AND @idFormulario IS NULL
+							);
+					DELETE dbo.tblId
+					WHERE
+						Id = @Id
+						OR
+							(
+							Id = @idMovimento
+							AND @idFormulario IS NULL
+							);
 
-				INSERT INTO dbo.tblIdCancellati (Id, IdSessione, [Data])
-				VALUES (@Id, @IdSessione, GETDATE());
+				COMMIT TRANSACTION;
+			END
+			ELSE
+			BEGIN
+				BEGIN TRANSACTION;
+					UPDATE dbo.tblRifiutiRegistrazioni
+					SET Lock = 4
+					WHERE
+						Id = @Id
+						AND Lock = 0;
 
-			COMMIT TRANSACTION;
+					IF @@ROWCOUNT = 0
+					BEGIN
+						ROLLBACK TRANSACTION;
+						SET @returnValue = -1;
+						SET @returnMessage = 'Registrazione non trovata o già eliminata';
+						GOTO BRANCH_END;
+					END
 
-			EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'D';
+					IF @Reset = 1
+						DELETE dbo.tblIdCancellati
+						WHERE IdSessione = @IdSessione;
+					ELSE
+						DELETE dbo.tblIdCancellati
+						WHERE Id = @Id;
+
+					INSERT INTO dbo.tblIdCancellati (Id, IdSessione, [Data])
+					VALUES (@Id, @IdSessione, GETDATE());
+
+				COMMIT TRANSACTION;
+
+				EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'D';
+			END
 		END
 
 		-- ── CASO 2: registrazione non confermata (Lock = 1) ──────────────────
@@ -211,6 +324,11 @@ BEGIN
 				-- il movimento resta un record di magazzino valido anche senza la registrazione di
 				-- origine (stesso pattern di uspSYS_del_RegistroCascade).
 				UPDATE dbo.tblEoWMovimenti SET IdRegistrazione = NULL WHERE IdRegistrazione = @Id;
+				-- Bozza di rettifica mai confermata: nessun valore è mai stato propagato sull'originale
+				-- (la propagazione avviene solo in uspRifiutiRegistrazioni_upd_Rettifica al salvataggio),
+				-- quindi qui basta rimuovere il collegamento, nessun ripristino necessario.
+				DELETE dbo.tblRentriRegistrazioniRettifiche
+				WHERE IdRettifica = @Id;
 				DELETE dbo.tblRifiutiRegistrazioni
 				WHERE Id = @Id;
 				DELETE dbo.tblRifiutiFormulari
@@ -265,5 +383,4 @@ BEGIN
 	END
 
 END;
-
-
+GO

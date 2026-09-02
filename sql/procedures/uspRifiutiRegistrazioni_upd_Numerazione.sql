@@ -1,3 +1,8 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd_Numerazione]
 	@IdSessione CHAR(16),
 	@DalNumero INT,
@@ -42,6 +47,26 @@ IF @totaleDaRinumerare = 0
 BEGIN
 	SET @returnValue = -1;
 	SET @returnMessage = 'Non ci sono registrazioni nell''intervallo indicato'
+	GOTO BRANCH_END
+END
+
+-- Se l'intervallo contiene registrazioni già inviate a RENTRI: il Numero/Anno trasmesso
+-- non può più essere modificato, pena il disallineamento con quanto RENTRI ha registrato
+IF EXISTS (SELECT 1
+	FROM
+		dbo.tblRifiutiRegistrazioni r
+		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+		INNER JOIN dbo.tblSessioni e ON m.IdRegistro = e.IdRegistro
+	WHERE
+		e.Id = @IdSessione
+		AND r.Lock < 2
+		AND YEAR(r.[Data]) = @Anno
+		AND r.Numero BETWEEN @DalNumero AND @AlNumero
+		AND (r.RentriIdentificativo IS NOT NULL OR r.RentriData IS NOT NULL)
+)
+BEGIN
+	SET @returnValue = -1;
+	SET @returnMessage = 'L''intervallo contiene registrazioni già inviate al RENTRI: non possono essere rinumerate'
 	GOTO BRANCH_END
 END
 

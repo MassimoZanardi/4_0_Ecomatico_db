@@ -1,20 +1,25 @@
 ﻿/*
 	Deploy produzione - 2026-09-02 - Blocco modifiche su registrazioni/formulari già inviati a RENTRI
 
-	Nuova regola di business: uspRifiutiRegistrazioni_upd/_del e uspRifiutiFormulari_upd/_del
-	bloccano qualunque modifica/cancellazione se la registrazione (per i formulari, solo se
-	hanno una registrazione associata attiva) ha già RentriIdentificativo o RentriData
-	valorizzati - una volta trasmessa a RENTRI, il dato non può più essere alterato.
-	Un formulario senza registrazione associata resta modificabile/cancellabile normalmente.
+	Nuova regola di business, estesa a tutte le SP che possono modificare una registrazione già
+	trasmessa a RENTRI (RentriIdentificativo o RentriData valorizzati):
+	- uspRifiutiRegistrazioni_upd/_del: bloccano qualunque modifica/cancellazione.
+	- uspRifiutiFormulari_upd/_del: bloccano se il Formulario ha una registrazione associata
+	  attiva già inviata (un formulario senza registrazione associata resta modificabile).
+	- uspRifiutiRegistrazioni_ins_Relazione/_ins_RelazioniTutte/_del_Relazione: bloccano se la
+	  registrazione "padre" (quella le cui associazioni cambierebbero, e il cui Lock verrebbe
+	  riportato a 1 "da confermare") è già stata inviata.
+	- uspRifiutiRegistrazioni_upd_Numerazione: blocca la rinumerazione se l'intervallo contiene
+	  anche una sola registrazione già inviata (il Numero/Anno trasmesso a RENTRI non può
+	  disallinearsi da quello locale).
 
-	Aggiunto anche l'header SET ANSI_NULLS/QUOTED_IDENTIFIER mancante su uspRifiutiFormulari_upd,
-	uspRifiutiRegistrazioni_del e uspRifiutiFormulari_del (nessun impatto funzionale, solo
-	allineamento allo standard - erano già ANSI_NULLS/QUOTED_IDENTIFIER=1 lato server).
+	Aggiunto anche l'header SET ANSI_NULLS/QUOTED_IDENTIFIER mancante su 7 delle 8 SP (nessun
+	impatto funzionale, solo allineamento allo standard - erano già ANSI_NULLS/
+	QUOTED_IDENTIFIER=1 lato server).
 
-	Testato con dati reali su dev (transazione con rollback, nessun dato alterato): simulato
-	RentriIdentificativo su una registrazione reale, confermato blocco upd/del con messaggio
-	corretto, confermato che una registrazione con RentriIdentificativo NULL resta modificabile
-	normalmente (nessuna regressione).
+	Testato con dati reali su dev (transazione con rollback, nessun dato alterato) per tutte e
+	8 le SP: confermato blocco con messaggio corretto su una registrazione simulata come già
+	inviata, confermato nessuna regressione sulle registrazioni non inviate.
 
 	Nessuna modifica a tabelle/funzioni, solo CREATE OR ALTER PROCEDURE.
 
@@ -2423,3 +2428,631 @@ BEGIN
 
 END;
 
+
+--------------------------------------------------------------------------------
+-- dbo.uspRifiutiRegistrazioni_ins_Relazione
+--------------------------------------------------------------------------------
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_ins_Relazione]
+	@IdSessione CHAR(16) = NULL,
+	@Id CHAR(16) = NULL,
+	@IdParent CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdParent = NULLIF(LTRIM(RTRIM(@IdParent)), '');
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdParent IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdParent non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'RRG',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Recupera l'operazione del padre e verifica che esista
+		DECLARE @operazioneParent CHAR(1);
+		DECLARE @rentriIdentificativo VARCHAR(20);
+		DECLARE @rentriData DATETIME2(0);
+		SELECT
+			@operazioneParent = Operazione,
+			@rentriIdentificativo = RentriIdentificativo,
+			@rentriData = RentriData
+		FROM dbo.tblRifiutiRegistrazioni
+		WHERE Id = @IdParent;
+
+		IF @operazioneParent IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Registrazione padre non trovata';
+			GOTO BRANCH_END;
+		END
+
+		-- La registrazione padre, già trasmessa a RENTRI, non può cambiare le proprie associazioni
+		IF @rentriIdentificativo IS NOT NULL OR @rentriData IS NOT NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La registrazione è già stata inviata al RENTRI: non può essere associata ad altre registrazioni';
+			GOTO BRANCH_END;
+		END
+
+		IF (
+			SELECT COUNT(DISTINCT r.Id)
+			FROM
+				dbo.tblRifiutiRegistrazioni r
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+			WHERE r.Id IN (@Id, @IdParent)) < 2
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @pos INT;
+		SELECT @pos = ISNULL(MAX(s.Pos), -1) + 1
+		FROM dbo.tblRifiutiRegistrazioniRelazioni s
+		INNER JOIN dbo.tblRifiutiRegistrazioni r ON s.Id = r.Id
+		WHERE
+			s.IdParent = @IdParent
+			AND r.Lock < 2;
+		IF @pos >= 499
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Superato il numero massimo di registrazioni associabili';
+			GOTO BRANCH_END;
+		END
+
+		BEGIN TRANSACTION;
+			INSERT INTO dbo.tblRifiutiRegistrazioniRelazioni
+				(Id, IdParent, Operazione, Quantita, Pos)
+			VALUES
+				(@Id, @IdParent, @operazioneParent, 0, @pos);
+
+			-- Imposta la registrazione padre nello stato "Da confermare"
+			UPDATE dbo.tblRifiutiRegistrazioni
+			SET Lock = 1
+			WHERE
+				Id = @IdParent
+				AND Lock = 0;
+		COMMIT TRANSACTION;
+
+		SELECT @returnValue AS ReturnValue;
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+
+--------------------------------------------------------------------------------
+-- dbo.uspRifiutiRegistrazioni_ins_RelazioniTutte
+--------------------------------------------------------------------------------
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_ins_RelazioniTutte]
+	@IdSessione CHAR(16) = NULL,
+	@IdParent CHAR(16) = NULL,
+	@IdRegistro CHAR(16) = NULL,
+	@IdEer CHAR(6),
+	@IdStatoFisico CHAR(1),
+	@IdUnitaMisura CHAR(2),
+	@Numero INT,
+	@Data DATE
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdParent = NULLIF(LTRIM(RTRIM(@IdParent)), '');
+		SET @IdRegistro = NULLIF(LTRIM(RTRIM(@IdRegistro)), '');
+		SET @IdEer = NULLIF(LTRIM(RTRIM(@IdEer)), '');
+		SET @IdStatoFisico = NULLIF(LTRIM(RTRIM(@IdStatoFisico)), '');
+		SET @IdUnitaMisura = NULLIF(LTRIM(RTRIM(@IdUnitaMisura)), '');
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdParent IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdParent non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdRegistro IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdRegistro non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'RRG',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Calcolata una sola volta e riusata nei due controlli titolarità sottostanti,
+		-- invece di richiamare la function separatamente per ciascuno
+		DECLARE @sedi TABLE (Id CHAR(16) PRIMARY KEY);
+		INSERT @sedi (Id)
+		SELECT Id
+		FROM dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione);
+
+		IF (
+			SELECT COUNT(DISTINCT g.Id)
+			FROM
+				dbo.tblRifiutiRegistri g
+				INNER JOIN @sedi i ON g.IdSede = i.Id
+			WHERE g.Id = @IdRegistro) = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblRifiutiRegistrazioni r
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN @sedi i ON g.IdSede = i.Id
+			WHERE r.Id = @IdParent)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- La registrazione padre, già trasmessa a RENTRI, non può cambiare le proprie associazioni
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblRifiutiRegistrazioni
+			WHERE
+				Id = @IdParent
+				AND (RentriIdentificativo IS NOT NULL OR RentriData IS NOT NULL)
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La registrazione è già stata inviata al RENTRI: non può essere associata ad altre registrazioni';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @pos INT;
+		SELECT @pos = ISNULL(MAX(s.Pos), -1)
+		FROM
+			dbo.tblRifiutiRegistrazioniRelazioni s
+			INNER JOIN dbo.tblRifiutiRegistrazioni r ON s.Id = r.Id
+		WHERE
+			s.IdParent = @IdParent
+			AND r.Lock < 2;
+
+		IF @pos >= 499
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Superato il numero massimo di registrazioni associabili';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idOperazione CHAR(1);
+		SELECT @idOperazione = m.IdOperazione
+		FROM
+			dbo.tblRifiutiRegistrazioni r
+			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+		WHERE r.Id = @IdParent;
+
+		BEGIN TRANSACTION;
+
+			--      QuantitaResidua = m.Quantita - ISNULL(a.Quantita, 0)
+			INSERT dbo.tblRifiutiRegistrazioniRelazioni
+				(Id, IdParent, Operazione, Quantita, Pos)
+			SELECT TOP(499 - @pos)
+				r.Id,
+				@IdParent,
+				IIF(r.Operazione = 'C', 'S', 'C'),
+				0,
+				@pos + ROW_NUMBER() OVER (ORDER BY YEAR(r.[Data]), r.Numero)
+			FROM
+				dbo.tblRifiutiRegistrazioni r
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+				LEFT JOIN (
+					SELECT
+						l.Id,
+						Quantita = SUM(l.Quantita)
+					FROM
+						dbo.tblRifiutiRegistrazioniRelazioni l
+						INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
+						INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
+					WHERE
+						p.Lock < 2
+						AND mp.Quantita > 0
+					GROUP BY l.Id
+				) a ON r.Id = a.Id
+			WHERE
+				r.Lock = 0
+				AND m.IdRegistro = @IdRegistro
+				AND
+					(
+					@idOperazione IN ('K', 'M')
+					OR m.IdEer = @IdEer
+					)
+				AND
+					(
+					@idOperazione IN ('K', 'M')
+					OR m.IdStatoFisico = @IdStatoFisico
+					)
+				AND
+					(
+					@idOperazione IN ('K', 'M')
+					OR m.IdUnitaMisura = @IdUnitaMisura
+					)
+				AND
+					(
+					r.[Data] < @Data
+					OR
+						(
+						r.[Data] = @Data
+						AND r.Numero < @Numero
+						)
+					)
+				AND m.IdOperazione IN ( SELECT IdParent FROM dbo.tblRifiutiOperazioniRelazioni WHERE Id = @idOperazione )
+				AND m.Quantita - ISNULL(a.Quantita, 0) > 0 -- QuantitaResidua > 0
+				AND NOT EXISTS ( SELECT 1 FROM dbo.tblRifiutiRegistrazioniRelazioni x WHERE x.Id = r.Id AND x.IdParent = @IdParent )
+			ORDER BY YEAR(r.[Data]), r.Numero;
+
+			SET @returnValue = @@ROWCOUNT;
+
+			-- Imposta la registrazione nello stato "Da confermare"
+			UPDATE dbo.tblRifiutiRegistrazioni
+			SET Lock = 1
+			WHERE
+				Id = @IdParent
+				AND Lock = 0;
+
+		COMMIT TRANSACTION;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+	SELECT ReturnValue = @returnValue;
+END;
+
+--------------------------------------------------------------------------------
+-- dbo.uspRifiutiRegistrazioni_del_Relazione
+--------------------------------------------------------------------------------
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_del_Relazione]
+	@IdSessione CHAR(16) = NULL,
+	@Id CHAR(16) = NULL,
+	@IdParent CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdParent = NULLIF(LTRIM(RTRIM(@IdParent)), '');
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdParent IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdParent non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'RRG',
+			@Permesso = @permesso OUTPUT;
+
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblRifiutiRegistrazioni r
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+			WHERE r.Id = @IdParent)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- La registrazione padre, già trasmessa a RENTRI, non può cambiare le proprie associazioni
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblRifiutiRegistrazioni
+			WHERE
+				Id = @IdParent
+				AND (RentriIdentificativo IS NOT NULL OR RentriData IS NOT NULL)
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La registrazione è già stata inviata al RENTRI: non può essere modificata la sua associazione';
+			GOTO BRANCH_END;
+		END
+
+		-- Caso 1: relazione con Quantita = 0 → eliminazione diretta senza transazione
+		-- (nessun effetto collaterale sullo stato della registrazione padre)
+		DELETE dbo.tblRifiutiRegistrazioniRelazioni
+		WHERE
+			Id = @Id
+			AND IdParent = @IdParent
+			AND Quantita = 0;
+
+		-- Caso 2: relazione con Quantita <> 0 → rimozione + ripristino stato Lock = 1 sul padre
+		IF @@ROWCOUNT = 0
+		BEGIN
+			BEGIN TRANSACTION;
+				DELETE dbo.tblRifiutiRegistrazioniRelazioni
+				WHERE
+					Id = @Id
+					AND IdParent = @IdParent;
+
+				IF @@ROWCOUNT = 0
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Relazione non trovata o già rimossa';
+					GOTO BRANCH_END;
+				END
+
+				-- Imposta la registrazione padre nello stato "Da confermare"
+				UPDATE dbo.tblRifiutiRegistrazioni
+				SET Lock = 1
+				WHERE
+					Id = @IdParent
+					AND Lock = 0;
+			COMMIT TRANSACTION;
+		END
+
+		SELECT @returnValue AS ReturnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1
+	END
+
+END;
+
+--------------------------------------------------------------------------------
+-- dbo.uspRifiutiRegistrazioni_upd_Numerazione
+--------------------------------------------------------------------------------
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd_Numerazione]
+	@IdSessione CHAR(16),
+	@DalNumero INT,
+	@AlNumero INT,
+	@Anno INT,
+	@PrimoNumero INT
+AS
+BEGIN
+
+SET NOCOUNT, XACT_ABORT ON
+
+BEGIN TRY
+
+DECLARE @returnValue INT = 0
+DECLARE @returnMessage NVARCHAR(200) = NULL
+
+-- Controlla il permesso sulla funzione
+DECLARE @permesso TINYINT
+EXEC dbo.uspSessione_get_FunzionePermesso @Id = @IdSessione, @IdFunzione = 'RRG', @Permesso = @permesso OUTPUT
+IF 2 > @permesso
+BEGIN
+	SET @returnValue = -1;
+	SET @returnMessage = 'Non si dispone dei diritti necessari'
+	GOTO BRANCH_END
+END
+
+DECLARE @totaleDaRinumerare INT
+SELECT
+	@totaleDaRinumerare = COUNT(*)
+FROM
+	dbo.tblRifiutiRegistrazioni r
+	INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+	INNER JOIN dbo.tblSessioni e ON m.IdRegistro = e.IdRegistro
+WHERE
+	e.Id = @IdSessione
+	AND r.Lock < 2
+	AND YEAR(r.[Data]) = @Anno
+	AND r.Numero BETWEEN @DalNumero AND @AlNumero
+
+-- Se non c'è nulla da rinumerare
+IF @totaleDaRinumerare = 0
+BEGIN
+	SET @returnValue = -1;
+	SET @returnMessage = 'Non ci sono registrazioni nell''intervallo indicato'
+	GOTO BRANCH_END
+END
+
+-- Se l'intervallo contiene registrazioni già inviate a RENTRI: il Numero/Anno trasmesso
+-- non può più essere modificato, pena il disallineamento con quanto RENTRI ha registrato
+IF EXISTS (SELECT 1
+	FROM
+		dbo.tblRifiutiRegistrazioni r
+		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+		INNER JOIN dbo.tblSessioni e ON m.IdRegistro = e.IdRegistro
+	WHERE
+		e.Id = @IdSessione
+		AND r.Lock < 2
+		AND YEAR(r.[Data]) = @Anno
+		AND r.Numero BETWEEN @DalNumero AND @AlNumero
+		AND (r.RentriIdentificativo IS NOT NULL OR r.RentriData IS NOT NULL)
+)
+BEGIN
+	SET @returnValue = -1;
+	SET @returnMessage = 'L''intervallo contiene registrazioni già inviate al RENTRI: non possono essere rinumerate'
+	GOTO BRANCH_END
+END
+
+-- Se la numerazione finale supera 999.999
+IF @PrimoNumero + @totaleDaRinumerare > 999999
+BEGIN
+	SET @returnValue = -1;
+	SET @returnMessage = 'La rinumerazione non può assegnare numeri maggiori di 999.999'
+	GOTO BRANCH_END
+END
+
+-- Se la nuova rinumerazione entra in conflitto con altre registrazioni al di fuori del gruppo che sarà rinumerato
+IF EXISTS (SELECT 1
+	FROM
+		dbo.tblRifiutiRegistrazioni r
+		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+		INNER JOIN dbo.tblSessioni e ON m.IdRegistro = e.IdRegistro
+	WHERE
+		e.Id = @IdSessione
+		AND r.Lock < 2
+		AND YEAR(r.[Data]) = @Anno
+		AND r.Numero NOT BETWEEN @DalNumero AND @AlNumero
+		AND r.Numero BETWEEN @PrimoNumero AND @PrimoNumero + @totaleDaRinumerare
+)
+BEGIN
+	SET @returnValue = -1;
+	SET @returnMessage = 'La nuova numerazione è in conflitto con quella di altre registrazioni'
+	GOTO BRANCH_END
+END
+
+UPDATE r
+SET Numero = t.NumeroBase + @PrimoNumero - 1
+FROM
+	dbo.tblRifiutiRegistrazioni r INNER JOIN
+	(SELECT
+		r.Id,
+		NumeroBase = ROW_NUMBER() OVER (ORDER BY r.[Data], r.Numero)
+	FROM
+		dbo.tblRifiutiRegistrazioni r
+		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+		INNER JOIN dbo.tblSessioni e ON m.IdRegistro = e.IdRegistro
+	WHERE
+		e.Id = @IdSessione
+		AND r.Lock < 2
+		AND YEAR(r.[Data]) = @Anno
+		AND r.Numero BETWEEN @DalNumero AND @AlNumero
+	) t ON r.Id = t.Id
+
+	SET @returnValue = @@ROWCOUNT
+
+END TRY
+BEGIN CATCH
+	THROW;
+END CATCH
+
+BRANCH_END:
+
+SET NOCOUNT, XACT_ABORT OFF
+
+IF @returnValue < 0
+BEGIN
+	SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+	THROW 50001, @returnMessage, 1;
+END
+
+SELECT ReturnValue = @returnValue
+
+END

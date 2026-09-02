@@ -1,3 +1,8 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_ins_Relazione]
 	@IdSessione CHAR(16) = NULL,
 	@Id CHAR(16) = NULL,
@@ -43,7 +48,12 @@ BEGIN
 
 		-- Recupera l'operazione del padre e verifica che esista
 		DECLARE @operazioneParent CHAR(1);
-		SELECT @operazioneParent = Operazione
+		DECLARE @rentriIdentificativo VARCHAR(20);
+		DECLARE @rentriData DATETIME2(0);
+		SELECT
+			@operazioneParent = Operazione,
+			@rentriIdentificativo = RentriIdentificativo,
+			@rentriData = RentriData
 		FROM dbo.tblRifiutiRegistrazioni
 		WHERE Id = @IdParent;
 
@@ -51,6 +61,14 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Registrazione padre non trovata';
+			GOTO BRANCH_END;
+		END
+
+		-- La registrazione padre, già trasmessa a RENTRI, non può cambiare le proprie associazioni
+		IF @rentriIdentificativo IS NOT NULL OR @rentriData IS NOT NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La registrazione è già stata inviata al RENTRI: non può essere associata ad altre registrazioni';
 			GOTO BRANCH_END;
 		END
 

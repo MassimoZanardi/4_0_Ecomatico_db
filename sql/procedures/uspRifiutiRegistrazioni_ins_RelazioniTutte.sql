@@ -1,3 +1,8 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_ins_RelazioniTutte]
 	@IdSessione CHAR(16) = NULL,
 	@IdParent CHAR(16) = NULL,
@@ -83,6 +88,20 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- La registrazione padre, già trasmessa a RENTRI, non può cambiare le proprie associazioni
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblRifiutiRegistrazioni
+			WHERE
+				Id = @IdParent
+				AND (RentriIdentificativo IS NOT NULL OR RentriData IS NOT NULL)
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La registrazione è già stata inviata al RENTRI: non può essere associata ad altre registrazioni';
 			GOTO BRANCH_END;
 		END
 

@@ -22,8 +22,10 @@
 	3. dbo.uspRifiutiRegistrazioni_del (esteso con hard-delete+ripristino rettifica, @IsMultipla)
 	4. dbo.uspRifiutiRegistrazioni_upd_Rettifica (NUOVA SP)
 	5. dbo.uspRifiutiRegistrazioni_get (esteso con IsRettifica/IsRettificaCampiBloccati/
-	   IdRegistrazioneOriginaleRettifica; aggiunto anche l'header SET ANSI_NULLS/QUOTED_IDENTIFIER
-	   mancante, QUOTED_IDENTIFIER era OFF lato server - nessun impatto funzionale)
+	   IdRegistrazioneOriginaleRettifica/RettificaRegistrazioneNumero/RettificaRegistrazioneData -
+	   quest'ultime due per il banner "Questa registrazione rettifica la registrazione n. XXX del
+	   dd/MM/yyyy" in Edit.cshtml; aggiunto anche l'header SET ANSI_NULLS/QUOTED_IDENTIFIER mancante,
+	   QUOTED_IDENTIFIER era OFF lato server - nessun impatto funzionale)
 	6. dbo.uspRifiutiRegistrazioni_get_List (esteso con IsRettifica/RettificaRegistrazioneNumero/
 	   RettificaRegistrazioneData - servono a _RentriStatoPartial per l'icona di rettifica in Index)
 	7. dbo.viewRentriRegistrazioni (valorizza RettificaNumero/RettificaAnno/RettificaIdentificativo
@@ -1494,6 +1496,8 @@ BEGIN
 			-- della specifica): Eer/StatoFisico/UnitaMisura/Quantita non modificabili se l'originale ha
 			-- relazioni carico/scarico attive su entrambi i lati.
 			IdRegistrazioneOriginaleRettifica = rett.Id,
+			RettificaRegistrazioneNumero = ro.Numero,
+			RettificaRegistrazioneData = ro.Data,
 			IsRettifica = CAST(IIF(rett.Id IS NOT NULL, 1, 0) AS BIT),
 			IsRettificaCampiBloccati = CAST(IIF(rett.Id IS NOT NULL AND EXISTS (
 				SELECT 1
@@ -1519,6 +1523,7 @@ BEGIN
 			LEFT JOIN dbo.tblRifiutiFormulari f ON m.Id = f.IdMovimento AND f.Lock < 2
 			LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 			LEFT JOIN dbo.tblRentriRegistrazioniRettifiche rett ON rett.IdRettifica = r.Id
+			LEFT JOIN dbo.tblRifiutiRegistrazioni ro ON rett.Id = ro.Id
 			-- Produttori
 			LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp ON m.Id = mp.Id AND mp.Pos = 0
 			-- Destinatari

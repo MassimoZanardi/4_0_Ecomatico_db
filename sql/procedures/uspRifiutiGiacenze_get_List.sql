@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiGiacenze_get_List]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiGiacenze_get_List]
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
 	@IdSessione CHAR(16) = NULL,
@@ -127,6 +127,9 @@ BEGIN
 				AND o.Operazione = 'C'
 				AND @Vista IN ('E', 'T')
 				AND (@Search IS NULL OR m.IdEer LIKE '%' + REPLACE(@Search, '.', '') + '%')
+				-- Una registrazione di rettifica o annullamento non è un movimento reale di
+				-- carico/scarico: non deve mai contribuire alla giacenza
+				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
 			GROUP BY
 				CASE WHEN @Vista IN ('E', 'M') THEN e.Id END,
 				CASE WHEN @Vista IN ('E', 'M') THEN s.Nome END,
@@ -163,6 +166,7 @@ BEGIN
 				AND o.Operazione = 'S'
 				AND @Vista IN ('E', 'T')
 				AND (@Search IS NULL OR m.IdEer LIKE '%' + REPLACE(@Search, '.', '') + '%')
+				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
 			GROUP BY
 				CASE WHEN @Vista IN ('E', 'M') THEN e.Id END,
 				CASE WHEN @Vista IN ('E', 'M') THEN s.Nome END,
@@ -198,6 +202,7 @@ BEGIN
 				AND o.Operazione = 'C'
 				AND @Vista IN ('M', 'T')
 				AND (@Search IS NULL OR e.Id LIKE '%' + @Search + '%' OR e.Nome LIKE '%' + @Search + '%')
+				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
 			GROUP BY
 				CASE WHEN @Vista IN ('E', 'M') THEN e.Id END,
 				CASE WHEN @Vista = 'T' THEN r.Etichette END

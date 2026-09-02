@@ -105,6 +105,15 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Una registrazione di rettifica o annullamento non ha mai relazioni carico/scarico
+		-- proprie - difesa in profondità, la UI già nasconde la sezione per queste registrazioni
+		IF EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = @IdParent)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Una registrazione di rettifica o annullamento non può avere relazioni di carico/scarico';
+			GOTO BRANCH_END;
+		END
+
 		DECLARE @pos INT;
 		SELECT @pos = ISNULL(MAX(s.Pos), -1)
 		FROM
@@ -186,6 +195,9 @@ BEGIN
 				AND m.IdOperazione IN ( SELECT IdParent FROM dbo.tblRifiutiOperazioniRelazioni WHERE Id = @idOperazione )
 				AND m.Quantita - ISNULL(a.Quantita, 0) > 0 -- QuantitaResidua > 0
 				AND NOT EXISTS ( SELECT 1 FROM dbo.tblRifiutiRegistrazioniRelazioni x WHERE x.Id = r.Id AND x.IdParent = @IdParent )
+				-- Una registrazione di rettifica o annullamento non ha mai relazioni carico/scarico
+				-- proprie: non deve mai comparire come candidata da associare
+				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
 			ORDER BY YEAR(r.[Data]), r.Numero;
 
 			SET @returnValue = @@ROWCOUNT;

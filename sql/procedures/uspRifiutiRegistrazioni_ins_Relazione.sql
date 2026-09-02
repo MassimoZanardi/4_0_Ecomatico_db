@@ -72,6 +72,16 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Una registrazione di rettifica o annullamento non ha mai relazioni carico/scarico
+		-- proprie (né come padre né come figlia) - difesa in profondità, la UI già la esclude
+		-- dalle liste di selezione (uspRifiutiRegistrazioni_get_RegistrazioniDaAssociare_List)
+		IF EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica IN (@Id, @IdParent))
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Una registrazione di rettifica o annullamento non può avere relazioni di carico/scarico';
+			GOTO BRANCH_END;
+		END
+
 		IF (
 			SELECT COUNT(DISTINCT r.Id)
 			FROM

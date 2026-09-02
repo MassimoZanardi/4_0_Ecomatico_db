@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiGiacenze_get_Quantita]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiGiacenze_get_Quantita]
 	@IdRegistro CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@IdEer CHAR(6) = NULL,
@@ -109,7 +109,10 @@ BEGIN
 				(ISNULL(m.IdOperazione, '') <> 'R' AND o.Operazione = 'C')
 				OR (m.IdOperazione = 'R' AND o.Operazione = 'S')
 			)
-			AND (m.Quantita - ISNULL(a.Quantita, 0)) > 0;
+			AND (m.Quantita - ISNULL(a.Quantita, 0)) > 0
+			-- Una registrazione di rettifica o annullamento non è un movimento reale di
+			-- carico/scarico: non deve mai contribuire alla giacenza
+			AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id);
 
 		SELECT rtn = ISNULL(@Giacenza, 0);
 

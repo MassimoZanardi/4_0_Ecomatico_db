@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_RegistrazioniDaAssociare_List]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_RegistrazioniDaAssociare_List]
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
 	@IdParent CHAR(16) = NULL,
@@ -144,7 +144,10 @@ BEGIN
 				)
 			AND m.IdOperazione IN ( SELECT IdParent FROM dbo.tblRifiutiOperazioniRelazioni WHERE Id = @idOperazione )
 			AND (m.Quantita - ISNULL(a.Quantita, 0)) > 0
-			AND r.Id NOT IN ( SELECT Id FROM dbo.tblRifiutiRegistrazioniRelazioni WHERE IdParent = @IdParent );
+			AND r.Id NOT IN ( SELECT Id FROM dbo.tblRifiutiRegistrazioniRelazioni WHERE IdParent = @IdParent )
+			-- Una registrazione di rettifica o annullamento non ha mai relazioni carico/scarico
+			-- proprie: non deve mai comparire come candidata da associare
+			AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id);
 
 		CREATE UNIQUE CLUSTERED INDEX IX_cte_Anno_Numero ON #cte (Anno, Numero, Id);
 

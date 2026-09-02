@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiGiacenze_get_Carichi_List]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiGiacenze_get_Carichi_List]
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
 	@IdSessione CHAR(16) = NULL,
@@ -151,6 +151,9 @@ BEGIN
 				AND (@Tipo IS NULL OR @Vista = 'T' OR (e.Id = @Id AND m.IdStatoFisico = @IdStatoFisico))
 				AND (@Tipo IS NULL OR @Vista = 'E' OR ((@Etichette IS NULL AND r.Etichette IS NULL) OR r.Etichette = @Etichette))
 				AND (@Search IS NULL OR e.Id LIKE '%' + REPLACE(@Search, '.', '') + '%')
+				-- Una registrazione di rettifica o annullamento non è un movimento reale di
+				-- carico/scarico: non deve mai contribuire alla giacenza
+				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
 
 			UNION ALL
 
@@ -187,6 +190,7 @@ BEGIN
 				AND (@Tipo IS NULL OR @Vista = 'T' OR (ISNULL(e.Id, '') = ISNULL(@Id, '') AND ISNULL(m.IdStatoFisico, '') = ISNULL(@IdStatoFisico, '')))
 				AND (@Tipo IS NULL OR @Vista = 'E' OR ((@Etichette IS NULL AND r.Etichette IS NULL) OR r.Etichette = @Etichette))
 				AND (@Search IS NULL OR ISNULL(e.Id, '') LIKE '%' + REPLACE(@Search, '.', '') + '%')
+				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
 
 			UNION ALL
 
@@ -222,6 +226,7 @@ BEGIN
 				AND (@Tipo IS NULL OR @Vista = 'T' OR e.Id = @Id)
 				AND (@Tipo IS NULL OR @Vista = 'E' OR ((@Etichette IS NULL AND r.Etichette IS NULL) OR r.Etichette = @Etichette))
 				AND (@Search IS NULL OR e.Id LIKE '%' + @Search + '%' OR e.Nome LIKE '%' + @Search + '%')
+				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
 		)
 		SELECT
 			Id, Numero, [Data], IdEer, EerNome, IdStatoFisico, StatoFisico, Etichette,

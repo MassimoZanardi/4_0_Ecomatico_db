@@ -1,3 +1,8 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
@@ -173,6 +178,26 @@ BEGIN
 			IsMateriale = ISNULL(o.IsMateriale, 0),
 			IsStoccaggioIstantaneo = ISNULL(o.IsStoccaggioIstantaneo, 0),
 
+			-- Rettifica: rett.Id valorizzato solo se questa registrazione è essa stessa una rettifica di
+			-- un'altra (tblRentriRegistrazioniRettifiche.IdRettifica = r.Id). IsRettificaCampiBloccati
+			-- riflette lato UI lo stesso gate applicato in uspRifiutiRegistrazioni_upd_Rettifica (punto 4
+			-- della specifica): Eer/StatoFisico/UnitaMisura/Quantita non modificabili se l'originale ha
+			-- relazioni carico/scarico attive su entrambi i lati.
+			IdRegistrazioneOriginaleRettifica = rett.Id,
+			IsRettifica = CAST(IIF(rett.Id IS NOT NULL, 1, 0) AS BIT),
+			IsRettificaCampiBloccati = CAST(IIF(rett.Id IS NOT NULL AND EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblRifiutiRegistrazioniRelazioni l
+					INNER JOIN dbo.tblRifiutiRegistrazioni r2 ON l.Id = r2.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioni rp2 ON l.IdParent = rp2.Id
+				WHERE
+					(l.Id = rett.Id OR l.IdParent = rett.Id)
+					AND l.Quantita > 0
+					AND r2.Lock < 2
+					AND rp2.Lock < 2
+			), 1, 0) AS BIT),
+
 			Lock = r.Lock
 		FROM
 			dbo.tblRifiutiRegistrazioni r
@@ -180,6 +205,7 @@ BEGIN
 			LEFT JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
 			LEFT JOIN dbo.tblRifiutiFormulari f ON m.Id = f.IdMovimento AND f.Lock < 2
 			LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+			LEFT JOIN dbo.tblRentriRegistrazioniRettifiche rett ON rett.IdRettifica = r.Id
 			-- Produttori
 			LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp ON m.Id = mp.Id AND mp.Pos = 0
 			-- Destinatari

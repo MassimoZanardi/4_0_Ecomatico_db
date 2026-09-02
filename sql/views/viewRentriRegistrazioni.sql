@@ -32,11 +32,11 @@ SELECT
     Anno                        = YEAR(r.Data),
 
     -- Registrazione di rettifica (tblRentriRegistrazioniRettifiche.IdRettifica = r.Id): riferimento alla
-    -- registrazione originale corretta, letta dal JOIN rett/rOriginale sotto. Nessun concetto di
+    -- registrazione originale corretta, letta dal JOIN rett/ro sotto. Nessun concetto di
     -- "annullamento" in questo schema (solo correzione), RettificaIsAnnullata resta sempre 0.
-    RettificaNumero              = ISNULL(rOriginale.Numero, 0),
-    RettificaAnno                 = ISNULL(YEAR(rOriginale.Data), 0),
-    RettificaIdentificativo      = rOriginale.RentriIdentificativo,
+    RettificaNumero              = ISNULL(ro.Numero, 0),
+    RettificaAnno                 = ISNULL(YEAR(ro.Data), 0),
+    RettificaIdentificativo      = ro.RentriIdentificativo,
     RettificaIsAnnullata          = CAST(0 AS BIT),
 
     Data                         = r.Data,
@@ -163,7 +163,7 @@ FROM
     LEFT  JOIN dbo.tblRifiutiRegistrazioniEsitiCausaliRespingimento ecr ON r.IdCausaleRespingimento = ecr.Id
     LEFT  JOIN dbo.tblRifiutiTrasportiTransfrontalieriTipi tt ON r.IdTrasportoTransfrontalieroTipo = tt.Id
     LEFT  JOIN dbo.tblRentriRegistrazioniRettifiche    rett ON r.Id                        = rett.IdRettifica
-    LEFT  JOIN dbo.tblRifiutiRegistrazioni             rOriginale ON rett.Id                = rOriginale.Id
+    LEFT  JOIN dbo.tblRifiutiRegistrazioni             ro   ON rett.Id                     = ro.Id
 
     LEFT  JOIN dbo.tblSedi                             sp   ON m.IdSedeProduttoreDetentore = sp.Id
     LEFT  JOIN dbo.tblSediIndirizzi                    sip  ON sp.Id                       = sip.Id

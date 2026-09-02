@@ -192,7 +192,10 @@ BEGIN
 					INNER JOIN dbo.tblRifiutiRegistrazioni r2 ON l.Id = r2.Id
 					INNER JOIN dbo.tblRifiutiRegistrazioni rp2 ON l.IdParent = rp2.Id
 				WHERE
-					(l.Id = rett.Id OR l.IdParent = rett.Id)
+					(
+					l.Id = rett.Id
+					OR l.IdParent = rett.Id
+					)
 					AND l.Quantita > 0
 					AND r2.Lock < 2
 					AND rp2.Lock < 2

@@ -112,8 +112,9 @@ BEGIN
                 LEFT  JOIN dbo.tblSedi                       sd ON m.IdSedeDestinatario        = sd.Id
                 LEFT  JOIN dbo.tblSedi                       si ON m.IdSedeIntermediario1      = si.Id
                 LEFT  JOIN dbo.tblRentriRegistri             z  ON g.Id                        = z.Id
-                LEFT  JOIN dbo.tblRentriRegistrazioniRettifiche rett ON rett.IdRettifica        = r.Id
-                LEFT  JOIN dbo.tblRifiutiRegistrazioni       ro ON rett.Id                       = ro.Id
+                LEFT  JOIN dbo.tblRentriRegistrazioniRettifiche
+                                                             rett ON rett.IdRettifica          = r.Id
+                LEFT  JOIN dbo.tblRifiutiRegistrazioni       ro ON rett.Id                     = ro.Id
             WHERE
                 e.Id      = @IdSessione
                 AND r.Lock < 2

@@ -147,7 +147,8 @@ BEGIN
 				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE
 				r.Id = @IdCopia
-				AND r.Lock < 2)
+				AND r.Lock < 2
+		)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
@@ -166,7 +167,8 @@ BEGIN
 					INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 				WHERE
 					r.Id = @IdRettifica
-					AND r.Lock < 2)
+					AND r.Lock < 2
+			)
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Non si dispone dei diritti necessari';
@@ -177,7 +179,8 @@ BEGIN
 			FROM dbo.tblRifiutiRegistrazioni
 			WHERE
 				Id = @IdRettifica
-				AND RentriIdentificativo IS NOT NULL)
+				AND RentriIdentificativo IS NOT NULL
+			)
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Solo una registrazione già inviata al RENTRI può essere rettificata';
@@ -206,7 +209,8 @@ BEGIN
 					INNER JOIN dbo.tblRifiutiRegistrazioni rr ON t.IdRettifica = rr.Id
 				WHERE
 					t.Id = @IdRettifica
-					AND rr.RentriIdentificativo IS NULL)
+					AND rr.RentriIdentificativo IS NULL
+			)
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Esiste già una rettifica non ancora inviata al RENTRI per questa registrazione';

@@ -88,7 +88,8 @@ BEGIN
 			FROM dbo.tblRifiutiRegistrazioni
 			WHERE
 				Id = @Id
-				AND RentriIdentificativo IS NOT NULL)
+				AND RentriIdentificativo IS NOT NULL
+		)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Una registrazione di rettifica non ancora inviata al RENTRI va cancellata singolarmente';
@@ -198,7 +199,9 @@ BEGIN
 						AND @idFormulario IS NULL;
 					DELETE dbo.tblRifiutiRegistrazioniEtichette
 					WHERE Id = @Id;
-					UPDATE dbo.tblEoWMovimenti SET IdRegistrazione = NULL WHERE IdRegistrazione = @Id;
+					UPDATE dbo.tblEoWMovimenti
+					SET IdRegistrazione = NULL
+					WHERE IdRegistrazione = @Id;
 					DELETE dbo.tblRentriRegistrazioniRettifiche
 					WHERE
 						Id = @idOriginaleRettifica
@@ -323,7 +326,9 @@ BEGIN
 				-- di magazzino EoW - si azzera il collegamento anziché bloccare la cancellazione,
 				-- il movimento resta un record di magazzino valido anche senza la registrazione di
 				-- origine (stesso pattern di uspSYS_del_RegistroCascade).
-				UPDATE dbo.tblEoWMovimenti SET IdRegistrazione = NULL WHERE IdRegistrazione = @Id;
+				UPDATE dbo.tblEoWMovimenti
+				SET IdRegistrazione = NULL
+				WHERE IdRegistrazione = @Id;
 				-- Bozza di rettifica mai confermata: nessun valore è mai stato propagato sull'originale
 				-- (la propagazione avviene solo in uspRifiutiRegistrazioni_upd_Rettifica al salvataggio),
 				-- quindi qui basta rimuovere il collegamento, nessun ripristino necessario.

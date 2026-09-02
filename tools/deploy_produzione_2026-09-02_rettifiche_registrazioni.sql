@@ -540,10 +540,16 @@ BEGIN
 				END
 				ELSE IF @IdCopia IS NOT NULL OR @IdRettifica IS NOT NULL
 				BEGIN
+					-- Quantita: MAI copiata per Copia/incolla (dipende da relazioni/giacenze, la nuova
+					-- registrazione parte sempre senza relazioni - invariato). Per Rettifica invece va
+					-- precompilata con la quantita' corrente dell'originale (@cQuantitaOriginale): se
+					-- l'originale ha relazioni attive il campo sara' disabilitato in UI e DEVE già
+					-- contenere il valore reale, altrimenti uspRifiutiRegistrazioni_upd_Rettifica rifiuta
+					-- il salvataggio confrontandolo con un valore mai impostato (0/NULL).
 					INSERT dbo.tblRifiutiMovimenti
-						(Id, IdRegistro, IdOperazione, IdEer, EerDescrizione, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, Note)
+						(Id, IdRegistro, IdOperazione, IdEer, EerDescrizione, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, Note, Quantita)
 					VALUES
-						(@idMovimento, @idRegistroFinale, @cIdOperazione, @cIdEer, @cEerDescrizione, @cIdStatoFisico, @cIdAttivita, @cIdUnitaMisura, @cIdProvenienza, @cNote);
+						(@idMovimento, @idRegistroFinale, @cIdOperazione, @cIdEer, @cEerDescrizione, @cIdStatoFisico, @cIdAttivita, @cIdUnitaMisura, @cIdProvenienza, @cNote, IIF(@IdRettifica IS NOT NULL, @cQuantitaOriginale, NULL));
 
 					IF @cIdAutorizzazioneProduttoreDetentore IS NOT NULL
 						INSERT dbo.tblRifiutiMovimentiProduttori (Id, IdAutorizzazione, Pos)

@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -135,7 +135,11 @@ SELECT
     IsDestinatario                 = CAST(IIF(ISNULL(o.IsDestinatario, 0)  = 1 AND m.IdSedeDestinatario        IS NOT NULL, 1, 0) AS BIT),
     IsIntermediario                = CAST(IIF(ISNULL(o.IsIntermediario, 0) = 1 AND m.IdSedeIntermediario1      IS NOT NULL, 1, 0) AS BIT),
     IsEsito                        = ISNULL(o.IsEsito, 0),
-    IsFormulario                   = ISNULL(o.IsFormulario, 0),
+    -- Non da tblRifiutiOperazioni.IsFormulario (governa il comportamento applicativo, non la
+    -- compilazione RENTRI): l'API dati-registri vieta il blocco integrazione_fir solo per causali
+    -- diverse da aT/TR/T*/T*aT (schema OpenAPI dati-registri v1.0, campo integrazione_fir) - con la
+    -- vecchia logica (o.IsFormulario) TR/T* lo perdevano sempre, anche con un FIR reale.
+    IsFormulario                   = CAST(IIF(o.Codice IN ('aT', 'TR', 'T*', 'T*aT'), 1, 0) AS BIT),
     IsTransfrontaliero            = CAST(IIF(r.IdTrasportoTransfrontalieroTipo IS NOT NULL, 1, 0) AS BIT),
     IsStoccaggioIstantaneo        = ISNULL(o.IsStoccaggioIstantaneo, 0),
 

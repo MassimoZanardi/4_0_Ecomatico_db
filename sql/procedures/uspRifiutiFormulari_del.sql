@@ -1,3 +1,8 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_del]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -69,6 +74,23 @@ BEGIN
 		DECLARE @lock INT = (SELECT Lock
 		FROM dbo.tblRifiutiFormulari
 		WHERE Id = @Id);
+
+		DECLARE @rentriIdentificativo VARCHAR(20);
+		DECLARE @rentriData DATETIME2(0);
+		SELECT @rentriIdentificativo = r.RentriIdentificativo, @rentriData = r.RentriData
+		FROM
+			dbo.tblRifiutiFormulari f
+			INNER JOIN dbo.tblRifiutiRegistrazioni r ON f.IdMovimento = r.IdMovimento AND r.Lock < 2
+		WHERE f.Id = @Id;
+
+		-- Se la registrazione associata è già stata trasmessa a RENTRI, il formulario non può
+		-- più essere cancellato (un formulario senza registrazione associata resta cancellabile)
+		IF @rentriIdentificativo IS NOT NULL OR @rentriData IS NOT NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La registrazione associata è già stata inviata al RENTRI: il formulario non può più essere cancellato';
+			GOTO BRANCH_END;
+		END
 
 		-- Se il record è già stato aggiunto
 		IF @lock = 0

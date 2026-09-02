@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -131,6 +131,8 @@ BEGIN
 		DECLARE @isIntermediario BIT;
 		DECLARE @isAttivitaRs BIT;
 		DECLARE @isAttivitaProvenienza BIT;
+		DECLARE @rentriIdentificativo VARCHAR(20);
+		DECLARE @rentriData DATETIME2(0);
 
 		-- Recupero dati registrazione
 		SELECT
@@ -140,6 +142,8 @@ BEGIN
 			@lock = r.Lock,
 			@operazione = r.Operazione,
 			@idOperazione = m.IdOperazione,
+			@rentriIdentificativo = r.RentriIdentificativo,
+			@rentriData = r.RentriData,
 			@isIntegrazioneFir = o.IsIntegrazioneFir,
 			@isFormularioAssociato = CAST(IIF(f.IdMovimento IS NOT NULL AND f.Lock < 2, 1, 0) AS BIT),
 			@isEsito = o.IsEsito,
@@ -188,6 +192,14 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Una registrazione già trasmessa a RENTRI non può più essere modificata in alcun modo
+		IF @rentriIdentificativo IS NOT NULL OR @rentriData IS NOT NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La registrazione è già stata inviata al RENTRI: non può più essere modificata';
 			GOTO BRANCH_END;
 		END
 

@@ -1,3 +1,8 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_del]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -73,10 +78,24 @@ BEGIN
 		DECLARE @operazione CHAR(1);
 		DECLARE @idOperazione CHAR(1);
 		DECLARE @isFormulario BIT;
+		DECLARE @rentriIdentificativo VARCHAR(20);
+		DECLARE @rentriData DATETIME2(0);
 
 		-- ── CASO 1: registrazione attiva (Lock = 0) → soft delete ────────────
 		IF @lock = 0
 		BEGIN
+			SELECT @rentriIdentificativo = RentriIdentificativo, @rentriData = RentriData
+			FROM dbo.tblRifiutiRegistrazioni
+			WHERE Id = @Id;
+
+			-- Una registrazione già trasmessa a RENTRI non può più essere cancellata
+			IF @rentriIdentificativo IS NOT NULL OR @rentriData IS NOT NULL
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'La registrazione è già stata inviata al RENTRI: non può più essere cancellata';
+				GOTO BRANCH_END;
+			END
+
 			IF EXISTS (
 				SELECT 1
 				FROM dbo.tblRifiutiRegistrazioniRelazioni a

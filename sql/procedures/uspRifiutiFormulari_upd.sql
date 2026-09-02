@@ -1,3 +1,8 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_upd]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -142,6 +147,8 @@ BEGIN
 		DECLARE @quantitaRelazione DECIMAL(18,2);
 		DECLARE @quantitaResidua DECIMAL(18,2);
 		DECLARE @nessunaRegistrazioneAssociata BIT = 1;
+		DECLARE @rentriIdentificativo VARCHAR(20);
+		DECLARE @rentriData DATETIME2(0);
 
 		-- Recupero dati formulario dalle tabelle base
 		SELECT
@@ -153,6 +160,8 @@ BEGIN
 			@isRegistrazioneAssociata = IIF(r.Id IS NOT NULL AND ISNULL(r.Lock, 8) < 2, 1, 0),
 			@registrazioneData = r.[Data],
 			@registrazioneNumero = r.Numero,
+			@rentriIdentificativo = r.RentriIdentificativo,
+			@rentriData = r.RentriData,
 			@nessunaRegistrazioneAssociata = CASE
 				WHEN EXISTS(
 					SELECT 1
@@ -175,6 +184,15 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Formulario non trovato';
+			GOTO BRANCH_END;
+		END
+
+		-- Se la registrazione associata è già stata trasmessa a RENTRI, il formulario non può più
+		-- essere modificato (un formulario senza registrazione associata resta invece modificabile)
+		IF @isRegistrazioneAssociata = 1 AND (@rentriIdentificativo IS NOT NULL OR @rentriData IS NOT NULL)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La registrazione associata è già stata inviata al RENTRI: il formulario non può più essere modificato';
 			GOTO BRANCH_END;
 		END
 

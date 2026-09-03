@@ -174,7 +174,10 @@ FROM
     LEFT JOIN (
         SELECT
             mc.Id,
-            ClassiPericolo = STRING_AGG(c.Codice, ';') WITHIN GROUP (ORDER BY c.Codice)
+            -- Spazio come delimitatore (non ';' come in viewRentriRegistrazioni): stessa resa di
+            -- 3_1_ecomatico..viewRentriRegistrazioniStampa (STRING_AGG('HP'+IDClasse, ' ')), qui senza
+            -- concatenare 'HP' perche' c.Codice lo include gia' (verificato su dbo.tblRifiutiClassiPericolo)
+            ClassiPericolo = STRING_AGG(c.Codice, ' ') WITHIN GROUP (ORDER BY c.Codice)
         FROM
             dbo.tblRifiutiMovimentiClassiPericolo mc
             LEFT JOIN dbo.tblRifiutiClassiPericolo c ON mc.IdClasse = c.Id

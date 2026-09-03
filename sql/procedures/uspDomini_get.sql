@@ -71,7 +71,7 @@ BEGIN
 			MagazziniMax,
 			ServiziMax,
 			RentriMax,
-			ConservazioniMax,
+			ConservazioniMax = ISNULL(ConservazioniMax, 0),
 			Demo,
 			Logo,
 			Codice = LOWER(ISNULL(Codice, RIGHT(CONVERT(VARCHAR(36), NEWID()), 5))),

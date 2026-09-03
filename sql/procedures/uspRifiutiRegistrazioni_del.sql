@@ -103,11 +103,12 @@ BEGIN
 		DECLARE @isFormulario BIT;
 		DECLARE @rentriIdentificativo VARCHAR(20);
 		DECLARE @rentriData DATETIME2(0);
+		DECLARE @conservazioneSostitutiva BIT;
 
 		-- ── CASO 1: registrazione attiva (Lock = 0) → soft delete, o hard delete se è una rettifica ──
 		IF @lock = 0
 		BEGIN
-			SELECT @rentriIdentificativo = RentriIdentificativo, @rentriData = RentriData
+			SELECT @rentriIdentificativo = RentriIdentificativo, @rentriData = RentriData, @conservazioneSostitutiva = ConservazioneSostitutiva
 			FROM dbo.tblRifiutiRegistrazioni
 			WHERE Id = @Id;
 
@@ -116,6 +117,14 @@ BEGIN
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'La registrazione è già stata inviata al RENTRI: non può più essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			-- Una registrazione bloccata per la conservazione sostitutiva non può più essere cancellata
+			IF ISNULL(@conservazioneSostitutiva, 0) = 1
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'La registrazione è bloccata per la conservazione sostitutiva: non può più essere cancellata';
 				GOTO BRANCH_END;
 			END
 

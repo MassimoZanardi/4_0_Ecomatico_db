@@ -133,6 +133,7 @@ BEGIN
 		DECLARE @isAttivitaProvenienza BIT;
 		DECLARE @rentriIdentificativo VARCHAR(20);
 		DECLARE @rentriData DATETIME2(0);
+		DECLARE @conservazioneSostitutiva BIT;
 
 		-- Recupero dati registrazione
 		SELECT
@@ -144,6 +145,7 @@ BEGIN
 			@idOperazione = m.IdOperazione,
 			@rentriIdentificativo = r.RentriIdentificativo,
 			@rentriData = r.RentriData,
+			@conservazioneSostitutiva = r.ConservazioneSostitutiva,
 			@isIntegrazioneFir = o.IsIntegrazioneFir,
 			@isFormularioAssociato = CAST(IIF(f.IdMovimento IS NOT NULL AND f.Lock < 2, 1, 0) AS BIT),
 			@isEsito = o.IsEsito,
@@ -200,6 +202,14 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'La registrazione è già stata inviata al RENTRI: non può più essere modificata';
+			GOTO BRANCH_END;
+		END
+
+		-- Una registrazione portata/bloccata per la conservazione sostitutiva non può più essere modificata
+		IF ISNULL(@conservazioneSostitutiva, 0) = 1
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La registrazione è bloccata per la conservazione sostitutiva: non può più essere modificata';
 			GOTO BRANCH_END;
 		END
 

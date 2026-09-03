@@ -71,10 +71,10 @@ BEGIN
 			BloccoFormulari = h.BloccoFormulari,
 			DataInizioInvio = h.DataInizioInvio,
 			IsCollegato = CAST(IIF(r.IdRentri IS NULL, 0, 1) AS BIT),
-			ConservazioneSostitutiva = ISNULL(g.ConservazioneSostitutiva, 0),
-			ConservazioneSostitutivaRagioneSociale = ISNULL(g.ConservazioneSostitutivaRagioneSociale, ''),
-			ConservazioneSostitutivaPartitaIva = ISNULL(g.ConservazioneSostitutivaPartitaIva, ''),
-			ConservazioneSostitutivaEmail = ISNULL(g.ConservazioneSostitutivaEmail, '')
+			Conservazione = ISNULL(h.Conservazione, 0),
+			ConservazioneNome = ISNULL(h.ConservazioneNome, ''),
+			ConservazioneCodiceFiscale = ISNULL(h.ConservazioneCodiceFiscale, ''),
+			ConservazioneEmail = ISNULL(h.ConservazioneEmail, '')
 		FROM
 			dbo.tblRifiutiRegistri g
 			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id

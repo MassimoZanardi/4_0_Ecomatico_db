@@ -9,10 +9,10 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistri_upd]
 	@Identificativo VARCHAR(20) = NULL,
 	@BloccoFormulari VARCHAR(10) = NULL,
 	@DataInizioInvio DATE = NULL,
-	@ConservazioneSostitutiva BIT = 0,
-	@ConservazioneSostitutivaRagioneSociale VARCHAR(50) = NULL,
-	@ConservazioneSostitutivaPartitaIva VARCHAR(20) = NULL,
-	@ConservazioneSostitutivaEmail VARCHAR(50) = NULL
+	@Conservazione BIT = 0,
+	@ConservazioneNome VARCHAR(50) = NULL,
+	@ConservazioneCodiceFiscale VARCHAR(20) = NULL,
+	@ConservazioneEmail VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -25,10 +25,10 @@ BEGIN
 		SET @Scollega = ISNULL(@Scollega, 0);
 		SET @Identificativo = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@Identificativo, 0, 1));
 		SET @BloccoFormulari = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@BloccoFormulari, 0, 1));
-		SET @ConservazioneSostitutiva = ISNULL(@ConservazioneSostitutiva, 0);
-		SET @ConservazioneSostitutivaRagioneSociale = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneSostitutivaRagioneSociale, 0, 1);
-		SET @ConservazioneSostitutivaPartitaIva = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneSostitutivaPartitaIva, 0, 1);
-		SET @ConservazioneSostitutivaEmail = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneSostitutivaEmail, 0, 1);
+		SET @Conservazione = ISNULL(@Conservazione, 0);
+		SET @ConservazioneNome = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneNome, 0, 1);
+		SET @ConservazioneCodiceFiscale = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneCodiceFiscale, 0, 1);
+		SET @ConservazioneEmail = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneEmail, 0, 1);
 
 		IF @Id IS NULL
 		BEGIN
@@ -89,14 +89,6 @@ BEGIN
 					DELETE dbo.tblRentriRegistri WHERE Id = @Id;
 					DELETE [1_0_rentri]..tblRegistri WHERE Id = @idRentri;
 				END
-
-				UPDATE dbo.tblRifiutiRegistri
-				SET
-					ConservazioneSostitutiva = 0,
-					ConservazioneSostitutivaRagioneSociale = NULL,
-					ConservazioneSostitutivaPartitaIva = NULL,
-					ConservazioneSostitutivaEmail = NULL
-				WHERE Id = @Id;
 			COMMIT TRANSACTION;
 			SELECT ReturnValue = @returnValue;
 			GOTO BRANCH_END;
@@ -135,7 +127,7 @@ BEGIN
 
 		-- Limite di registri con conservazione sostitutiva abilitata per Dominio (tblDomini.ConservazioniMax);
 		-- @Id escluso dal conteggio: se già abilitata su questo stesso registro non va contata come "nuova"
-		IF @ConservazioneSostitutiva = 1
+		IF @Conservazione = 1
 		BEGIN
 			DECLARE @idDominio CHAR(16);
 			SELECT @idDominio = IdDominio FROM dbo.tblSessioni WHERE Id = @IdSessione;
@@ -146,9 +138,11 @@ BEGIN
 				 FROM
 					 dbo.tblRifiutiRegistri r
 					 INNER JOIN dbo.tblSediInterne i ON r.IdSede = i.Id
+					 INNER JOIN dbo.tblRentriRegistri rr ON r.Id = rr.Id
+					 INNER JOIN [1_0_rentri]..tblRegistri h ON rr.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
 				 WHERE
 					 i.IdDominio = @idDominio
-					 AND r.ConservazioneSostitutiva = 1
+					 AND h.Conservazione = 1
 					 AND r.Lock = 0
 					 AND r.Id <> @Id
 				)
@@ -163,8 +157,8 @@ BEGIN
 			IF @idRentri IS NULL
 			BEGIN
 				SET @idRentri = LOWER(REPLACE(LEFT(CONVERT(VARCHAR(36), NEWID()), 18), '-', ''));
-				INSERT INTO [1_0_rentri]..tblRegistri (Id, IdSede, Identificativo, BloccoFormulari, DataInizioInvio)
-				VALUES (@idRentri, @idRentriSede, @Identificativo, @BloccoFormulari, @DataInizioInvio);
+				INSERT INTO [1_0_rentri]..tblRegistri (Id, IdSede, Identificativo, BloccoFormulari, DataInizioInvio, Conservazione, ConservazioneNome, ConservazioneCodiceFiscale, ConservazioneEmail)
+				VALUES (@idRentri, @idRentriSede, @Identificativo, @BloccoFormulari, @DataInizioInvio, @Conservazione, @ConservazioneNome, @ConservazioneCodiceFiscale, @ConservazioneEmail);
 
 				INSERT INTO dbo.tblRentriRegistri (Id, IdRentri)
 				VALUES (@Id, @idRentri);
@@ -176,17 +170,13 @@ BEGIN
 					IdSede = @idRentriSede,
 					Identificativo = @Identificativo,
 					BloccoFormulari = @BloccoFormulari,
-					DataInizioInvio = @DataInizioInvio
+					DataInizioInvio = @DataInizioInvio,
+					Conservazione = @Conservazione,
+					ConservazioneNome = @ConservazioneNome,
+					ConservazioneCodiceFiscale = @ConservazioneCodiceFiscale,
+					ConservazioneEmail = @ConservazioneEmail
 				WHERE Id = @idRentri;
 			END
-
-			UPDATE dbo.tblRifiutiRegistri
-			SET
-				ConservazioneSostitutiva = @ConservazioneSostitutiva,
-				ConservazioneSostitutivaRagioneSociale = @ConservazioneSostitutivaRagioneSociale,
-				ConservazioneSostitutivaPartitaIva = @ConservazioneSostitutivaPartitaIva,
-				ConservazioneSostitutivaEmail = @ConservazioneSostitutivaEmail
-			WHERE Id = @Id;
 		COMMIT TRANSACTION;
 
 		SELECT ReturnValue = @returnValue;

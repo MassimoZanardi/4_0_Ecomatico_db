@@ -1,0 +1,346 @@
+﻿/*
+	Deploy produzione - 2026-09-03 - Fix conservazione sostitutiva del registro: dati solo su hub
+
+	Deploy minimo, SOLO queste 2 SP (dipendenti l'una dall'altra, deployare insieme):
+
+	1) uspRentriRegistri_get
+	2) uspRentriRegistri_upd
+
+	Contenuto: la conservazione sostitutiva del registro (Conservazione/ConservazioneNome/
+	ConservazioneCodiceFiscale/ConservazioneEmail) ora vive UNICAMENTE su
+	[1_0_rentri]..tblRegistri - dbo.tblRifiutiRegistri (4.0) non li scrive/legge piu' affatto.
+
+	Bug corretto: la versione precedente scriveva i 3 dati anagrafici (Ragione sociale/Partita
+	Iva/Email) solo sulla tabella locale 4.0, mai propagati all'hub. Quando l'utente inviava un
+	registro in conservazione sostitutiva, il provider esterno riceveva un CompanyTitle vuoto e
+	rispondeva "no Route matched with those values" (404). Il flag booleano e' stato poi
+	disallineato allo stesso modo per coerenza con l'unica fonte di verita' (l'hub).
+
+	Nomi di parametri/proprieta' allineati a quelli di [1_0_rentri]..tblRegistri per coerenza
+	(Conservazione/ConservazioneNome/ConservazioneCodiceFiscale/ConservazioneEmail, non piu'
+	ConservazioneSostitutiva/ConservazioneSostitutivaRagioneSociale/
+	ConservazioneSostitutivaPartitaIva/ConservazioneSostitutivaEmail).
+
+	In _upd: il limite per Dominio (tblDomini.ConservazioniMax) ora conta via JOIN su
+	[1_0_rentri]..tblRegistri.Conservazione = 1 (prima contava sulla colonna locale). Lo
+	scollegamento (@Scollega=1) azzera la conservazione insieme allo scollegamento con il solo
+	DELETE della riga hub, nessuna colonna locale da azzerare.
+
+	PREREQUISITI (confermati gia' presenti in produzione dall'utente, non creati da questo
+	script): dbo.tblDomini.ConservazioniMax, e su [1_0_rentri]..tblRegistri le colonne
+	Conservazione (BIT)/ConservazioneNome (VARCHAR(50))/ConservazioneCodiceFiscale (VARCHAR(20))/
+	ConservazioneEmail (VARCHAR(50)).
+
+	Dopo questo deploy le 4 colonne su dbo.tblRifiutiRegistri (ConservazioneSostitutiva/
+	ConservazioneSostitutivaRagioneSociale/ConservazioneSostitutivaPartitaIva/
+	ConservazioneSostitutivaEmail) sono ridondanti e possono essere droppate (fuori da questo
+	script, a cura dell'utente).
+
+	CREATE OR ALTER (idempotente). Testato su dev: build app pulita (nessuna modifica C#
+	necessaria, le proprieta' erano gia' chiamate Conservazione/ConservazioneNome/
+	ConservazioneCodiceFiscale/ConservazioneEmail), deploy re-eseguito piu' volte senza errori.
+*/
+
+-- ============================================================
+-- uspRentriRegistri_get.sql
+-- ============================================================
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistri_get]
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'RNT',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità)
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblRifiutiRegistri g
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+			WHERE g.Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiRegistri WHERE Id = @Id AND Lock = 0)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Registro non trovato';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			g.Id,
+			g.Nome,
+			g.IdSede,
+			SedeNome = s.NomeCompleto,
+			s.IndirizzoCompleto,
+			Identificativo = h.Identificativo,
+			BloccoFormulari = h.BloccoFormulari,
+			DataInizioInvio = h.DataInizioInvio,
+			IsCollegato = CAST(IIF(r.IdRentri IS NULL, 0, 1) AS BIT),
+			Conservazione = ISNULL(h.Conservazione, 0),
+			ConservazioneNome = ISNULL(h.ConservazioneNome, ''),
+			ConservazioneCodiceFiscale = ISNULL(h.ConservazioneCodiceFiscale, ''),
+			ConservazioneEmail = ISNULL(h.ConservazioneEmail, '')
+		FROM
+			dbo.tblRifiutiRegistri g
+			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
+			LEFT JOIN dbo.tblRentriRegistri r ON g.Id = r.Id
+			LEFT JOIN [1_0_rentri]..tblRegistri h ON r.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
+		WHERE g.Id = @Id;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+
+-- ============================================================
+-- uspRentriRegistri_upd.sql
+-- ============================================================
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistri_upd]
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@Scollega BIT = 0,
+	@Identificativo VARCHAR(20) = NULL,
+	@BloccoFormulari VARCHAR(10) = NULL,
+	@DataInizioInvio DATE = NULL,
+	@Conservazione BIT = 0,
+	@ConservazioneNome VARCHAR(50) = NULL,
+	@ConservazioneCodiceFiscale VARCHAR(20) = NULL,
+	@ConservazioneEmail VARCHAR(50) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Scollega = ISNULL(@Scollega, 0);
+		SET @Identificativo = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@Identificativo, 0, 1));
+		SET @BloccoFormulari = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@BloccoFormulari, 0, 1));
+		SET @Conservazione = ISNULL(@Conservazione, 0);
+		SET @ConservazioneNome = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneNome, 0, 1);
+		SET @ConservazioneCodiceFiscale = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneCodiceFiscale, 0, 1);
+		SET @ConservazioneEmail = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneEmail, 0, 1);
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'RNT',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità) e recupera la sede del registro
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = g.IdSede
+		FROM
+			dbo.tblRifiutiRegistri g
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+		WHERE
+			g.Id = @Id
+			AND g.Lock = 0;
+
+		IF @idSede IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idRentri CHAR(16);
+		SELECT @idRentri = IdRentri
+		FROM dbo.tblRentriRegistri
+		WHERE Id = @Id;
+
+		-- Scollegamento esplicito: la conservazione sostitutiva non ha senso su un registro non
+		-- collegato a RENTRI, azzerata insieme allo scollegamento (libera anche il posto nel
+		-- conteggio ConservazioniMax del Dominio)
+		IF @Scollega = 1
+		BEGIN
+			BEGIN TRANSACTION;
+				IF @idRentri IS NOT NULL
+				BEGIN
+					DELETE dbo.tblRentriRegistri WHERE Id = @Id;
+					DELETE [1_0_rentri]..tblRegistri WHERE Id = @idRentri;
+				END
+			COMMIT TRANSACTION;
+			SELECT ReturnValue = @returnValue;
+			GOTO BRANCH_END;
+		END
+
+		-- Il registro non ha una propria credenziale: eredita sempre la Primaria (Pos=0) della Sede su cui si appoggia
+		DECLARE @idRentriSede CHAR(16);
+		SELECT @idRentriSede = IdRentri
+		FROM dbo.tblRentriCredenzialiSedi
+		WHERE
+			IdSede = @idSede
+			AND Pos = 0;
+
+		IF @idRentriSede IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La sede non ha ancora una credenziale primaria collegata a RENTRI';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla che non esista già un altro registro con lo stesso identificativo
+		IF @Identificativo IS NOT NULL AND EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblRentriRegistri r
+				INNER JOIN [1_0_rentri]..tblRegistri h ON r.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
+			WHERE
+				r.Id <> @Id
+				AND h.Identificativo = @Identificativo
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Un altro registro con lo stesso identificativo è già presente';
+			GOTO BRANCH_END;
+		END
+
+		-- Limite di registri con conservazione sostitutiva abilitata per Dominio (tblDomini.ConservazioniMax);
+		-- @Id escluso dal conteggio: se già abilitata su questo stesso registro non va contata come "nuova"
+		IF @Conservazione = 1
+		BEGIN
+			DECLARE @idDominio CHAR(16);
+			SELECT @idDominio = IdDominio FROM dbo.tblSessioni WHERE Id = @IdSessione;
+
+			IF ISNULL((SELECT ConservazioniMax FROM dbo.tblDomini WHERE Id = @idDominio), 0)
+				<=
+				(SELECT COUNT(*)
+				 FROM
+					 dbo.tblRifiutiRegistri r
+					 INNER JOIN dbo.tblSediInterne i ON r.IdSede = i.Id
+					 INNER JOIN dbo.tblRentriRegistri rr ON r.Id = rr.Id
+					 INNER JOIN [1_0_rentri]..tblRegistri h ON rr.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
+				 WHERE
+					 i.IdDominio = @idDominio
+					 AND h.Conservazione = 1
+					 AND r.Lock = 0
+					 AND r.Id <> @Id
+				)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'È stato raggiunto il numero massimo di registri con conservazione sostitutiva abilitata';
+				GOTO BRANCH_END;
+			END
+		END
+
+		BEGIN TRANSACTION;
+			IF @idRentri IS NULL
+			BEGIN
+				SET @idRentri = LOWER(REPLACE(LEFT(CONVERT(VARCHAR(36), NEWID()), 18), '-', ''));
+				INSERT INTO [1_0_rentri]..tblRegistri (Id, IdSede, Identificativo, BloccoFormulari, DataInizioInvio, Conservazione, ConservazioneNome, ConservazioneCodiceFiscale, ConservazioneEmail)
+				VALUES (@idRentri, @idRentriSede, @Identificativo, @BloccoFormulari, @DataInizioInvio, @Conservazione, @ConservazioneNome, @ConservazioneCodiceFiscale, @ConservazioneEmail);
+
+				INSERT INTO dbo.tblRentriRegistri (Id, IdRentri)
+				VALUES (@Id, @idRentri);
+			END
+			ELSE
+			BEGIN
+				UPDATE [1_0_rentri]..tblRegistri
+				SET
+					IdSede = @idRentriSede,
+					Identificativo = @Identificativo,
+					BloccoFormulari = @BloccoFormulari,
+					DataInizioInvio = @DataInizioInvio,
+					Conservazione = @Conservazione,
+					ConservazioneNome = @ConservazioneNome,
+					ConservazioneCodiceFiscale = @ConservazioneCodiceFiscale,
+					ConservazioneEmail = @ConservazioneEmail
+				WHERE Id = @idRentri;
+			END
+		COMMIT TRANSACTION;
+
+		SELECT ReturnValue = @returnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO

@@ -13,10 +13,20 @@
 	   ISNULL(ConservazioniMax, 0) in _get - tutti i domini hanno la colonna NULL finche' non
 	   salvata almeno una volta da uspDomini_upd.
 
-	3) uspRentriRegistri_get/_upd: sezione Conservazione sostitutiva del registro (4 campi su
-	   tblRifiutiRegistri, stesso Id di tblRentriRegistri). In _upd: limite per Dominio su
-	   tblDomini.ConservazioniMax, e lo scollegamento (@Scollega=1) azzera anche la
-	   conservazione sostitutiva sul registro.
+	3) uspRentriRegistri_get/_upd: sezione Conservazione sostitutiva del registro. Tutti e 4 i campi
+	   (Conservazione/ConservazioneNome/ConservazioneCodiceFiscale/ConservazioneEmail) vivono
+	   UNICAMENTE su [1_0_rentri]..tblRegistri - dbo.tblRifiutiRegistri (4.0) non li scrive/legge
+	   piu' affatto (colonne ridondanti, da droppare lato tabella - fuori da questo script). Bug
+	   corretto in questa v2: la prima versione scriveva i 3 dati anagrafici solo sulla tabella
+	   locale 4.0, mai propagati all'hub, causando "no Route matched" dal provider esterno di
+	   conservazione (CompanyTitle vuoto) quando letti da uspRegistroConservazione_get in
+	   1_0_RentriApi; il flag booleano e' stato poi disallineato allo stesso modo per coerenza.
+	   Nomi di parametri/proprieta' allineati a quelli di [1_0_rentri]..tblRegistri (Conservazione/
+	   ConservazioneNome/ConservazioneCodiceFiscale/ConservazioneEmail, non piu'
+	   ConservazioneSostitutiva*). In _upd: limite per Dominio su tblDomini.ConservazioniMax
+	   (conteggio via JOIN su [1_0_rentri]..tblRegistri.Conservazione), e lo scollegamento
+	   (@Scollega=1) azzera la conservazione sostitutiva insieme allo scollegamento (DELETE della
+	   riga hub, nessuna colonna locale da azzerare).
 
 	4) uspRifiutiRegistrazioni_upd/_del: una registrazione con ConservazioneSostitutiva=1 non
 	   puo' piu' essere modificata/cancellata (stesso principio di RentriIdentificativo/RentriData).
@@ -71,173 +81,173 @@ GO
 CREATE OR ALTER VIEW [dbo].[viewRentriRegistrazioniStampa]
 AS
 SELECT
-    IDRegistro                     = g.Id,
-    IDRentri                       = z.IdRentri,
-    IdRegistrazione                = r.Id,
-    RentriIdentificativo           = r.RentriIdentificativo,
+	IDRegistro                     = g.Id,
+	IDRentri                       = z.IdRentri,
+	IdRegistrazione                = r.Id,
+	RentriIdentificativo           = r.RentriIdentificativo,
 
-    Numero                          = r.Numero,
-    Anno                            = YEAR(r.Data),
-    Data                            = r.Data,
+	Numero                          = r.Numero,
+	Anno                            = YEAR(r.Data),
+	Data                            = r.Data,
 
-    RettificaNumero                 = ro.Numero,
-    RettificaAnno                   = YEAR(ro.Data),
-    RettificaData                   = ro.Data,
-    RettificaIsAnnullata            = CAST(ISNULL(rett.Annullata, 0) AS BIT),
+	RettificaNumero                 = ro.Numero,
+	RettificaAnno                   = YEAR(ro.Data),
+	RettificaData                   = ro.Data,
+	RettificaIsAnnullata            = CAST(ISNULL(rett.Annullata, 0) AS BIT),
 
-    StoccaggioIstantaneoData        = CASE WHEN o.Codice = 'SI' AND ISNULL(rett.Annullata, 0) = 0 THEN r.Data ELSE NULL END,
+	StoccaggioIstantaneoData        = CASE WHEN o.Codice = 'SI' AND ISNULL(rett.Annullata, 0) = 0 THEN r.Data ELSE NULL END,
 
-    Operazione                      = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN o.Codice ELSE NULL END,
+	Operazione                      = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN o.Codice ELSE NULL END,
 
-    -- Eer = codice esteso con separatori (equivalente a 3_1_ecomatico..tblRifiutiCER.CodiceEsteso),
-    -- con marcatore '*' per i codici pericolosi - non il codice RENTRI grezzo usato da viewRentriRegistrazioni
-    Eer                              = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN eer.Nome + IIF(eer.Pericoloso = 1, '*', '') ELSE NULL END,
-    EerDescrizione                   = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND m.IdEer LIKE '%99' THEN ISNULL(m.EerDescrizione, eer.Descrizione) ELSE NULL END,
+	-- Eer = codice esteso con separatori (equivalente a 3_1_ecomatico..tblRifiutiCER.CodiceEsteso),
+	-- con marcatore '*' per i codici pericolosi - non il codice RENTRI grezzo usato da viewRentriRegistrazioni
+	Eer                              = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN eer.Nome + IIF(eer.Pericoloso = 1, '*', '') ELSE NULL END,
+	EerDescrizione                   = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND m.IdEer LIKE '%99' THEN ISNULL(m.EerDescrizione, eer.Descrizione) ELSE NULL END,
 
-    StatoFisico                      = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN sf.Codice ELSE NULL END,
+	StatoFisico                      = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN sf.Codice ELSE NULL END,
 
-    Provenienza                      = CASE
-        WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL
-        WHEN o.Codice IN ('T*aT', 'TR') THEN NULL
-        ELSE ISNULL(m.IdProvenienza, 'S')
-    END,
+	Provenienza                      = CASE
+		WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL
+		WHEN o.Codice IN ('T*aT', 'TR') THEN NULL
+		ELSE ISNULL(m.IdProvenienza, 'S')
+	END,
 
-    Quantita                         = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN m.Quantita ELSE NULL END,
-    UnitaMisura                      = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN LOWER(um.Codice) ELSE NULL END,
-    ClassiPericolo                   = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN cp.ClassiPericolo ELSE NULL END,
+	Quantita                         = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN m.Quantita ELSE NULL END,
+	UnitaMisura                      = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN LOWER(um.Codice) ELSE NULL END,
+	ClassiPericolo                   = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN cp.ClassiPericolo ELSE NULL END,
 
-    VeicoloFuoriUso                  = CASE WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL ELSE ISNULL(r.VeicoloFuoriUso, 0) END,
-    VeicoloFuoriUsoNumero            = CASE WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL ELSE r.VeicoloFuoriUsoNumero END,
-    VeicoloFuoriUsoData              = CASE WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL ELSE r.VeicoloFuoriUsoData END,
+	VeicoloFuoriUso                  = CASE WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL ELSE ISNULL(r.VeicoloFuoriUso, 0) END,
+	VeicoloFuoriUsoNumero            = CASE WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL ELSE r.VeicoloFuoriUsoNumero END,
+	VeicoloFuoriUsoData              = CASE WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL ELSE r.VeicoloFuoriUsoData END,
 
-    CategorieAee                     = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN raee.Codice ELSE NULL END,
+	CategorieAee                     = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN raee.Codice ELSE NULL END,
 
-    -- 'A' -> 'Altro' (mat.Nome), stessa resa testuale di 3_1 (li' hardcoded in SP, qui via lookup)
-    MaterialeSecondario              = CASE
-        WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL
-        WHEN mat.Codice = 'A' THEN mat.Nome
-        ELSE mat.Codice
-    END,
-    MaterialeSecondarioDescrizione   = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN r.MaterialeDescrizione ELSE NULL END,
+	-- 'A' -> 'Altro' (mat.Nome), stessa resa testuale di 3_1 (li' hardcoded in SP, qui via lookup)
+	MaterialeSecondario              = CASE
+		WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL
+		WHEN mat.Codice = 'A' THEN mat.Nome
+		ELSE mat.Codice
+	END,
+	MaterialeSecondarioDescrizione   = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN r.MaterialeDescrizione ELSE NULL END,
 
-    Esito                            = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('aT', 'T*aT') THEN ISNULL(es.Codice, 'A') ELSE NULL END,
-    DataEsito                        = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('aT', 'T*aT') THEN r.DataFineTrasporto ELSE NULL END,
-    QuantitaDestino                  = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('aT', 'T*aT') THEN ISNULL(r.QuantitaVerificata, m.Quantita) ELSE NULL END,
+	Esito                            = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('aT', 'T*aT') THEN ISNULL(es.Codice, 'A') ELSE NULL END,
+	DataEsito                        = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('aT', 'T*aT') THEN r.DataFineTrasporto ELSE NULL END,
+	QuantitaDestino                  = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('aT', 'T*aT') THEN ISNULL(r.QuantitaVerificata, m.Quantita) ELSE NULL END,
 
-    EsitoCausaleRespingimento        = CASE
-        WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL
-        WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL
-        ELSE ISNULL(ecr.Codice, 'NC')
-    END,
-    RespingimentoMotivo              = CASE
-        WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL
-        WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL
-        ELSE ISNULL(r.CausaleRespingimentoAltro, 'Non conforme')
-    END,
-    -- Non gated da RettificaIsAnnullata/causale: replica fedele di 3_1 (unico campo del gruppo Esito
-    -- senza IIF nella SP originale, verificato live) - possibile incoerenza preesistente in 3_1, non
-    -- "corretta" qui per restare fedeli al comportamento di riferimento.
-    RespingimentoQuantita            = ISNULL(r.QuantitaRespinta, m.Quantita),
+	EsitoCausaleRespingimento        = CASE
+		WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL
+		WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL
+		ELSE ISNULL(ecr.Codice, 'NC')
+	END,
+	RespingimentoMotivo              = CASE
+		WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL
+		WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL
+		ELSE ISNULL(r.CausaleRespingimentoAltro, 'Non conforme')
+	END,
+	-- Non gated da RettificaIsAnnullata/causale: replica fedele di 3_1 (unico campo del gruppo Esito
+	-- senza IIF nella SP originale, verificato live) - possibile incoerenza preesistente in 3_1, non
+	-- "corretta" qui per restare fedeli al comportamento di riferimento.
+	RespingimentoQuantita            = ISNULL(r.QuantitaRespinta, m.Quantita),
 
-    Destinazione                     = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN attv.Codice ELSE NULL END,
+	Destinazione                     = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN attv.Codice ELSE NULL END,
 
-    RegistrazioniAssociate           = CASE
-        WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL
-        WHEN o.Operazione = 'S' OR o.Codice = 'M' THEN assocRiferimentiTxt.Registrazioni
-        ELSE NULL
-    END,
+	RegistrazioniAssociate           = CASE
+		WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL
+		WHEN o.Operazione = 'S' OR o.Codice = 'M' THEN assocRiferimentiTxt.Registrazioni
+		ELSE NULL
+	END,
 
-    FormularioNumero                 = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN m.FormularioNumero ELSE NULL END,
-    FormularioDataInizioTrasporto    = CASE
-        WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL
-        WHEN o.Codice IN ('aT', 'T*aT', 'TR') THEN m.DataInizioTrasporto
-        ELSE NULL
-    END,
+	FormularioNumero                 = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN m.FormularioNumero ELSE NULL END,
+	FormularioDataInizioTrasporto    = CASE
+		WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL
+		WHEN o.Codice IN ('aT', 'T*aT', 'TR') THEN m.DataInizioTrasporto
+		ELSE NULL
+	END,
 
-    Transfrontaliero                 = CASE WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL ELSE CAST(IIF(r.IdTrasportoTransfrontalieroTipo IS NOT NULL, 1, 0) AS BIT) END,
-    -- tt.Nome e' gia' l'etichetta testuale ("Allegato VII"/"Allegato I-B"), stessa resa di 3_1 (li' hardcoded in SP)
-    TransfrontalieroTipo             = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN tt.Nome ELSE NULL END,
+	Transfrontaliero                 = CASE WHEN ISNULL(rett.Annullata, 0) = 1 THEN NULL ELSE CAST(IIF(r.IdTrasportoTransfrontalieroTipo IS NOT NULL, 1, 0) AS BIT) END,
+	-- tt.Nome e' gia' l'etichetta testuale ("Allegato VII"/"Allegato I-B"), stessa resa di 3_1 (li' hardcoded in SP)
+	TransfrontalieroTipo             = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN tt.Nome ELSE NULL END,
 
-    ProduttoreNome                   = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN sp.NomeCompleto ELSE NULL END,
-    ProduttoreCodiceFiscale          = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ISNULL(sp.CodiceFiscale, sp.PartitaIva) ELSE NULL END,
-    ProduttoreIndirizzo              = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ip.Indirizzo + ISNULL(', ' + ip.CAP + ' ' + ip.Localita, '') ELSE NULL END,
+	ProduttoreNome                   = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN sp.NomeCompleto ELSE NULL END,
+	ProduttoreCodiceFiscale          = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ISNULL(sp.CodiceFiscale, sp.PartitaIva) ELSE NULL END,
+	ProduttoreIndirizzo              = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ip.Indirizzo + ISNULL(', ' + ip.CAP + ' ' + ip.Localita, '') ELSE NULL END,
 
-    TrasportatoreNome                = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN st.NomeCompleto ELSE NULL END,
-    TrasportatoreCodiceFiscale       = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ISNULL(st.CodiceFiscale, st.PartitaIva) ELSE NULL END,
-    TrasportatoreAutorizzazione      = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN at.Numero ELSE NULL END,
+	TrasportatoreNome                = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN st.NomeCompleto ELSE NULL END,
+	TrasportatoreCodiceFiscale       = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ISNULL(st.CodiceFiscale, st.PartitaIva) ELSE NULL END,
+	TrasportatoreAutorizzazione      = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN at.Numero ELSE NULL END,
 
-    DestinatarioNome                 = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice = 'TR' THEN sd.NomeCompleto ELSE NULL END,
-    DestinatarioCodiceFiscale        = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice = 'TR' THEN ISNULL(sd.CodiceFiscale, sd.PartitaIva) ELSE NULL END,
-    DestinatarioAutorizzazione       = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice = 'TR' THEN ad.Numero ELSE NULL END,
+	DestinatarioNome                 = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice = 'TR' THEN sd.NomeCompleto ELSE NULL END,
+	DestinatarioCodiceFiscale        = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice = 'TR' THEN ISNULL(sd.CodiceFiscale, sd.PartitaIva) ELSE NULL END,
+	DestinatarioAutorizzazione       = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice = 'TR' THEN ad.Numero ELSE NULL END,
 
-    IntermediarioNome                = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN si.NomeCompleto ELSE NULL END,
-    IntermediarioCodiceFiscale       = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ISNULL(si.CodiceFiscale, si.PartitaIva) ELSE NULL END,
-    IntermediarioAutorizzazione      = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ai.Numero ELSE NULL END,
+	IntermediarioNome                = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN si.NomeCompleto ELSE NULL END,
+	IntermediarioCodiceFiscale       = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ISNULL(si.CodiceFiscale, si.PartitaIva) ELSE NULL END,
+	IntermediarioAutorizzazione      = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ai.Numero ELSE NULL END,
 
-    Note                              = LEFT(r.Note, 500),
+	Note                              = LEFT(r.Note, 500),
 
-    Lock                              = r.Lock
+	Lock                              = r.Lock
 FROM
-    dbo.tblRifiutiRegistrazioni                        r
-    INNER JOIN dbo.tblRifiutiMovimenti                 m    ON r.IdMovimento               = m.Id
-    INNER JOIN dbo.tblRifiutiRegistri                  g    ON m.IdRegistro                = g.Id
-    LEFT  JOIN dbo.tblRentriRegistri                   z    ON g.Id                        = z.Id
-    LEFT  JOIN dbo.tblRifiutiOperazioni                o    ON m.IdOperazione              = o.Id
-    LEFT  JOIN dbo.tblRifiutiEer                       eer  ON m.IdEer                     = eer.Id
-    LEFT  JOIN dbo.tblRifiutiStatiFisici               sf   ON m.IdStatoFisico             = sf.Id
-    LEFT  JOIN dbo.tblUnitaMisura                      um   ON m.IdUnitaMisura             = um.Id
-    LEFT  JOIN dbo.tblRifiutiAttivitaRecuperoSmaltimento attv ON m.IdAttivita              = attv.Id
-    LEFT  JOIN dbo.tblRifiutiRaee                      raee ON r.IdRaee                    = raee.Id
-    LEFT  JOIN dbo.tblRifiutiMateriali                 mat  ON r.IdMateriale               = mat.Id
-    LEFT  JOIN dbo.tblRifiutiRegistrazioniEsiti        es   ON r.IdEsito                   = es.Id
-    LEFT  JOIN dbo.tblRifiutiRegistrazioniEsitiCausaliRespingimento ecr ON r.IdCausaleRespingimento = ecr.Id
-    LEFT  JOIN dbo.tblRifiutiTrasportiTransfrontalieriTipi tt ON r.IdTrasportoTransfrontalieroTipo = tt.Id
-    LEFT  JOIN dbo.tblRentriRegistrazioniRettifiche    rett ON r.Id                        = rett.IdRettifica
-    LEFT  JOIN dbo.tblRifiutiRegistrazioni             ro   ON rett.Id                     = ro.Id
+	dbo.tblRifiutiRegistrazioni r
+	INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+	INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+	LEFT JOIN dbo.tblRentriRegistri z ON g.Id = z.Id
+	LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+	LEFT JOIN dbo.tblRifiutiEer eer ON m.IdEer = eer.Id
+	LEFT JOIN dbo.tblRifiutiStatiFisici sf ON m.IdStatoFisico = sf.Id
+	LEFT JOIN dbo.tblUnitaMisura um ON m.IdUnitaMisura = um.Id
+	LEFT JOIN dbo.tblRifiutiAttivitaRecuperoSmaltimento attv ON m.IdAttivita = attv.Id
+	LEFT JOIN dbo.tblRifiutiRaee raee ON r.IdRaee = raee.Id
+	LEFT JOIN dbo.tblRifiutiMateriali mat ON r.IdMateriale = mat.Id
+	LEFT JOIN dbo.tblRifiutiRegistrazioniEsiti es ON r.IdEsito = es.Id
+	LEFT JOIN dbo.tblRifiutiRegistrazioniEsitiCausaliRespingimento ecr ON r.IdCausaleRespingimento = ecr.Id
+	LEFT JOIN dbo.tblRifiutiTrasportiTransfrontalieriTipi tt ON r.IdTrasportoTransfrontalieroTipo = tt.Id
+	LEFT JOIN dbo.tblRentriRegistrazioniRettifiche rett ON r.Id = rett.IdRettifica
+	LEFT JOIN dbo.tblRifiutiRegistrazioni ro ON rett.Id = ro.Id
 
-    LEFT  JOIN dbo.tblSedi                             sp   ON m.IdSedeProduttoreDetentore = sp.Id
-    LEFT  JOIN dbo.tblSediIndirizzi                    sip  ON sp.Id                       = sip.Id
-    LEFT  JOIN dbo.tblIndirizzi                        ip   ON sip.IdIndirizzo             = ip.Id
+	LEFT JOIN dbo.tblSedi sp ON m.IdSedeProduttoreDetentore = sp.Id
+	LEFT JOIN dbo.tblSediIndirizzi sip ON sp.Id = sip.Id
+	LEFT JOIN dbo.tblIndirizzi ip ON sip.IdIndirizzo = ip.Id
 
-    LEFT  JOIN dbo.tblSedi                             st   ON m.IdSedeTrasportatore1      = st.Id
-    LEFT  JOIN dbo.tblRifiutiMovimentiTrasportatori    mt   ON m.Id                        = mt.Id AND mt.Pos = 0
-    LEFT  JOIN dbo.tblRifiutiAutorizzazioni            at   ON mt.IdAutorizzazione         = at.Id
+	LEFT JOIN dbo.tblSedi st ON m.IdSedeTrasportatore1 = st.Id
+	LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt ON m.Id = mt.Id AND mt.Pos = 0
+	LEFT JOIN dbo.tblRifiutiAutorizzazioni at ON mt.IdAutorizzazione = at.Id
 
-    LEFT  JOIN dbo.tblSedi                             sd   ON m.IdSedeDestinatario        = sd.Id
-    LEFT  JOIN dbo.tblRifiutiMovimentiDestinatari      md   ON m.Id                        = md.Id AND md.Pos = 0
-    LEFT  JOIN dbo.tblRifiutiAutorizzazioni            ad   ON md.IdAutorizzazione         = ad.Id
+	LEFT JOIN dbo.tblSedi sd ON m.IdSedeDestinatario = sd.Id
+	LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id AND md.Pos = 0
+	LEFT JOIN dbo.tblRifiutiAutorizzazioni ad ON md.IdAutorizzazione = ad.Id
 
-    LEFT  JOIN dbo.tblSedi                             si   ON m.IdSedeIntermediario1      = si.Id
-    LEFT  JOIN dbo.tblRifiutiMovimentiIntermediari     mi   ON m.Id                        = mi.Id AND mi.Pos = 0
-    LEFT  JOIN dbo.tblRifiutiAutorizzazioni            ai   ON mi.IdAutorizzazione         = ai.Id
+	LEFT JOIN dbo.tblSedi si ON m.IdSedeIntermediario1 = si.Id
+	LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi ON m.Id = mi.Id AND mi.Pos = 0
+	LEFT JOIN dbo.tblRifiutiAutorizzazioni ai ON mi.IdAutorizzazione = ai.Id
 
-    LEFT JOIN (
-        SELECT
-            mc.Id,
-            -- Spazio come delimitatore (non ';' come in viewRentriRegistrazioni): stessa resa di
-            -- 3_1_ecomatico..viewRentriRegistrazioniStampa (STRING_AGG('HP'+IDClasse, ' ')), qui senza
-            -- concatenare 'HP' perche' c.Codice lo include gia' (verificato su dbo.tblRifiutiClassiPericolo)
-            ClassiPericolo = STRING_AGG(c.Codice, ' ') WITHIN GROUP (ORDER BY c.Codice)
-        FROM
-            dbo.tblRifiutiMovimentiClassiPericolo mc
-            LEFT JOIN dbo.tblRifiutiClassiPericolo c ON mc.IdClasse = c.Id
-        GROUP BY
-            mc.Id
-    ) cp ON m.Id = cp.Id
+	LEFT JOIN (
+		SELECT
+			mc.Id,
+			-- Spazio come delimitatore (non ';' come in viewRentriRegistrazioni): stessa resa di
+			-- 3_1_ecomatico..viewRentriRegistrazioniStampa (STRING_AGG('HP'+IDClasse, ' ')), qui senza
+			-- concatenare 'HP' perche' c.Codice lo include gia' (verificato su dbo.tblRifiutiClassiPericolo)
+			ClassiPericolo = STRING_AGG(c.Codice, ' ') WITHIN GROUP (ORDER BY c.Codice)
+		FROM
+			dbo.tblRifiutiMovimentiClassiPericolo mc
+			LEFT JOIN dbo.tblRifiutiClassiPericolo c ON mc.IdClasse = c.Id
+		GROUP BY
+			mc.Id
+	) cp ON m.Id = cp.Id
 
-    OUTER APPLY (
-        -- Testo leggibile "anno/numero anno/numero ...", stesso universo di righe (rl.IdParent = r.Id)
-        -- gia' verificato empiricamente in viewRentriRegistrazioni, qui in formato stampa anziche' JSON
-        SELECT Registrazioni = (
-            SELECT STRING_AGG(CAST(YEAR(rif.Data) AS VARCHAR(4)) + '/' + CAST(rif.Numero AS VARCHAR(6)), ' ') WITHIN GROUP (ORDER BY rif.Data, rif.Numero)
-            FROM
-                dbo.tblRifiutiRegistrazioniRelazioni rl
-                INNER JOIN dbo.tblRifiutiRegistrazioni rif ON rl.Id = rif.Id
-            WHERE
-                rl.IdParent = r.Id
-                AND rif.Lock = 0
-        )
-    ) assocRiferimentiTxt
+			OUTER APPLY (
+		-- Testo leggibile "anno/numero anno/numero ...", stesso universo di righe (rl.IdParent = r.Id)
+		-- gia' verificato empiricamente in viewRentriRegistrazioni, qui in formato stampa anziche' JSON
+		SELECT Registrazioni = (
+			SELECT STRING_AGG(CAST(YEAR(rif.Data) AS VARCHAR(4)) + '/' + CAST(rif.Numero AS VARCHAR(6)), ' ') WITHIN GROUP (ORDER BY rif.Data, rif.Numero)
+			FROM
+				dbo.tblRifiutiRegistrazioniRelazioni rl
+				INNER JOIN dbo.tblRifiutiRegistrazioni rif ON rl.Id = rif.Id
+			WHERE
+				rl.IdParent = r.Id
+				AND rif.Lock = 0
+		)
+	) assocRiferimentiTxt
 GO
 
 
@@ -743,10 +753,10 @@ BEGIN
 			BloccoFormulari = h.BloccoFormulari,
 			DataInizioInvio = h.DataInizioInvio,
 			IsCollegato = CAST(IIF(r.IdRentri IS NULL, 0, 1) AS BIT),
-			ConservazioneSostitutiva = ISNULL(g.ConservazioneSostitutiva, 0),
-			ConservazioneSostitutivaRagioneSociale = ISNULL(g.ConservazioneSostitutivaRagioneSociale, ''),
-			ConservazioneSostitutivaPartitaIva = ISNULL(g.ConservazioneSostitutivaPartitaIva, ''),
-			ConservazioneSostitutivaEmail = ISNULL(g.ConservazioneSostitutivaEmail, '')
+			Conservazione = ISNULL(h.Conservazione, 0),
+			ConservazioneNome = ISNULL(h.ConservazioneNome, ''),
+			ConservazioneCodiceFiscale = ISNULL(h.ConservazioneCodiceFiscale, ''),
+			ConservazioneEmail = ISNULL(h.ConservazioneEmail, '')
 		FROM
 			dbo.tblRifiutiRegistri g
 			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
@@ -784,10 +794,10 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistri_upd]
 	@Identificativo VARCHAR(20) = NULL,
 	@BloccoFormulari VARCHAR(10) = NULL,
 	@DataInizioInvio DATE = NULL,
-	@ConservazioneSostitutiva BIT = 0,
-	@ConservazioneSostitutivaRagioneSociale VARCHAR(50) = NULL,
-	@ConservazioneSostitutivaPartitaIva VARCHAR(20) = NULL,
-	@ConservazioneSostitutivaEmail VARCHAR(50) = NULL
+	@Conservazione BIT = 0,
+	@ConservazioneNome VARCHAR(50) = NULL,
+	@ConservazioneCodiceFiscale VARCHAR(20) = NULL,
+	@ConservazioneEmail VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -800,10 +810,10 @@ BEGIN
 		SET @Scollega = ISNULL(@Scollega, 0);
 		SET @Identificativo = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@Identificativo, 0, 1));
 		SET @BloccoFormulari = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@BloccoFormulari, 0, 1));
-		SET @ConservazioneSostitutiva = ISNULL(@ConservazioneSostitutiva, 0);
-		SET @ConservazioneSostitutivaRagioneSociale = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneSostitutivaRagioneSociale, 0, 1);
-		SET @ConservazioneSostitutivaPartitaIva = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneSostitutivaPartitaIva, 0, 1);
-		SET @ConservazioneSostitutivaEmail = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneSostitutivaEmail, 0, 1);
+		SET @Conservazione = ISNULL(@Conservazione, 0);
+		SET @ConservazioneNome = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneNome, 0, 1);
+		SET @ConservazioneCodiceFiscale = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneCodiceFiscale, 0, 1);
+		SET @ConservazioneEmail = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneEmail, 0, 1);
 
 		IF @Id IS NULL
 		BEGIN
@@ -864,14 +874,6 @@ BEGIN
 					DELETE dbo.tblRentriRegistri WHERE Id = @Id;
 					DELETE [1_0_rentri]..tblRegistri WHERE Id = @idRentri;
 				END
-
-				UPDATE dbo.tblRifiutiRegistri
-				SET
-					ConservazioneSostitutiva = 0,
-					ConservazioneSostitutivaRagioneSociale = NULL,
-					ConservazioneSostitutivaPartitaIva = NULL,
-					ConservazioneSostitutivaEmail = NULL
-				WHERE Id = @Id;
 			COMMIT TRANSACTION;
 			SELECT ReturnValue = @returnValue;
 			GOTO BRANCH_END;
@@ -910,7 +912,7 @@ BEGIN
 
 		-- Limite di registri con conservazione sostitutiva abilitata per Dominio (tblDomini.ConservazioniMax);
 		-- @Id escluso dal conteggio: se già abilitata su questo stesso registro non va contata come "nuova"
-		IF @ConservazioneSostitutiva = 1
+		IF @Conservazione = 1
 		BEGIN
 			DECLARE @idDominio CHAR(16);
 			SELECT @idDominio = IdDominio FROM dbo.tblSessioni WHERE Id = @IdSessione;
@@ -921,9 +923,11 @@ BEGIN
 				 FROM
 					 dbo.tblRifiutiRegistri r
 					 INNER JOIN dbo.tblSediInterne i ON r.IdSede = i.Id
+					 INNER JOIN dbo.tblRentriRegistri rr ON r.Id = rr.Id
+					 INNER JOIN [1_0_rentri]..tblRegistri h ON rr.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
 				 WHERE
 					 i.IdDominio = @idDominio
-					 AND r.ConservazioneSostitutiva = 1
+					 AND h.Conservazione = 1
 					 AND r.Lock = 0
 					 AND r.Id <> @Id
 				)
@@ -938,8 +942,8 @@ BEGIN
 			IF @idRentri IS NULL
 			BEGIN
 				SET @idRentri = LOWER(REPLACE(LEFT(CONVERT(VARCHAR(36), NEWID()), 18), '-', ''));
-				INSERT INTO [1_0_rentri]..tblRegistri (Id, IdSede, Identificativo, BloccoFormulari, DataInizioInvio)
-				VALUES (@idRentri, @idRentriSede, @Identificativo, @BloccoFormulari, @DataInizioInvio);
+				INSERT INTO [1_0_rentri]..tblRegistri (Id, IdSede, Identificativo, BloccoFormulari, DataInizioInvio, Conservazione, ConservazioneNome, ConservazioneCodiceFiscale, ConservazioneEmail)
+				VALUES (@idRentri, @idRentriSede, @Identificativo, @BloccoFormulari, @DataInizioInvio, @Conservazione, @ConservazioneNome, @ConservazioneCodiceFiscale, @ConservazioneEmail);
 
 				INSERT INTO dbo.tblRentriRegistri (Id, IdRentri)
 				VALUES (@Id, @idRentri);
@@ -951,17 +955,13 @@ BEGIN
 					IdSede = @idRentriSede,
 					Identificativo = @Identificativo,
 					BloccoFormulari = @BloccoFormulari,
-					DataInizioInvio = @DataInizioInvio
+					DataInizioInvio = @DataInizioInvio,
+					Conservazione = @Conservazione,
+					ConservazioneNome = @ConservazioneNome,
+					ConservazioneCodiceFiscale = @ConservazioneCodiceFiscale,
+					ConservazioneEmail = @ConservazioneEmail
 				WHERE Id = @idRentri;
 			END
-
-			UPDATE dbo.tblRifiutiRegistri
-			SET
-				ConservazioneSostitutiva = @ConservazioneSostitutiva,
-				ConservazioneSostitutivaRagioneSociale = @ConservazioneSostitutivaRagioneSociale,
-				ConservazioneSostitutivaPartitaIva = @ConservazioneSostitutivaPartitaIva,
-				ConservazioneSostitutivaEmail = @ConservazioneSostitutivaEmail
-			WHERE Id = @Id;
 		COMMIT TRANSACTION;
 
 		SELECT ReturnValue = @returnValue;
@@ -2748,184 +2748,184 @@ GO
 CREATE OR ALTER VIEW [dbo].[viewRentriRegistrazioniConservazione]
 AS
 SELECT
-    IDRegistro                  = g.Id,
-    IDRentri                    = z.IdRentri,
+	IDRegistro                  = g.Id,
+	IDRentri                    = z.IdRentri,
 
-    -- "Autore" nella vista gemella 3_1 e' la Sede del registro (non un utente) - stessa colonna
-    -- gia' esposta come IdSede su tblRifiutiRegistri
-    Autore                       = g.IdSede,
-    -- Data della registrazione, con l'orario reale di inserimento (tblIdLog, Operazione='I')
-    DataInserimento              = DATEADD(MINUTE, DATEPART(MINUTE, idl.Data), DATEADD(HOUR, DATEPART(HOUR, idl.Data), CAST(r.Data AS SMALLDATETIME))),
+	-- "Autore" nella vista gemella 3_1 e' la Sede del registro (non un utente) - stessa colonna
+	-- gia' esposta come IdSede su tblRifiutiRegistri
+	Autore                       = g.IdSede,
+	-- Data della registrazione, con l'orario reale di inserimento (tblIdLog, Operazione='I')
+	DataInserimento              = DATEADD(MINUTE, DATEPART(MINUTE, idl.Data), DATEADD(HOUR, DATEPART(HOUR, idl.Data), CAST(r.Data AS SMALLDATETIME))),
 
-    IdRegistrazione             = r.Id,
-    RentriIdentificativo        = r.RentriIdentificativo,
-    Numero                      = r.Numero,
-    Anno                        = YEAR(r.Data),
+	IdRegistrazione             = r.Id,
+	RentriIdentificativo        = r.RentriIdentificativo,
+	Numero                      = r.Numero,
+	Anno                        = YEAR(r.Data),
 
-    RettificaNumero              = ISNULL(ro.Numero, 0),
-    RettificaAnno                 = ISNULL(YEAR(ro.Data), 0),
-    RettificaIdentificativo      = ro.RentriIdentificativo,
-    RettificaIsAnnullata          = CAST(ISNULL(rett.Annullata, 0) AS BIT),
+	RettificaNumero              = ISNULL(ro.Numero, 0),
+	RettificaAnno                 = ISNULL(YEAR(ro.Data), 0),
+	RettificaIdentificativo      = ro.RentriIdentificativo,
+	RettificaIsAnnullata          = CAST(ISNULL(rett.Annullata, 0) AS BIT),
 
-    Data                         = r.Data,
-    Operazione                   = o.Codice,
+	Data                         = r.Data,
+	Operazione                   = o.Codice,
 
-    Eer                          = m.IdEer,
-    EerDescrizione               = m.EerDescrizione,
-    StatoFisico                  = sf.Codice,
-    Provenienza                  = CASE WHEN o.Codice IN ('T*aT', 'TR') THEN NULL ELSE ISNULL(m.IdProvenienza, 'S') END,
+	Eer                          = m.IdEer,
+	EerDescrizione               = m.EerDescrizione,
+	StatoFisico                  = sf.Codice,
+	Provenienza                  = CASE WHEN o.Codice IN ('T*aT', 'TR') THEN NULL ELSE ISNULL(m.IdProvenienza, 'S') END,
 
-    Quantita                     = m.Quantita,
-    UnitaMisura                  = LOWER(um.Codice),
-    -- Formato array JSON stringato (es. ["HP01","HP14"]), stessa resa di 3_1 per la conservazione
-    -- (diversa sia da viewRentriRegistrazioni ';'-separata sia da viewRentriRegistrazioniStampa spazio-separata)
-    ClassiPericolo                = cp.ClassiPericolo,
+	Quantita                     = m.Quantita,
+	UnitaMisura                  = LOWER(um.Codice),
+	-- Formato array JSON stringato (es. ["HP01","HP14"]), stessa resa di 3_1 per la conservazione
+	-- (diversa sia da viewRentriRegistrazioni ';'-separata sia da viewRentriRegistrazioniStampa spazio-separata)
+	ClassiPericolo                = cp.ClassiPericolo,
 
-    VeicoloFuoriUso               = ISNULL(r.VeicoloFuoriUso, 0),
-    VeicoloFuoriUsoNumero        = r.VeicoloFuoriUsoNumero,
-    VeicoloFuoriUsoData          = ISNULL(r.VeicoloFuoriUsoData, r.Data),
+	VeicoloFuoriUso               = ISNULL(r.VeicoloFuoriUso, 0),
+	VeicoloFuoriUsoNumero        = r.VeicoloFuoriUsoNumero,
+	VeicoloFuoriUsoData          = ISNULL(r.VeicoloFuoriUsoData, r.Data),
 
-    CategorieAee                 = raee.Codice,
+	CategorieAee                 = raee.Codice,
 
-    MaterialeSecondario           = mat.Codice,
-    MaterialeSecondarioDescrizione = r.MaterialeDescrizione,
+	MaterialeSecondario           = mat.Codice,
+	MaterialeSecondarioDescrizione = r.MaterialeDescrizione,
 
-    Esito                        = es.Codice,
-    DataEsito                    = ISNULL(r.DataFineTrasporto, r.Data),
-    QuantitaDestino               = ISNULL(r.QuantitaVerificata, m.Quantita),
+	Esito                        = es.Codice,
+	DataEsito                    = ISNULL(r.DataFineTrasporto, r.Data),
+	QuantitaDestino               = ISNULL(r.QuantitaVerificata, m.Quantita),
 
-    EsitoCausaleRespingimento    = CASE WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL ELSE ISNULL(ecr.Codice, 'NC') END,
-    RespingimentoMotivo          = CASE WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL ELSE ISNULL(r.CausaleRespingimentoAltro, 'Non conforme') END,
-    RespingimentoQuantita        = ISNULL(r.QuantitaRespinta, m.Quantita),
+	EsitoCausaleRespingimento    = CASE WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL ELSE ISNULL(ecr.Codice, 'NC') END,
+	RespingimentoMotivo          = CASE WHEN ISNULL(es.Codice, 'A') = 'A' THEN NULL ELSE ISNULL(r.CausaleRespingimentoAltro, 'Non conforme') END,
+	RespingimentoQuantita        = ISNULL(r.QuantitaRespinta, m.Quantita),
 
-    Destinazione                 = attv.Codice,
+	Destinazione                 = attv.Codice,
 
-    -- A differenza di viewRentriRegistrazioni (progressivo/anno), qui anche l'IdentificativoRentri
-    -- di ogni riferimento (stessa resa di 3_1..viewRentriRegistrazioniConservazione)
-    RegistrazioniAssociate       = CASE
-        WHEN o.Operazione = 'S' OR o.Codice = 'M' THEN assocRiferimenti.Registrazioni
-        ELSE NULL
-    END,
+	-- A differenza di viewRentriRegistrazioni (progressivo/anno), qui anche l'IdentificativoRentri
+	-- di ogni riferimento (stessa resa di 3_1..viewRentriRegistrazioniConservazione)
+	RegistrazioniAssociate       = CASE
+		WHEN o.Operazione = 'S' OR o.Codice = 'M' THEN assocRiferimenti.Registrazioni
+		ELSE NULL
+	END,
 
-    FormularioNumero              = m.FormularioNumero,
-    FormularioDataInizioTrasporto = ISNULL(m.DataInizioTrasporto, r.Data),
-    TransfrontalieroTipo         = tt.Codice,
+	FormularioNumero              = m.FormularioNumero,
+	FormularioDataInizioTrasporto = ISNULL(m.DataInizioTrasporto, r.Data),
+	TransfrontalieroTipo         = tt.Codice,
 
-    ProduttoreNome                = sp.NomeCompleto,
-    ProduttoreCodiceFiscale       = ISNULL(sp.CodiceFiscale, sp.PartitaIva),
-    ProduttoreNazione             = nzp.Sigla,
-    ProduttoreIdComune            = ip.IdComune,
-    ProduttoreIndirizzo           = ip.Indirizzo,
-    ProduttoreCAP                 = ip.CAP,
-    ProduttoreLocalita            = ip.Localita,
+	ProduttoreNome                = sp.NomeCompleto,
+	ProduttoreCodiceFiscale       = ISNULL(sp.CodiceFiscale, sp.PartitaIva),
+	ProduttoreNazione             = nzp.Sigla,
+	ProduttoreIdComune            = ip.IdComune,
+	ProduttoreIndirizzo           = ip.Indirizzo,
+	ProduttoreCAP                 = ip.CAP,
+	ProduttoreLocalita            = ip.Localita,
 
-    TrasportatoreNome             = st.NomeCompleto,
-    TrasportatoreCodiceFiscale    = ISNULL(st.CodiceFiscale, st.PartitaIva),
-    TrasportatoreNazione          = nzt.Sigla,
-    TrasportatoreAutorizzazione   = at.Numero,
+	TrasportatoreNome             = st.NomeCompleto,
+	TrasportatoreCodiceFiscale    = ISNULL(st.CodiceFiscale, st.PartitaIva),
+	TrasportatoreNazione          = nzt.Sigla,
+	TrasportatoreAutorizzazione   = at.Numero,
 
-    DestinatarioNome               = sd.NomeCompleto,
-    DestinatarioCodiceFiscale     = ISNULL(sd.CodiceFiscale, sd.PartitaIva),
-    DestinatarioNazione           = nzd.Sigla,
-    DestinatarioAutorizzazione    = ad.Numero,
+	DestinatarioNome               = sd.NomeCompleto,
+	DestinatarioCodiceFiscale     = ISNULL(sd.CodiceFiscale, sd.PartitaIva),
+	DestinatarioNazione           = nzd.Sigla,
+	DestinatarioAutorizzazione    = ad.Numero,
 
-    IntermediarioNome              = si.NomeCompleto,
-    IntermediarioCodiceFiscale    = ISNULL(si.CodiceFiscale, si.PartitaIva),
-    IntermediarioNazione          = nzi.Sigla,
-    IntermediarioAutorizzazione   = ai.Numero,
+	IntermediarioNome              = si.NomeCompleto,
+	IntermediarioCodiceFiscale    = ISNULL(si.CodiceFiscale, si.PartitaIva),
+	IntermediarioNazione          = nzi.Sigla,
+	IntermediarioAutorizzazione   = ai.Numero,
 
-    -- Nessun supporto multi-intermediario su Registrazioni in questo schema (solo IdSedeIntermediario1),
-    -- stessa scelta gia' fatta in viewRentriRegistrazioni - la vista gemella 3_1 per la conservazione
-    -- non referenzia Intermediario2* neanche lei
-    Intermediario2Nome            = CAST(NULL AS VARCHAR(200)),
-    Intermediario2CodiceFiscale   = CAST(NULL AS VARCHAR(20)),
-    Intermediario2Nazione         = CAST(NULL AS CHAR(2)),
-    Intermediario2Autorizzazione  = CAST(NULL AS VARCHAR(20)),
+	-- Nessun supporto multi-intermediario su Registrazioni in questo schema (solo IdSedeIntermediario1),
+	-- stessa scelta gia' fatta in viewRentriRegistrazioni - la vista gemella 3_1 per la conservazione
+	-- non referenzia Intermediario2* neanche lei
+	Intermediario2Nome            = CAST(NULL AS VARCHAR(200)),
+	Intermediario2CodiceFiscale   = CAST(NULL AS VARCHAR(20)),
+	Intermediario2Nazione         = CAST(NULL AS CHAR(2)),
+	Intermediario2Autorizzazione  = CAST(NULL AS VARCHAR(20)),
 
-    IsProduttore                  = CAST(IIF(ISNULL(o.IsProduttore, 0)     = 1 AND m.IdSedeProduttoreDetentore IS NOT NULL, 1, 0) AS BIT),
-    IsTrasportatore                = CAST(IIF(ISNULL(o.IsTrasportatore, 0) = 1 AND m.IdSedeTrasportatore1      IS NOT NULL, 1, 0) AS BIT),
-    IsDestinatario                 = CAST(IIF(ISNULL(o.IsDestinatario, 0)  = 1 AND m.IdSedeDestinatario        IS NOT NULL, 1, 0) AS BIT),
-    IsIntermediario                = CAST(IIF(ISNULL(o.IsIntermediario, 0) = 1 AND m.IdSedeIntermediario1      IS NOT NULL, 1, 0) AS BIT),
-    IsEsito                        = ISNULL(o.IsEsito, 0),
-    IsFormulario                   = CAST(IIF(o.Codice IN ('aT', 'TR', 'T*', 'T*aT'), 1, 0) AS BIT),
-    IsTransfrontaliero            = CAST(IIF(r.IdTrasportoTransfrontalieroTipo IS NOT NULL, 1, 0) AS BIT),
-    IsStoccaggioIstantaneo        = ISNULL(o.IsStoccaggioIstantaneo, 0),
+	IsProduttore                  = CAST(IIF(ISNULL(o.IsProduttore, 0) = 1 AND m.IdSedeProduttoreDetentore IS NOT NULL, 1, 0) AS BIT),
+	IsTrasportatore                = CAST(IIF(ISNULL(o.IsTrasportatore, 0) = 1 AND m.IdSedeTrasportatore1 IS NOT NULL, 1, 0) AS BIT),
+	IsDestinatario                 = CAST(IIF(ISNULL(o.IsDestinatario, 0) = 1 AND m.IdSedeDestinatario IS NOT NULL, 1, 0) AS BIT),
+	IsIntermediario                = CAST(IIF(ISNULL(o.IsIntermediario, 0) = 1 AND m.IdSedeIntermediario1 IS NOT NULL, 1, 0) AS BIT),
+	IsEsito                        = ISNULL(o.IsEsito, 0),
+	IsFormulario                   = CAST(IIF(o.Codice IN ('aT', 'TR', 'T*', 'T*aT'), 1, 0) AS BIT),
+	IsTransfrontaliero            = CAST(IIF(r.IdTrasportoTransfrontalieroTipo IS NOT NULL, 1, 0) AS BIT),
+	IsStoccaggioIstantaneo        = ISNULL(o.IsStoccaggioIstantaneo, 0),
 
-    Lock                          = r.Lock,
+	Lock                          = r.Lock,
 
-    Note                          = LEFT(r.Note, 500)
+	Note                          = LEFT(r.Note, 500)
 FROM
-    dbo.tblRifiutiRegistrazioni                        r
-    INNER JOIN dbo.tblRifiutiMovimenti                 m    ON r.IdMovimento               = m.Id
-    INNER JOIN dbo.tblRifiutiRegistri                  g    ON m.IdRegistro                = g.Id
-    LEFT  JOIN dbo.tblRentriRegistri                   z    ON g.Id                        = z.Id
-    LEFT  JOIN dbo.tblRifiutiOperazioni                o    ON m.IdOperazione              = o.Id
-    LEFT  JOIN dbo.tblRifiutiStatiFisici               sf   ON m.IdStatoFisico             = sf.Id
-    LEFT  JOIN dbo.tblUnitaMisura                      um   ON m.IdUnitaMisura             = um.Id
-    LEFT  JOIN dbo.tblRifiutiAttivitaRecuperoSmaltimento attv ON m.IdAttivita              = attv.Id
-    LEFT  JOIN dbo.tblRifiutiRaee                      raee ON r.IdRaee                    = raee.Id
-    LEFT  JOIN dbo.tblRifiutiMateriali                 mat  ON r.IdMateriale               = mat.Id
-    LEFT  JOIN dbo.tblRifiutiRegistrazioniEsiti        es   ON r.IdEsito                   = es.Id
-    LEFT  JOIN dbo.tblRifiutiRegistrazioniEsitiCausaliRespingimento ecr ON r.IdCausaleRespingimento = ecr.Id
-    LEFT  JOIN dbo.tblRifiutiTrasportiTransfrontalieriTipi tt ON r.IdTrasportoTransfrontalieroTipo = tt.Id
-    LEFT  JOIN dbo.tblRentriRegistrazioniRettifiche    rett ON r.Id                        = rett.IdRettifica
-    LEFT  JOIN dbo.tblRifiutiRegistrazioni             ro   ON rett.Id                     = ro.Id
-    LEFT  JOIN dbo.tblIdLog                            idl  ON r.Id                        = idl.Id AND idl.Operazione = 'I'
+	dbo.tblRifiutiRegistrazioni r
+	INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+	INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+	LEFT JOIN dbo.tblRentriRegistri z ON g.Id = z.Id
+	LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+	LEFT JOIN dbo.tblRifiutiStatiFisici sf ON m.IdStatoFisico = sf.Id
+	LEFT JOIN dbo.tblUnitaMisura um ON m.IdUnitaMisura = um.Id
+	LEFT JOIN dbo.tblRifiutiAttivitaRecuperoSmaltimento attv ON m.IdAttivita = attv.Id
+	LEFT JOIN dbo.tblRifiutiRaee raee ON r.IdRaee = raee.Id
+	LEFT JOIN dbo.tblRifiutiMateriali mat ON r.IdMateriale = mat.Id
+	LEFT JOIN dbo.tblRifiutiRegistrazioniEsiti es ON r.IdEsito = es.Id
+	LEFT JOIN dbo.tblRifiutiRegistrazioniEsitiCausaliRespingimento ecr ON r.IdCausaleRespingimento = ecr.Id
+	LEFT JOIN dbo.tblRifiutiTrasportiTransfrontalieriTipi tt ON r.IdTrasportoTransfrontalieroTipo = tt.Id
+	LEFT JOIN dbo.tblRentriRegistrazioniRettifiche rett ON r.Id = rett.IdRettifica
+	LEFT JOIN dbo.tblRifiutiRegistrazioni ro ON rett.Id = ro.Id
+	LEFT JOIN dbo.tblIdLog idl ON r.Id = idl.Id AND idl.Operazione = 'I'
 
-    LEFT  JOIN dbo.tblSedi                             sp   ON m.IdSedeProduttoreDetentore = sp.Id
-    LEFT  JOIN dbo.tblSediIndirizzi                    sip  ON sp.Id                       = sip.Id
-    LEFT  JOIN dbo.tblIndirizzi                        ip   ON sip.IdIndirizzo             = ip.Id
-    LEFT  JOIN dbo.tblNazioni                          nzp  ON ip.IdNazione                = nzp.Id
+	LEFT JOIN dbo.tblSedi sp ON m.IdSedeProduttoreDetentore = sp.Id
+	LEFT JOIN dbo.tblSediIndirizzi sip ON sp.Id = sip.Id
+	LEFT JOIN dbo.tblIndirizzi ip ON sip.IdIndirizzo = ip.Id
+	LEFT JOIN dbo.tblNazioni nzp ON ip.IdNazione = nzp.Id
 
-    LEFT  JOIN dbo.tblSedi                             st   ON m.IdSedeTrasportatore1      = st.Id
-    LEFT  JOIN dbo.tblSediIndirizzi                    sit  ON st.Id                       = sit.Id
-    LEFT  JOIN dbo.tblIndirizzi                        it_  ON sit.IdIndirizzo             = it_.Id
-    LEFT  JOIN dbo.tblNazioni                          nzt  ON it_.IdNazione               = nzt.Id
-    LEFT  JOIN dbo.tblRifiutiMovimentiTrasportatori    mt   ON m.Id                        = mt.Id AND mt.Pos = 0
-    LEFT  JOIN dbo.tblRifiutiAutorizzazioni            at   ON mt.IdAutorizzazione         = at.Id
+	LEFT JOIN dbo.tblSedi st ON m.IdSedeTrasportatore1 = st.Id
+	LEFT JOIN dbo.tblSediIndirizzi sit ON st.Id = sit.Id
+	LEFT JOIN dbo.tblIndirizzi it_ ON sit.IdIndirizzo = it_.Id
+	LEFT JOIN dbo.tblNazioni nzt ON it_.IdNazione = nzt.Id
+	LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt ON m.Id = mt.Id AND mt.Pos = 0
+	LEFT JOIN dbo.tblRifiutiAutorizzazioni at ON mt.IdAutorizzazione = at.Id
 
-    LEFT  JOIN dbo.tblSedi                             sd   ON m.IdSedeDestinatario        = sd.Id
-    LEFT  JOIN dbo.tblSediIndirizzi                    sid  ON sd.Id                       = sid.Id
-    LEFT  JOIN dbo.tblIndirizzi                        id_  ON sid.IdIndirizzo             = id_.Id
-    LEFT  JOIN dbo.tblNazioni                          nzd  ON id_.IdNazione               = nzd.Id
-    LEFT  JOIN dbo.tblRifiutiMovimentiDestinatari      md   ON m.Id                        = md.Id AND md.Pos = 0
-    LEFT  JOIN dbo.tblRifiutiAutorizzazioni            ad   ON md.IdAutorizzazione         = ad.Id
+	LEFT JOIN dbo.tblSedi sd ON m.IdSedeDestinatario = sd.Id
+	LEFT JOIN dbo.tblSediIndirizzi sid ON sd.Id = sid.Id
+	LEFT JOIN dbo.tblIndirizzi id_ ON sid.IdIndirizzo = id_.Id
+	LEFT JOIN dbo.tblNazioni nzd ON id_.IdNazione = nzd.Id
+	LEFT JOIN dbo.tblRifiutiMovimentiDestinatari md ON m.Id = md.Id AND md.Pos = 0
+	LEFT JOIN dbo.tblRifiutiAutorizzazioni ad ON md.IdAutorizzazione = ad.Id
 
-    LEFT  JOIN dbo.tblSedi                             si   ON m.IdSedeIntermediario1      = si.Id
-    LEFT  JOIN dbo.tblSediIndirizzi                    sii  ON si.Id                       = sii.Id
-    LEFT  JOIN dbo.tblIndirizzi                        ii_  ON sii.IdIndirizzo             = ii_.Id
-    LEFT  JOIN dbo.tblNazioni                          nzi  ON ii_.IdNazione               = nzi.Id
-    LEFT  JOIN dbo.tblRifiutiMovimentiIntermediari     mi   ON m.Id                        = mi.Id AND mi.Pos = 0
-    LEFT  JOIN dbo.tblRifiutiAutorizzazioni            ai   ON mi.IdAutorizzazione         = ai.Id
+	LEFT JOIN dbo.tblSedi si ON m.IdSedeIntermediario1 = si.Id
+	LEFT JOIN dbo.tblSediIndirizzi sii ON si.Id = sii.Id
+	LEFT JOIN dbo.tblIndirizzi ii_ ON sii.IdIndirizzo = ii_.Id
+	LEFT JOIN dbo.tblNazioni nzi ON ii_.IdNazione = nzi.Id
+	LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi ON m.Id = mi.Id AND mi.Pos = 0
+	LEFT JOIN dbo.tblRifiutiAutorizzazioni ai ON mi.IdAutorizzazione = ai.Id
 
-    LEFT JOIN (
-        SELECT
-            mc.Id,
-            ClassiPericolo = '[' + STRING_AGG('"' + c.Codice + '"', ',') WITHIN GROUP (ORDER BY c.Codice) + ']'
-        FROM
-            dbo.tblRifiutiMovimentiClassiPericolo mc
-            LEFT JOIN dbo.tblRifiutiClassiPericolo c ON mc.IdClasse = c.Id
-        GROUP BY
-            mc.Id
-    ) cp ON m.Id = cp.Id
+	LEFT JOIN (
+		SELECT
+			mc.Id,
+			ClassiPericolo = '[' + STRING_AGG('"' + c.Codice + '"', ',') WITHIN GROUP (ORDER BY c.Codice) + ']'
+		FROM
+			dbo.tblRifiutiMovimentiClassiPericolo mc
+			LEFT JOIN dbo.tblRifiutiClassiPericolo c ON mc.IdClasse = c.Id
+		GROUP BY
+			mc.Id
+	) cp ON m.Id = cp.Id
 
-    OUTER APPLY (
-        SELECT Registrazioni = (
-            SELECT
-                progressivo = rif.Numero,
-                anno = YEAR(rif.Data),
-                identificativoRentri = rif.RentriIdentificativo
-            FROM
-                dbo.tblRifiutiRegistrazioniRelazioni rl
-                INNER JOIN dbo.tblRifiutiRegistrazioni rif ON rl.Id = rif.Id
-            WHERE
-                rl.IdParent = r.Id
-                AND rif.Lock = 0
-            ORDER BY
-                rif.Data, rif.Numero
-            FOR JSON PATH
-        )
-    ) assocRiferimenti
+			OUTER APPLY (
+		SELECT Registrazioni = (
+			SELECT
+				progressivo = rif.Numero,
+				anno = YEAR(rif.Data),
+				identificativoRentri = rif.RentriIdentificativo
+			FROM
+				dbo.tblRifiutiRegistrazioniRelazioni rl
+				INNER JOIN dbo.tblRifiutiRegistrazioni rif ON rl.Id = rif.Id
+			WHERE
+				rl.IdParent = r.Id
+				AND rif.Lock = 0
+			ORDER BY
+				rif.Data, rif.Numero
+			FOR JSON PATH
+		)
+	) assocRiferimenti
 GO
 
 

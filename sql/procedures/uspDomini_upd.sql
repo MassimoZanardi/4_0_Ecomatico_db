@@ -1,3 +1,7 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER PROCEDURE [dbo].[uspDomini_upd]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -13,6 +17,7 @@ CREATE OR ALTER PROCEDURE [dbo].[uspDomini_upd]
 	@MagazziniMax INT = 0,
 	@ServiziMax INT = 0,
 	@RentriMax INT = 0,
+	@ConservazioniMax INT = 0,
 	@Demo BIT = 0,
 	@Codice CHAR(5) = NULL,
 	@NoLogo BIT = 0,
@@ -198,6 +203,7 @@ BEGIN
 				MagazziniMax = @MagazziniMax,
 				ServiziMax = @ServiziMax,
 				RentriMax = @RentriMax,
+				ConservazioniMax = @ConservazioniMax,
 				Demo = @Demo,
 				Codice = ISNULL(@Codice, Codice),
 				Logo = IIF(@NoLogo = 1, NULL, Logo),

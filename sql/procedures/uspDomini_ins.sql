@@ -1,3 +1,7 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER PROCEDURE [dbo].[uspDomini_ins]
 	@IdSessione CHAR(16) = NULL
 AS
@@ -37,7 +41,7 @@ BEGIN
 		BEGIN TRANSACTION;
 			INSERT INTO dbo.tblDomini
 				(Id, IdStato, [Master], Registrazione, Scadenza, ScadenzaAuto,
-				 UtentiMax, AziendeMax, SediMax, RegistriMax, MagazziniMax, ServiziMax, RentriMax, Demo, Lock)
+				 UtentiMax, AziendeMax, SediMax, RegistriMax, MagazziniMax, ServiziMax, RentriMax, ConservazioniMax, Demo, Lock)
 			VALUES (
 				@returnId,
 				'AT',
@@ -46,7 +50,7 @@ BEGIN
 				DATEADD(YEAR, 1, EOMONTH(GETDATE())),
 				1,
 				1, 1, 1,
-				0, 0, 0, 0,
+				0, 0, 0, 0, 0,
 				0,
 				2
 			);

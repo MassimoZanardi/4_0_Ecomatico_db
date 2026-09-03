@@ -1,3 +1,7 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER PROCEDURE [dbo].[uspDomini_get]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
@@ -67,6 +71,7 @@ BEGIN
 			MagazziniMax,
 			ServiziMax,
 			RentriMax,
+			ConservazioniMax,
 			Demo,
 			Logo,
 			Codice = LOWER(ISNULL(Codice, RIGHT(CONVERT(VARCHAR(36), NEWID()), 5))),

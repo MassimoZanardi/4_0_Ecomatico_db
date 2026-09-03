@@ -8,7 +8,11 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistri_upd]
 	@Scollega BIT = 0,
 	@Identificativo VARCHAR(20) = NULL,
 	@BloccoFormulari VARCHAR(10) = NULL,
-	@DataInizioInvio DATE = NULL
+	@DataInizioInvio DATE = NULL,
+	@ConservazioneSostitutiva BIT = 0,
+	@ConservazioneSostitutivaRagioneSociale VARCHAR(50) = NULL,
+	@ConservazioneSostitutivaPartitaIva VARCHAR(20) = NULL,
+	@ConservazioneSostitutivaEmail VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -21,6 +25,10 @@ BEGIN
 		SET @Scollega = ISNULL(@Scollega, 0);
 		SET @Identificativo = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@Identificativo, 0, 1));
 		SET @BloccoFormulari = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@BloccoFormulari, 0, 1));
+		SET @ConservazioneSostitutiva = ISNULL(@ConservazioneSostitutiva, 0);
+		SET @ConservazioneSostitutivaRagioneSociale = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneSostitutivaRagioneSociale, 0, 1);
+		SET @ConservazioneSostitutivaPartitaIva = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneSostitutivaPartitaIva, 0, 1);
+		SET @ConservazioneSostitutivaEmail = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneSostitutivaEmail, 0, 1);
 
 		IF @Id IS NULL
 		BEGIN
@@ -70,16 +78,26 @@ BEGIN
 		FROM dbo.tblRentriRegistri
 		WHERE Id = @Id;
 
-		-- Scollegamento esplicito
+		-- Scollegamento esplicito: la conservazione sostitutiva non ha senso su un registro non
+		-- collegato a RENTRI, azzerata insieme allo scollegamento (libera anche il posto nel
+		-- conteggio ConservazioniMax del Dominio)
 		IF @Scollega = 1
 		BEGIN
-			IF @idRentri IS NOT NULL
-			BEGIN
-				BEGIN TRANSACTION;
+			BEGIN TRANSACTION;
+				IF @idRentri IS NOT NULL
+				BEGIN
 					DELETE dbo.tblRentriRegistri WHERE Id = @Id;
 					DELETE [1_0_rentri]..tblRegistri WHERE Id = @idRentri;
-				COMMIT TRANSACTION;
-			END
+				END
+
+				UPDATE dbo.tblRifiutiRegistri
+				SET
+					ConservazioneSostitutiva = 0,
+					ConservazioneSostitutivaRagioneSociale = NULL,
+					ConservazioneSostitutivaPartitaIva = NULL,
+					ConservazioneSostitutivaEmail = NULL
+				WHERE Id = @Id;
+			COMMIT TRANSACTION;
 			SELECT ReturnValue = @returnValue;
 			GOTO BRANCH_END;
 		END
@@ -115,6 +133,32 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Limite di registri con conservazione sostitutiva abilitata per Dominio (tblDomini.ConservazioniMax);
+		-- @Id escluso dal conteggio: se già abilitata su questo stesso registro non va contata come "nuova"
+		IF @ConservazioneSostitutiva = 1
+		BEGIN
+			DECLARE @idDominio CHAR(16);
+			SELECT @idDominio = IdDominio FROM dbo.tblSessioni WHERE Id = @IdSessione;
+
+			IF ISNULL((SELECT ConservazioniMax FROM dbo.tblDomini WHERE Id = @idDominio), 0)
+				<=
+				(SELECT COUNT(*)
+				 FROM
+					 dbo.tblRifiutiRegistri r
+					 INNER JOIN dbo.tblSediInterne i ON r.IdSede = i.Id
+				 WHERE
+					 i.IdDominio = @idDominio
+					 AND r.ConservazioneSostitutiva = 1
+					 AND r.Lock = 0
+					 AND r.Id <> @Id
+				)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'È stato raggiunto il numero massimo di registri con conservazione sostitutiva abilitata';
+				GOTO BRANCH_END;
+			END
+		END
+
 		BEGIN TRANSACTION;
 			IF @idRentri IS NULL
 			BEGIN
@@ -135,6 +179,14 @@ BEGIN
 					DataInizioInvio = @DataInizioInvio
 				WHERE Id = @idRentri;
 			END
+
+			UPDATE dbo.tblRifiutiRegistri
+			SET
+				ConservazioneSostitutiva = @ConservazioneSostitutiva,
+				ConservazioneSostitutivaRagioneSociale = @ConservazioneSostitutivaRagioneSociale,
+				ConservazioneSostitutivaPartitaIva = @ConservazioneSostitutivaPartitaIva,
+				ConservazioneSostitutivaEmail = @ConservazioneSostitutivaEmail
+			WHERE Id = @Id;
 		COMMIT TRANSACTION;
 
 		SELECT ReturnValue = @returnValue;

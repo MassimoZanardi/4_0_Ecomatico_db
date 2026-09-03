@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
@@ -78,6 +78,10 @@ BEGIN
 			ControlloConducenti = ISNULL(ControlloConducenti, 1),
 			ControlloPatenti = ISNULL(ControlloPatenti, 1),
 			ControlloAttivitaRs = ISNULL(ControlloAttivitaRs, 1),
+			ConservazioneSostitutiva = ISNULL(ConservazioneSostitutiva, 0),
+			ConservazioneSostitutivaRagioneSociale = ISNULL(ConservazioneSostitutivaRagioneSociale, ''),
+			ConservazioneSostitutivaPartitaIva = ISNULL(ConservazioneSostitutivaPartitaIva, ''),
+			ConservazioneSostitutivaEmail = ISNULL(ConservazioneSostitutivaEmail, ''),
 			Lock
 		FROM dbo.tblRifiutiRegistri
 		WHERE

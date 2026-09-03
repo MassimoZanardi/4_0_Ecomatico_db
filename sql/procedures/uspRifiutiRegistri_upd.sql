@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
@@ -13,7 +13,11 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistri_upd]
 	@ControlloTarghe BIT = 1,
 	@ControlloConducenti BIT = 1,
 	@ControlloPatenti BIT = 1,
-	@ControlloAttivitaRs BIT = 1
+	@ControlloAttivitaRs BIT = 1,
+	@ConservazioneSostitutiva BIT = 0,
+	@ConservazioneSostitutivaRagioneSociale VARCHAR(50) = NULL,
+	@ConservazioneSostitutivaPartitaIva VARCHAR(20) = NULL,
+	@ConservazioneSostitutivaEmail VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -30,6 +34,10 @@ BEGIN
 		SET @ControlloConducenti = ISNULL(@ControlloConducenti, 1);
 		SET @ControlloPatenti = ISNULL(@ControlloPatenti, 1);
 		SET @ControlloAttivitaRs = ISNULL(@ControlloAttivitaRs, 1);
+		SET @ConservazioneSostitutiva = ISNULL(@ConservazioneSostitutiva, 0);
+		SET @ConservazioneSostitutivaRagioneSociale = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneSostitutivaRagioneSociale, 0, 1);
+		SET @ConservazioneSostitutivaPartitaIva = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneSostitutivaPartitaIva, 0, 1);
+		SET @ConservazioneSostitutivaEmail = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneSostitutivaEmail, 0, 1);
 
 		IF @Id IS NULL
 		BEGIN
@@ -126,6 +134,32 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Limite di registri con conservazione sostitutiva abilitata per Dominio (tblDomini.ConservazioniMax);
+		-- @Id escluso dal conteggio: se gia' abilitata su questo stesso registro non va contata come "nuova"
+		IF @ConservazioneSostitutiva = 1
+		BEGIN
+			DECLARE @idDominio CHAR(16);
+			SELECT @idDominio = IdDominio FROM dbo.tblSessioni WHERE Id = @IdSessione;
+
+			IF ISNULL((SELECT ConservazioniMax FROM dbo.tblDomini WHERE Id = @idDominio), 0)
+				<=
+				(SELECT COUNT(*)
+				 FROM
+					 dbo.tblRifiutiRegistri r
+					 INNER JOIN dbo.tblSediInterne i ON r.IdSede = i.Id
+				 WHERE
+					 i.IdDominio = @idDominio
+					 AND r.ConservazioneSostitutiva = 1
+					 AND r.Lock = 0
+					 AND r.Id <> @Id
+				)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'È stato raggiunto il numero massimo di registri con conservazione sostitutiva abilitata';
+				GOTO BRANCH_END;
+			END
+		END
+
 		BEGIN TRANSACTION;
 			UPDATE dbo.tblRifiutiRegistri
 			SET
@@ -136,7 +170,11 @@ BEGIN
 				ControlloTarghe = @ControlloTarghe,
 				ControlloConducenti = @ControlloConducenti,
 				ControlloPatenti = @ControlloPatenti,
-				ControlloAttivitaRs = @ControlloAttivitaRs
+				ControlloAttivitaRs = @ControlloAttivitaRs,
+				ConservazioneSostitutiva = @ConservazioneSostitutiva,
+				ConservazioneSostitutivaRagioneSociale = @ConservazioneSostitutivaRagioneSociale,
+				ConservazioneSostitutivaPartitaIva = @ConservazioneSostitutivaPartitaIva,
+				ConservazioneSostitutivaEmail = @ConservazioneSostitutivaEmail
 			WHERE
 				Id = @Id
 				AND Lock <= 2;

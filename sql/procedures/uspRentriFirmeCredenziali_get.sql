@@ -3,7 +3,9 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriFirmeCredenziali_get]
-	@IdSessione CHAR(16) = NULL
+	@IdSessione CHAR(16) = NULL,
+	@IdUtente CHAR(16) = NULL,
+	@IdCredenziale CHAR(16) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -12,6 +14,8 @@ BEGIN
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdUtente = NULLIF(LTRIM(RTRIM(@IdUtente)), '');
+		SET @IdCredenziale = NULLIF(LTRIM(RTRIM(@IdCredenziale)), '');
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -19,8 +23,19 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
+		IF @IdUtente IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdUtente non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdCredenziale IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdCredenziale non può essere vuoto';
+			GOTO BRANCH_END;
+		END
 
-		-- Controlla il permesso sulla funzione
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
@@ -33,30 +48,80 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		DECLARE @idUtente CHAR(16);
-		SELECT @idUtente = IdUtente
+		DECLARE @idUtenteSessione CHAR(16);
+		SELECT @idUtenteSessione = IdUtente
 		FROM dbo.tblSessioni
 		WHERE Id = @IdSessione;
 
-		IF @idUtente IS NULL
+		IF @idUtenteSessione IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Sessione non valida';
 			GOTO BRANCH_END;
 		END
 
+		-- Titolarità sull'utente target: se stesso, oppure Amministratore del suo Dominio
+		-- (o di un Dominio Master). Stesso schema di uspUtenti_upd.
+		IF @idUtenteSessione <> @IdUtente
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1
+				FROM dbo.tblUtenti target
+				INNER JOIN dbo.tblUtenti admin ON admin.IdDominio = target.IdDominio
+				WHERE
+					target.Id = @IdUtente
+					AND admin.Id = @idUtenteSessione
+					AND admin.IdRuolo = 'AD'
+					AND admin.Lock = 0
+			)
+			AND NOT EXISTS (
+				SELECT 1
+				FROM dbo.tblUtenti target
+				INNER JOIN dbo.tblUtenti admin ON admin.Id = @idUtenteSessione
+				INNER JOIN dbo.tblDomini d ON admin.IdDominio = d.Id
+				WHERE
+					target.Id = @IdUtente
+					AND admin.IdRuolo = 'AD'
+					AND admin.Lock = 0
+					AND d.[Master] = 1
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Non si dispone dei diritti necessari';
+				GOTO BRANCH_END;
+			END
+		END
+
+		-- Titolarità sulla Credenziale: deve appartenere allo stesso Dominio del target
+		IF NOT EXISTS (
+			SELECT 1
+			FROM dbo.tblRentriCredenziali rc
+			INNER JOIN dbo.tblUtenti u ON u.IdDominio = rc.IdDominio
+			WHERE rc.Id = @IdCredenziale AND u.Id = @IdUtente
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- DeviceIdentifier e' restituito anche per righe scollegate (Lock<>0): serve internamente
+		-- all'app per riusare lo stesso dispositivo gia' noto a RENTRI ad un successivo
+		-- ricollegamento, invece di farne registrare uno nuovo. CredentialsId/DataBoarding/
+		-- Collegata restano invece legati allo stato "attivo" (Lock = 0) per la UI.
 		SELECT
 			u.Id AS IdUtente,
 			u.CodiceFiscale,
 			u.Nome,
 			u.Cognome,
-			c.CredentialsId,
-			c.DataBoarding,
+			CredentialsId = CASE WHEN c.Lock = 0 THEN c.CredentialsId ELSE NULL END,
+			c.DeviceIdentifier,
+			DataBoarding = CASE WHEN c.Lock = 0 THEN c.DataBoarding ELSE NULL END,
 			Collegata = CASE WHEN c.IdUtente IS NOT NULL AND c.Lock = 0 THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END
 		FROM
 			dbo.tblUtenti u
-			LEFT JOIN dbo.tblRentriFirmeCredenziali c ON c.IdUtente = u.Id AND c.Lock = 0
-		WHERE u.Id = @idUtente;
+			LEFT JOIN dbo.tblRentriFirmeCredenziali c ON c.IdUtente = u.Id AND c.IdCredenziale = @IdCredenziale
+		WHERE u.Id = @IdUtente;
 
 	END TRY
 	BEGIN CATCH

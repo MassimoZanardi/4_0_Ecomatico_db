@@ -4,6 +4,8 @@ SET QUOTED_IDENTIFIER ON
 GO
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriFirmeCredenziali_upd_Boarding]
 	@IdSessione CHAR(16) = NULL,
+	@IdUtente CHAR(16) = NULL,
+	@IdCredenziale CHAR(16) = NULL,
 	@CredentialsId VARCHAR(50) = NULL,
 	@DeviceIdentifier VARCHAR(50) = NULL
 AS
@@ -14,6 +16,8 @@ BEGIN
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdUtente = NULLIF(LTRIM(RTRIM(@IdUtente)), '');
+		SET @IdCredenziale = NULLIF(LTRIM(RTRIM(@IdCredenziale)), '');
 		SET @CredentialsId = NULLIF(LTRIM(RTRIM(@CredentialsId)), '');
 		SET @DeviceIdentifier = NULLIF(LTRIM(RTRIM(@DeviceIdentifier)), '');
 
@@ -23,6 +27,18 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
+		IF @IdUtente IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdUtente non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdCredenziale IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdCredenziale non può essere vuoto';
+			GOTO BRANCH_END;
+		END
 		IF @CredentialsId IS NULL
 		BEGIN
 			SET @returnValue = -1;
@@ -30,7 +46,6 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Controlla il permesso sulla funzione
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
@@ -43,36 +58,82 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		DECLARE @idUtente CHAR(16);
-		SELECT @idUtente = IdUtente
+		DECLARE @idUtenteSessione CHAR(16);
+		SELECT @idUtenteSessione = IdUtente
 		FROM dbo.tblSessioni
 		WHERE Id = @IdSessione;
 
-		IF @idUtente IS NULL
+		IF @idUtenteSessione IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Sessione non valida';
 			GOTO BRANCH_END;
 		END
 
-		-- L'utente deve avere Codice Fiscale e Nome/Cognome impostati: sono richiesti dal boarding RENTRI
+		-- Titolarità sull'utente target: se stesso, oppure Amministratore del suo Dominio
+		-- (o di un Dominio Master). Stesso schema di uspUtenti_upd.
+		IF @idUtenteSessione <> @IdUtente
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1
+				FROM dbo.tblUtenti target
+				INNER JOIN dbo.tblUtenti admin ON admin.IdDominio = target.IdDominio
+				WHERE
+					target.Id = @IdUtente
+					AND admin.Id = @idUtenteSessione
+					AND admin.IdRuolo = 'AD'
+					AND admin.Lock = 0
+			)
+			AND NOT EXISTS (
+				SELECT 1
+				FROM dbo.tblUtenti target
+				INNER JOIN dbo.tblUtenti admin ON admin.Id = @idUtenteSessione
+				INNER JOIN dbo.tblDomini d ON admin.IdDominio = d.Id
+				WHERE
+					target.Id = @IdUtente
+					AND admin.IdRuolo = 'AD'
+					AND admin.Lock = 0
+					AND d.[Master] = 1
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Non si dispone dei diritti necessari';
+				GOTO BRANCH_END;
+			END
+		END
+
+		-- Titolarità sulla Credenziale: deve appartenere allo stesso Dominio del target
+		IF NOT EXISTS (
+			SELECT 1
+			FROM dbo.tblRentriCredenziali rc
+			INNER JOIN dbo.tblUtenti u ON u.IdDominio = rc.IdDominio
+			WHERE rc.Id = @IdCredenziale AND u.Id = @IdUtente
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Il TARGET deve avere Codice Fiscale e Nome/Cognome impostati: sono richiesti dal
+		-- boarding RENTRI (non l'esecutore, se diverso dal target).
 		IF NOT EXISTS (
 			SELECT 1
 			FROM dbo.tblUtenti
 			WHERE
-				Id = @idUtente
+				Id = @IdUtente
 				AND CodiceFiscale IS NOT NULL
 				AND Nome IS NOT NULL
 				AND Cognome IS NOT NULL
 		)
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Impostare Codice Fiscale, Nome e Cognome prima di collegare la credenziale di firma';
+			SET @returnMessage = 'Impostare Codice Fiscale, Nome e Cognome dell''utente prima di collegare la credenziale di firma';
 			GOTO BRANCH_END;
 		END
 
 		BEGIN TRANSACTION;
-			IF EXISTS (SELECT 1 FROM dbo.tblRentriFirmeCredenziali WHERE IdUtente = @idUtente)
+			IF EXISTS (SELECT 1 FROM dbo.tblRentriFirmeCredenziali WHERE IdUtente = @IdUtente AND IdCredenziale = @IdCredenziale)
 			BEGIN
 				UPDATE dbo.tblRentriFirmeCredenziali
 				SET
@@ -80,12 +141,12 @@ BEGIN
 					DeviceIdentifier = @DeviceIdentifier,
 					DataBoarding = SYSDATETIME(),
 					Lock = 0
-				WHERE IdUtente = @idUtente;
+				WHERE IdUtente = @IdUtente AND IdCredenziale = @IdCredenziale;
 			END
 			ELSE
 			BEGIN
-				INSERT dbo.tblRentriFirmeCredenziali (IdUtente, CredentialsId, DeviceIdentifier, DataBoarding, Lock)
-				VALUES (@idUtente, @CredentialsId, @DeviceIdentifier, SYSDATETIME(), 0);
+				INSERT dbo.tblRentriFirmeCredenziali (IdUtente, IdCredenziale, CredentialsId, DeviceIdentifier, DataBoarding, Lock)
+				VALUES (@IdUtente, @IdCredenziale, @CredentialsId, @DeviceIdentifier, SYSDATETIME(), 0);
 			END
 		COMMIT TRANSACTION;
 

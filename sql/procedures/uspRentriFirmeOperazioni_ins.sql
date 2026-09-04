@@ -4,6 +4,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriFirmeOperazioni_ins]
 	@IdSessione CHAR(16) = NULL,
+	@IdUtente CHAR(16) = NULL,
 	@Handle VARCHAR(50) = NULL,
 	@Esito VARCHAR(20) = NULL,
 	@Note VARCHAR(200) = NULL
@@ -16,11 +17,18 @@ BEGIN
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdUtente = NULLIF(LTRIM(RTRIM(@IdUtente)), '');
 
 		IF @IdSessione IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdUtente IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdUtente non può essere vuoto';
 			GOTO BRANCH_END;
 		END
 
@@ -37,16 +45,48 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		DECLARE @idUtente CHAR(16);
-		SELECT @idUtente = IdUtente
+		DECLARE @idUtenteSessione CHAR(16);
+		SELECT @idUtenteSessione = IdUtente
 		FROM dbo.tblSessioni
 		WHERE Id = @IdSessione;
 
-		IF @idUtente IS NULL
+		IF @idUtenteSessione IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Sessione non valida';
 			GOTO BRANCH_END;
+		END
+
+		-- Titolarità sull'utente target: se stesso, oppure Amministratore del suo Dominio
+		-- (o di un Dominio Master). Stesso schema di uspUtenti_upd.
+		IF @idUtenteSessione <> @IdUtente
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1
+				FROM dbo.tblUtenti target
+				INNER JOIN dbo.tblUtenti admin ON admin.IdDominio = target.IdDominio
+				WHERE
+					target.Id = @IdUtente
+					AND admin.Id = @idUtenteSessione
+					AND admin.IdRuolo = 'AD'
+					AND admin.Lock = 0
+			)
+			AND NOT EXISTS (
+				SELECT 1
+				FROM dbo.tblUtenti target
+				INNER JOIN dbo.tblUtenti admin ON admin.Id = @idUtenteSessione
+				INNER JOIN dbo.tblDomini d ON admin.IdDominio = d.Id
+				WHERE
+					target.Id = @IdUtente
+					AND admin.IdRuolo = 'AD'
+					AND admin.Lock = 0
+					AND d.[Master] = 1
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Non si dispone dei diritti necessari';
+				GOTO BRANCH_END;
+			END
 		END
 
 		-- uspId_get FUORI dalla transazione
@@ -54,7 +94,7 @@ BEGIN
 
 		BEGIN TRANSACTION;
 			INSERT dbo.tblRentriFirmeOperazioni (Id, IdUtente, DataOra, Handle, Esito, Note)
-			VALUES (@returnId, @idUtente, SYSDATETIME(), @Handle, @Esito, @Note);
+			VALUES (@returnId, @IdUtente, SYSDATETIME(), @Handle, @Esito, @Note);
 		COMMIT TRANSACTION;
 
 		SELECT Id = @returnId;

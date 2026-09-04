@@ -18,7 +18,10 @@ CREATE TABLE [dbo].[tblUtenti](
 	[TokenReset] [nvarchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[TokenResetScade] [datetime2](0) NULL,
 	[Lock] [tinyint] NULL,
- CONSTRAINT [PK_tblUtenti] PRIMARY KEY CLUSTERED 
+	[CodiceFiscale] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
+	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+	[Cognome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+ CONSTRAINT [PK_tblUtenti] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]

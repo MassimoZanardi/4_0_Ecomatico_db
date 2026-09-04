@@ -1,3 +1,7 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
@@ -89,6 +93,9 @@ BEGIN
 			PasswordPrecedenti = ISNULL(u.PasswordPrecedenti, 0),
 			PasswordScadenzaGiorni = ISNULL(u.PasswordScadenzaGiorni, 0),
 			PasswordLunghezzaMinima = ISNULL(u.PasswordLunghezzaMinima, 8),
+			u.CodiceFiscale,
+			u.Nome,
+			u.Cognome,
 			u.Lock
 		FROM
 			dbo.tblUtenti u

@@ -1,5 +1,5 @@
 ﻿/*
-	Deploy produzione - 2026-09-04 - Fix formattazione viste RENTRI (nessuna modifica di logica)
+	Deploy produzione - 2026-09-04 - Fix formattazione viste RENTRI + civico produttore
 
 	Le 3 viste viewRentriRegistrazioni/viewRentriRegistrazioniConservazione/viewRentriRegistrazioniStampa
 	avevano ereditato, copiando l'una dall'altra, uno stile "a griglia" (colonne allineate a spazi multipli
@@ -9,10 +9,18 @@
 	nessuna riga vuota decorativa dentro SELECT/FROM. Corretto anche, in tutte e tre, un bug di indentazione
 	su OUTER APPLY (tab in eccesso copiato tra le viste sorelle).
 
-	Nessuna colonna, nessun JOIN, nessuna condizione e' stata cambiata: ogni file e' stato verificato con
-	SqlFormatter.VerifyEquivalent (confronto byte-a-byte dei segmenti protetti - stringhe/commenti/
-	identificatori - e confronto del codice ignorando gli spazi) prima e dopo la riformattazione, e gia'
-	deployato e verificato su dev (2026-09-04) prima di questo bundle.
+	Aggiunge inoltre la colonna ProduttoreNumeroCivico (da tblIndirizzi.NumeroCivico, mai esposta finora) a
+	viewRentriRegistrazioni e viewRentriRegistrazioniConservazione: il numero civico del produttore
+	risultava sempre assente sia nell'invio reale delle registrazioni a RENTRI sia nell'XML di conservazione
+	sostitutiva, nonostante il dato fosse correttamente valorizzato in tblIndirizzi - la colonna esisteva ma
+	non era mai stata selezionata. viewRentriRegistrazioniStampa aggiunge invece direttamente il civico alla
+	stringa ProduttoreIndirizzo gia' concatenata (unico campo indirizzo presente in stampa), con lo stesso
+	pattern gia' in uso in uspSedi_upd.sql (Indirizzo + ', ' + NumeroCivico).
+
+	Nessuna colonna esistente, nessun JOIN, nessuna condizione preesistente e' stata cambiata oltre a quanto
+	sopra: ogni file e' stato verificato con SqlFormatter.VerifyEquivalent per la sola parte di formattazione,
+	e il civico e' un'aggiunta puramente additiva (nuova colonna/concatenazione, nessun dato esistente
+	alterato). Gia' deployato e verificato su dev (2026-09-04) prima di questo bundle.
 
 	Eseguire con:
 	  sqlcmd -S <server_produzione> -d "4_0_ecomatico" -E -f 65001 -i deploy_produzione_2026-09-04_fix_formattazione_viste.sql
@@ -116,6 +124,7 @@ SELECT
 	ProduttoreNazione = nzp.Sigla,
 	ProduttoreIdComune = ip.IdComune,
 	ProduttoreIndirizzo = ip.Indirizzo,
+	ProduttoreNumeroCivico = ip.NumeroCivico,
 	ProduttoreCAP = ip.CAP,
 	ProduttoreLocalita = ip.Localita,
 	TrasportatoreNome = st.NomeCompleto,
@@ -301,6 +310,7 @@ SELECT
 	ProduttoreNazione = nzp.Sigla,
 	ProduttoreIdComune = ip.IdComune,
 	ProduttoreIndirizzo = ip.Indirizzo,
+	ProduttoreNumeroCivico = ip.NumeroCivico,
 	ProduttoreCAP = ip.CAP,
 	ProduttoreLocalita = ip.Localita,
 	TrasportatoreNome = st.NomeCompleto,
@@ -507,7 +517,7 @@ SELECT
 	TransfrontalieroTipo = CASE WHEN ISNULL(rett.Annullata, 0) = 0 THEN tt.Nome ELSE NULL END,
 	ProduttoreNome = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN sp.NomeCompleto ELSE NULL END,
 	ProduttoreCodiceFiscale = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ISNULL(sp.CodiceFiscale, sp.PartitaIva) ELSE NULL END,
-	ProduttoreIndirizzo = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ip.Indirizzo + ISNULL(', ' + ip.CAP + ' ' + ip.Localita, '') ELSE NULL END,
+	ProduttoreIndirizzo = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ip.Indirizzo + ISNULL(', ' + ip.NumeroCivico, '') + ISNULL(', ' + ip.CAP + ' ' + ip.Localita, '') ELSE NULL END,
 	TrasportatoreNome = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN st.NomeCompleto ELSE NULL END,
 	TrasportatoreCodiceFiscale = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN ISNULL(st.CodiceFiscale, st.PartitaIva) ELSE NULL END,
 	TrasportatoreAutorizzazione = CASE WHEN ISNULL(rett.Annullata, 0) = 0 AND o.Codice IN ('T*', 'TR') THEN at.Numero ELSE NULL END,

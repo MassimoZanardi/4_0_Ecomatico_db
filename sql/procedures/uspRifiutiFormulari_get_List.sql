@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -91,6 +91,7 @@ BEGIN
                 IsRentriCollegato       = CAST(IIF(z.Id IS NOT NULL, 1, 0) AS BIT),
                 r.RentriIdentificativo,
                 r.RentriData,
+                RentriFormularioStato   = f.RentriStato,
                 RowsCount               = COUNT(*) OVER ()
             FROM
                 dbo.tblRifiutiFormulari                      f
@@ -173,7 +174,7 @@ BEGIN
             tbl.ProduttoreDetentoreSede, tbl.Trasportatore1Sede,
             tbl.DestinatarioSede, tbl.Intermediario1Sede,
             tbl.Etichette,
-            tbl.IsRentriCollegato, tbl.RentriIdentificativo, tbl.RentriData,
+            tbl.IsRentriCollegato, tbl.RentriIdentificativo, tbl.RentriData, tbl.RentriFormularioStato,
             tbl.RowsCount
         FROM tbl
         ORDER BY tbl.FormularioDataEmissione DESC, tbl.FormularioNumero DESC

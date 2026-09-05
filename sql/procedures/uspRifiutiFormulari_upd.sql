@@ -149,6 +149,7 @@ BEGIN
 		DECLARE @nessunaRegistrazioneAssociata BIT = 1;
 		DECLARE @rentriIdentificativo VARCHAR(20);
 		DECLARE @rentriData DATETIME2(0);
+		DECLARE @formularioRentriStato VARCHAR(40);
 
 		-- Recupero dati formulario dalle tabelle base
 		SELECT
@@ -162,6 +163,7 @@ BEGIN
 			@registrazioneNumero = r.Numero,
 			@rentriIdentificativo = r.RentriIdentificativo,
 			@rentriData = r.RentriData,
+			@formularioRentriStato = f.RentriStato,
 			@nessunaRegistrazioneAssociata = CASE
 				WHEN EXISTS(
 					SELECT 1
@@ -769,7 +771,11 @@ BEGIN
 				IdSedeDestinatario = ad.IdSede,
 				IdSedeTrasportatore1 = ar.IdSede,
 				IdSedeIntermediario1 = ai.IdSede,
-				FormularioNumero = @FormularioNumero,
+				-- Una volta creato il formulario digitale su RENTRI (RentriStato valorizzato), il numero
+				-- non puo' piu' essere modificato dall'utente - mantiene il valore gia' a DB
+				-- indipendentemente da @FormularioNumero (non blocca l'intero update, solo questo campo:
+				-- gli altri dati restano modificabili e sincronizzabili su RENTRI via "Modifica").
+				FormularioNumero = CASE WHEN @formularioRentriStato IS NOT NULL THEN m.FormularioNumero ELSE @FormularioNumero END,
 				DataInizioTrasporto = @DataInizioTrasporto,
 				Note = @UtenteNote
 			FROM

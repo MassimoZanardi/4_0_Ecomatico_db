@@ -96,7 +96,8 @@ BEGIN
                 IsRettifica              = CAST(IIF(rett.Id IS NOT NULL, 1, 0) AS BIT),
                 IsAnnullamento           = CAST(ISNULL(rett.Annullata, 0) AS BIT),
                 RettificaRegistrazioneNumero = ro.Numero,
-                RettificaRegistrazioneData   = ro.Data
+                RettificaRegistrazioneData   = ro.Data,
+                RentriFormularioStato    = fdig.RentriStato
             FROM
                 dbo.tblRifiutiRegistrazioni                  r
                 INNER JOIN dbo.tblRifiutiMovimenti           m  ON r.IdMovimento               = m.Id
@@ -116,6 +117,7 @@ BEGIN
                 LEFT  JOIN dbo.tblRentriRegistrazioniRettifiche
                                                              rett ON rett.IdRettifica          = r.Id
                 LEFT  JOIN dbo.tblRifiutiRegistrazioni       ro ON rett.Id                     = ro.Id
+                LEFT  JOIN dbo.tblRifiutiFormulari           fdig ON m.Id                      = fdig.IdMovimento AND fdig.Lock < 2
             WHERE
                 e.Id      = @IdSessione
                 AND r.Lock < 2
@@ -179,6 +181,7 @@ BEGIN
             tbl.Etichette,
             tbl.IsRentriCollegato, tbl.RentriIdentificativo, tbl.RentriData,
             tbl.IsRettifica, tbl.IsAnnullamento, tbl.RettificaRegistrazioneNumero, tbl.RettificaRegistrazioneData,
+            tbl.RentriFormularioStato,
             RowsCount = COUNT(*) OVER ()
         FROM tbl
         ORDER BY tbl.RegistrazioneData DESC, tbl.RegistrazioneNumero DESC

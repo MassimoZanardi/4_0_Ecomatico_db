@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_get]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_get]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS
@@ -94,6 +94,7 @@ BEGIN
 			-- Dati formulario
 			FormularioNumero = ISNULL(m.FormularioNumero, ''),
 			FormularioDataEmissione = ISNULL(f.DataEmissione, GETDATE()),
+			RentriFormularioStato = f.RentriStato,
 			IdAdr = ISNULL(f.IdAdr, '00'),
 			NumeroOnu = ISNULL(f.NumeroOnu, ''),
 			TrasportoAdr = ISNULL(f.TrasportoAdr, 0),

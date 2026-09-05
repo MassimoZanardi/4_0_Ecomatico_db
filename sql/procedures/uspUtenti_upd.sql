@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -10,10 +10,7 @@ CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_upd]
 	@Scadenza DATE = NULL,
 	@PasswordScadenzaGiorni INT = NULL,
 	@PasswordPrecedenti INT = NULL,
-	@PasswordLunghezzaMinima INT = NULL,
-	@CodiceFiscale VARCHAR(20) = NULL,
-	@Nome VARCHAR(50) = NULL,
-	@Cognome VARCHAR(50) = NULL
+	@PasswordLunghezzaMinima INT = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -27,9 +24,6 @@ BEGIN
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdRuolo = NULLIF(LTRIM(RTRIM(@IdRuolo)), '');
 		SET @Email = LOWER(dbo.ufnStringhe_get_SenzaSpazi(@Email, 0, 1));
-		SET @CodiceFiscale = UPPER(dbo.ufnStringhe_get_SenzaSpazi(@CodiceFiscale, 0, 1));
-		SET @Nome = dbo.ufnStringhe_get_SenzaSpazi(@Nome, 0, 1);
-		SET @Cognome = dbo.ufnStringhe_get_SenzaSpazi(@Cognome, 0, 1);
 
 		IF @Id IS NULL
 		BEGIN
@@ -187,9 +181,6 @@ BEGIN
 				PasswordScadenzaGiorni = @PasswordScadenzaGiorni,
 				PasswordPrecedenti = @PasswordPrecedenti,
 				PasswordLunghezzaMinima = @PasswordLunghezzaMinima,
-				CodiceFiscale = @CodiceFiscale,
-				Nome = @Nome,
-				Cognome = @Cognome,
 				Lock = 0
 			WHERE
 				Id = @Id

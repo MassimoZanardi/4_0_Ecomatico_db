@@ -1,3 +1,7 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_del]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -135,6 +139,22 @@ BEGIN
 					GOTO BRANCH_END;
 				END
 
+				-- Blocca la cancellazione se esiste una firma remota attualmente collegata a
+				-- questo utente (stesso schema di uspRentriCredenziali_del): lo scollegamento
+				-- non cancella mai la riga, quindi qui conta solo Lock = 0.
+				IF EXISTS (
+					SELECT 1
+					FROM dbo.tblRentriFirmeCredenziali
+					WHERE
+						IdUtente = @Id
+						AND Lock = 0
+				)
+				BEGIN
+					SET @returnValue = -1;
+					SET @returnMessage = 'Impossibile eliminare: esiste una firma remota collegata a questo utente';
+					GOTO BRANCH_END;
+				END
+
 				-- Soft delete: marca l'utente come cancellato
 				UPDATE dbo.tblUtenti
 				SET Lock = 4
@@ -166,6 +186,8 @@ BEGIN
 				WHERE Id = @Id;
 				DELETE dbo.tblUtentiSediInterne
 				WHERE Id = @Id;
+				DELETE dbo.tblRentriFirmeCredenziali
+				WHERE IdUtente = @Id;
 				DELETE dbo.tblUtentiPassword
 				WHERE Id = @Id;
 				DELETE dbo.tblUtenti
@@ -214,5 +236,6 @@ BEGIN
 	END
 
 END;
+GO
 
 

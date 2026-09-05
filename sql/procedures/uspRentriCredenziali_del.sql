@@ -46,7 +46,9 @@ BEGIN
 
 		-- Idempotenza: un @Id mai esistito o già cancellato è trattato come cancellazione
 		-- già avvenuta con successo, non come errore.
-		IF NOT EXISTS (SELECT 1 FROM dbo.tblRentriCredenziali WHERE Id = @Id)
+		IF NOT EXISTS (SELECT 1
+		FROM dbo.tblRentriCredenziali
+		WHERE Id = @Id)
 		BEGIN
 			SET @returnValue = 0;
 		END
@@ -61,7 +63,8 @@ BEGIN
 					INNER JOIN dbo.tblSessioni e ON c.IdDominio = e.IdDominio
 				WHERE
 					c.Id = @Id
-					AND e.Id = @IdSessione)
+					AND e.Id = @IdSessione
+			)
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Non si dispone dei diritti necessari';
@@ -79,7 +82,26 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			DECLARE @lock INT = (SELECT Lock FROM dbo.tblRentriCredenziali WHERE Id = @Id);
+			-- Blocca la cancellazione se esiste una firma remota attualmente collegata: lo
+			-- scollegamento (uspRentriFirmeCredenziali_del) non cancella mai la riga (mantiene
+			-- il DeviceIdentifier per un futuro ricollegamento), quindi qui conta solo Lock = 0 -
+			-- una riga già scollegata non blocca la cancellazione.
+			IF EXISTS (
+				SELECT 1
+				FROM dbo.tblRentriFirmeCredenziali
+				WHERE
+					IdCredenziale = @Id
+					AND Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Impossibile eliminare: esiste una firma remota collegata a questa credenziale';
+				GOTO BRANCH_END;
+			END
+
+			DECLARE @lock INT = (SELECT Lock
+			FROM dbo.tblRentriCredenziali
+			WHERE Id = @Id);
 
 			-- ── CASO 1: credenziale attiva (Lock = 0) → soft delete ────────────────
 			-- La riga hub NON viene toccata, per non perdere dati in caso di Undo.
@@ -101,9 +123,11 @@ BEGIN
 					END
 
 					IF @Reset = 1
-						DELETE dbo.tblIdCancellati WHERE IdSessione = @IdSessione;
+						DELETE dbo.tblIdCancellati
+						WHERE IdSessione = @IdSessione;
 					ELSE
-						DELETE dbo.tblIdCancellati WHERE Id = @Id;
+						DELETE dbo.tblIdCancellati
+						WHERE Id = @Id;
 
 					INSERT INTO dbo.tblIdCancellati (Id, IdSessione, [Data])
 					VALUES (@Id, @IdSessione, GETDATE());
@@ -117,10 +141,16 @@ BEGIN
 			ELSE IF @lock = 2
 			BEGIN
 				BEGIN TRANSACTION;
-					DELETE dbo.tblRentriCredenziali WHERE Id = @Id;
-					DELETE dbo.tblIdCancellati WHERE Id = @Id;
-					DELETE dbo.tblIdLog WHERE Id = @Id;
-					DELETE dbo.tblId WHERE Id = @Id;
+					DELETE dbo.tblRentriFirmeCredenziali
+					WHERE IdCredenziale = @Id;
+					DELETE dbo.tblRentriCredenziali
+					WHERE Id = @Id;
+					DELETE dbo.tblIdCancellati
+					WHERE Id = @Id;
+					DELETE dbo.tblIdLog
+					WHERE Id = @Id;
+					DELETE dbo.tblId
+					WHERE Id = @Id;
 				COMMIT TRANSACTION;
 			END
 

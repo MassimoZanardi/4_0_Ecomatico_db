@@ -15,9 +15,14 @@ GO
 -- - Luogo di produzione diverso dall'unita' locale (tblRifiutiFormulari.LuogoDiProduzione=1): l'indirizzo
 --   selezionato nel FIR (Sede dell'autorizzazione produttore) e' il luogo di produzione effettivo (Posizione*),
 --   mentre Produttore* (Nome/CodiceFiscale/indirizzo, l'unita' locale/sede legale) va risolto separatamente:
---   stessa IdAziendaInterna, Sede con UnitaLocale=1, altrimenti la Sede Padre (regola identica sia per sedi
---   interne che esterne, nessun filtro InternaEsterna - confermato dall'utente 2026-09-05). Il gate lato hub
---   ApiHelpers.BuildFormularioContent (codice condiviso con le app legacy, non modificabile) allega il blocco
+--   nella famiglia della Sede (se stessa/sorelle dirette via IdParent, ancora = ISNULL(IdParent, Id) - stesso
+--   raggruppamento dell'invariante di uspSedi_upd), la Sede con UnitaLocale=1, altrimenti la Sede Padre
+--   (regola identica sia per sedi interne che esterne, nessun filtro InternaEsterna - confermato dall'utente
+--   2026-09-05). NON usare IdAziendaInterna come chiave di famiglia: per le Sedi Esterne quella colonna vale
+--   l'azienda interna proprietaria (tblSediEsterne.IdSedeInterna, vedi uspSedi_upd), non la radice della
+--   propria parentela - userebbe come "sorelle" tutte le sedi esterne di quell'azienda interna, non quelle
+--   della stessa famiglia (bug reale riscontrato in produzione 2026-09-06, corretto qui usando IdParent).
+--   Il gate lato hub ApiHelpers.BuildFormularioContent (codice condiviso con le app legacy, non modificabile) allega il blocco
 --   luogo_produzione solo se IDCausale='CSX' - per questo IDCausale sopra e' forzato a 'CSX' quando
 --   LuogoDiProduzione=1 (nessun altro uso di IDCausale in questo schema/lato hub), invece di modificare il gate.
 -- - Esito/DataEsito/QuantitaRegistrata/QuantitaDestino/QuantitaRespinta/EsitoCausaleRespingimento/RespingimentoMotivo/
@@ -48,7 +53,9 @@ SELECT
 	ProduttoreSede = CAST(NULL AS VARCHAR(200)),
 	-- Luogo di produzione diverso dall'unita' locale (f.LuogoDiProduzione=1): l'indirizzo selezionato nel FIR
 	-- (sp/ip, la Sede dell'autorizzazione produttore) e' in realta' il luogo di produzione (va in Posizione*),
-	-- mentre l'unita' locale (Produttore*) va risolta separatamente sulla stessa IdAziendaInterna di sp:
+	-- mentre l'unita' locale (Produttore*) va risolta separatamente nella famiglia di sp (se stessa/sorelle
+	-- dirette via IdParent, stesso raggruppamento dell'invariante di uspSedi_upd - NON IdAziendaInterna, che
+	-- per le Sedi Esterne e' l'azienda interna proprietaria e non la radice della propria parentela):
 	-- la Sede con UnitaLocale=1, o in sua assenza la Sede Padre di sp (spul, risolta in OUTER APPLY sotto).
 	-- Confermato dall'utente (2026-09-05): anche Nome/CodiceFiscale vanno presi dalla Sede risolta (spul), non da sp.
 	ProduttorePosizione = CASE WHEN ISNULL(f.LuogoDiProduzione, 0) = 1 THEN UPPER(ip.Indirizzo + ISNULL(', ' + NULLIF(ip.NumeroCivico, ''), '')) ELSE NULL END,
@@ -152,14 +159,18 @@ FROM
 	LEFT JOIN dbo.tblSediIndirizzi sip ON sp.Id = sip.Id
 	LEFT JOIN dbo.tblIndirizzi ip ON sip.IdIndirizzo = ip.Id
 	LEFT JOIN dbo.tblNazioni nzp ON ip.IdNazione = nzp.Id
-	-- Unita' locale del produttore (usata al posto di sp quando f.LuogoDiProduzione=1): stessa IdAziendaInterna
-	-- di sp, la Sede con UnitaLocale=1, altrimenti la Sede Padre di sp
+	-- Unita' locale del produttore (usata al posto di sp quando f.LuogoDiProduzione=1): nella famiglia di sp
+	-- (se stessa/sorelle dirette via IdParent - ancora = ISNULL(sp.IdParent, sp.Id), stesso raggruppamento
+	-- dell'invariante di uspSedi_upd), la Sede con UnitaLocale=1, altrimenti la Sede Padre di sp. NON tramite
+	-- IdAziendaInterna: per le Sedi Esterne quella colonna e' l'azienda interna proprietaria (tblSediEsterne.
+	-- IdSedeInterna), condivisa da tutte le sedi esterne di quell'azienda interna - non la radice della
+	-- famiglia di sp - e avrebbe pescato UnitaLocale=1 da una sede sorella estranea.
 	OUTER APPLY (
 		SELECT Id = COALESCE(
 			(SELECT TOP 1 Id
 			FROM dbo.tblSedi
 			WHERE
-				IdAziendaInterna = sp.IdAziendaInterna
+				(Id = ISNULL(sp.IdParent, sp.Id) OR IdParent = ISNULL(sp.IdParent, sp.Id))
 				AND UnitaLocale = 1
 			),
 			sp.IdParent

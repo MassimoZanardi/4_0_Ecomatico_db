@@ -126,6 +126,7 @@ BEGIN
 			END AS BIT),
 			FormularioNumero = ISNULL(m.FormularioNumero, ''),
 			FormularioDataEmissione = ISNULL(f.DataEmissione, GETDATE()),
+			RentriFormularioStato = m.RentriFormularioStato,
 
 			IsTrasportoTransfrontaliero = CAST(IIF(r.IdTrasportoTransfrontalieroTipo IS NOT NULL, 1, 0) AS BIT),
 			IdTrasportoTransfrontalieroTipo = ISNULL(r.IdTrasportoTransfrontalieroTipo, 'D'),
@@ -174,6 +175,7 @@ BEGIN
 			IsIntermediario = ISNULL(o.IsIntermediario, 0),
 			IsAttivitaRs = ISNULL(o.IsAttivitaRs, 0),
 			IsEsito = ISNULL(o.IsEsito, 0),
+			IsRentriAccettazione = ISNULL(o.IsRentriAccettazione, 0),
 			IsAttivitaProvenienza = ISNULL(o.IsAttivitaProvenienza, 0),
 			IsMateriale = ISNULL(o.IsMateriale, 0),
 			IsStoccaggioIstantaneo = ISNULL(o.IsStoccaggioIstantaneo, 0),

@@ -3,13 +3,16 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
--- Numeri di formulario già presenti (Lock < 2, stesso filtro del controllo duplicati in
--- uspRifiutiRegistrazioni_upd/uspRifiutiFormulari_upd) nel registro indicato - usato dalla modale "Ricerca
--- formulari digitali RENTRI" (Rifiuti/Registrazioni e Rifiuti/Formulari) per marcare/filtrare i formulari
--- già importati in questo registro e non riproporli per errore all'utente.
+-- Numeri di formulario già presenti (Lock < 2) nel registro indicato per la modalità indicata - usato dalla
+-- modale "Ricerca formulari digitali RENTRI" (Rifiuti/Registrazioni e Rifiuti/Formulari) per marcare/filtrare
+-- i formulari già importati e non riproporli per errore all'utente. @ModalitaRitorno ('R'/'F') scopa il
+-- controllo alla sola entità di quella pagina: da Registrazioni non ostacola/non è ostacolato da un
+-- Formulario con lo stesso numero acquisito separatamente da Rifiuti/Formulari, e viceversa - stesso
+-- principio del controllo duplicati in uspRifiutiMovimenti_ins_DaAcquisizioneFormulario.
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiMovimenti_get_FormularioNumeri_List]
 	@IdSessione CHAR(16) = NULL,
-	@IdRegistro CHAR(16) = NULL
+	@IdRegistro CHAR(16) = NULL,
+	@ModalitaRitorno CHAR(1) = NULL -- 'R' Registrazione, 'F' Formulario
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -20,6 +23,7 @@ BEGIN
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdRegistro = NULLIF(LTRIM(RTRIM(@IdRegistro)), '');
+		SET @ModalitaRitorno = NULLIF(LTRIM(RTRIM(@ModalitaRitorno)), '');
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -31,6 +35,12 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Il parametro @IdRegistro non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @ModalitaRitorno NOT IN ('R', 'F')
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @ModalitaRitorno deve essere ''R'' o ''F''';
 			GOTO BRANCH_END;
 		END
 
@@ -46,10 +56,9 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Un formulario può risultare "già presente" tramite una Registrazione (senza riga in
-		-- tblRifiutiFormulari, per acquisizioni da Rifiuti/Registrazioni) o tramite un Formulario vero e
-		-- proprio (per acquisizioni da Rifiuti/Formulari) - controllare entrambe le tabelle, mai solo
-		-- un INNER JOIN su una delle due (altrimenti l'altro percorso di acquisizione resta invisibile).
+		-- Scopato alla sola entità della modalità indicata: da Registrazioni conta solo un'altra
+		-- Registrazione con lo stesso numero, da Formulari solo un altro Formulario - i due percorsi di
+		-- acquisizione sono indipendenti e non devono segnalarsi a vicenda.
 		SELECT DISTINCT m.FormularioNumero
 		FROM dbo.tblRifiutiMovimenti m
 		WHERE
@@ -57,8 +66,15 @@ BEGIN
 			AND m.FormularioNumero IS NOT NULL
 			AND
 				(
-				EXISTS (SELECT 1 FROM dbo.tblRifiutiRegistrazioni r WHERE r.IdMovimento = m.Id AND r.Lock < 2)
-				OR EXISTS (SELECT 1 FROM dbo.tblRifiutiFormulari f WHERE f.IdMovimento = m.Id AND f.Lock < 2)
+					(
+					@ModalitaRitorno = 'R'
+					AND EXISTS (SELECT 1 FROM dbo.tblRifiutiRegistrazioni r WHERE r.IdMovimento = m.Id AND r.Lock < 2)
+					)
+				OR
+					(
+					@ModalitaRitorno = 'F'
+					AND EXISTS (SELECT 1 FROM dbo.tblRifiutiFormulari f WHERE f.IdMovimento = m.Id AND f.Lock < 2)
+					)
 				);
 
 	END TRY

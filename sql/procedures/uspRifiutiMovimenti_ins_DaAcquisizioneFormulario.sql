@@ -170,9 +170,9 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Duplicato: stesso numero di formulario già presente e attivo nel registro (stesso principio del
-		-- controllo in uspRifiutiRegistrazioni_upd/uspRifiutiFormulari_upd, qui anticipato per non creare
-		-- una bozza inutile)
+		-- Duplicato: stesso numero di formulario già presente e attivo nel registro, scopato alla sola
+		-- entità della modalità corrente (Registrazioni e Formulari sono percorsi di acquisizione
+		-- indipendenti: lo stesso FIR può esistere come Registrazione e, separatamente, come Formulario)
 		IF EXISTS (
 			SELECT 1
 			FROM dbo.tblRifiutiMovimenti m
@@ -181,8 +181,15 @@ BEGIN
 				AND m.FormularioNumero = @Numero
 				AND
 					(
-					EXISTS (SELECT 1 FROM dbo.tblRifiutiRegistrazioni r WHERE r.IdMovimento = m.Id AND r.Lock < 2)
-					OR EXISTS (SELECT 1 FROM dbo.tblRifiutiFormulari f WHERE f.IdMovimento = m.Id AND f.Lock < 2)
+						(
+						@ModalitaRitorno = 'R'
+						AND EXISTS (SELECT 1 FROM dbo.tblRifiutiRegistrazioni r WHERE r.IdMovimento = m.Id AND r.Lock < 2)
+						)
+					OR
+						(
+						@ModalitaRitorno = 'F'
+						AND EXISTS (SELECT 1 FROM dbo.tblRifiutiFormulari f WHERE f.IdMovimento = m.Id AND f.Lock < 2)
+						)
 					)
 		)
 		BEGIN

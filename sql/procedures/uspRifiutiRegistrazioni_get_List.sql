@@ -97,7 +97,7 @@ BEGIN
                 IsAnnullamento           = CAST(ISNULL(rett.Annullata, 0) AS BIT),
                 RettificaRegistrazioneNumero = ro.Numero,
                 RettificaRegistrazioneData   = ro.Data,
-                RentriFormularioStato    = fdig.RentriStato
+                RentriFormularioStato    = m.RentriFormularioStato
             FROM
                 dbo.tblRifiutiRegistrazioni                  r
                 INNER JOIN dbo.tblRifiutiMovimenti           m  ON r.IdMovimento               = m.Id
@@ -117,7 +117,6 @@ BEGIN
                 LEFT  JOIN dbo.tblRentriRegistrazioniRettifiche
                                                              rett ON rett.IdRettifica          = r.Id
                 LEFT  JOIN dbo.tblRifiutiRegistrazioni       ro ON rett.Id                     = ro.Id
-                LEFT  JOIN dbo.tblRifiutiFormulari           fdig ON m.Id                      = fdig.IdMovimento AND fdig.Lock < 2
             WHERE
                 e.Id      = @IdSessione
                 AND r.Lock < 2

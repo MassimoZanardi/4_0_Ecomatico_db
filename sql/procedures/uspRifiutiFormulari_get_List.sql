@@ -91,7 +91,7 @@ BEGIN
                 IsRentriCollegato       = CAST(IIF(z.Id IS NOT NULL, 1, 0) AS BIT),
                 r.RentriIdentificativo,
                 r.RentriData,
-                RentriFormularioStato   = f.RentriStato,
+                RentriFormularioStato   = m.RentriFormularioStato,
                 RowsCount               = COUNT(*) OVER ()
             FROM
                 dbo.tblRifiutiFormulari                      f

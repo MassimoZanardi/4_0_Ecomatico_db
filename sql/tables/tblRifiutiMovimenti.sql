@@ -22,7 +22,10 @@ CREATE TABLE [dbo].[tblRifiutiMovimenti](
 	[FormularioNumero] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
 	[DataInizioTrasporto] [smalldatetime] NULL,
 	[Note] [varchar](500) COLLATE Latin1_General_CI_AS NULL,
- CONSTRAINT [PK_tblRifiutiMovimenti] PRIMARY KEY CLUSTERED 
+	[RentriFormularioStato] [varchar](40) COLLATE Latin1_General_CI_AS NULL,
+	[RentriFormularioDataCopia] [smalldatetime] NULL,
+	[RentriFormularioDataTrasmissione] [smalldatetime] NULL,
+ CONSTRAINT [PK_tblRifiutiMovimenti] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]

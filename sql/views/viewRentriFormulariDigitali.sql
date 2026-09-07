@@ -142,7 +142,7 @@ SELECT
 	IdentificativoTratta = CASE WHEN mt1.IdTipo = 'T' THEN ft.Tratta ELSE NULL END,
 	IdentificativoNave = CASE WHEN mt1.IdTipo = 'N' THEN fn.Nave ELSE NULL END,
 	OpzioneTrenoNave = CASE mt1.IdTipo WHEN 'T' THEN ISNULL(ft.Rid, 0) WHEN 'N' THEN ISNULL(fn.Imdg, 0) ELSE CAST(0 AS BIT) END,
-	Stato = f.RentriStato
+	Stato = m.RentriFormularioStato
 FROM
 	dbo.tblRifiutiFormulari f
 	INNER JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id

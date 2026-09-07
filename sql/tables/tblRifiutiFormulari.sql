@@ -23,9 +23,6 @@ CREATE TABLE [dbo].[tblRifiutiFormulari](
 	[AllaRinfusa] [bit] NULL,
 	[Note] [varchar](500) COLLATE Latin1_General_CI_AS NULL,
 	[Etichette] [varchar](2000) COLLATE Latin1_General_CI_AS NULL,
-	[RentriStato] [varchar](40) COLLATE Latin1_General_CI_AS NULL,
-	[RentriDataCopia] [smalldatetime] NULL,
-	[RentriDataTrasmissione] [smalldatetime] NULL,
 	[Lock] [tinyint] NULL,
  CONSTRAINT [PK_tblRifiutiFormulari] PRIMARY KEY CLUSTERED 
 (

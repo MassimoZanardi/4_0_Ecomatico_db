@@ -1,4 +1,9 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_get]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_get]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS
@@ -94,7 +99,7 @@ BEGIN
 			-- Dati formulario
 			FormularioNumero = ISNULL(m.FormularioNumero, ''),
 			FormularioDataEmissione = ISNULL(f.DataEmissione, GETDATE()),
-			RentriFormularioStato = f.RentriStato,
+			RentriFormularioStato = m.RentriFormularioStato,
 			IdAdr = ISNULL(f.IdAdr, '00'),
 			NumeroOnu = ISNULL(f.NumeroOnu, ''),
 			TrasportoAdr = ISNULL(f.TrasportoAdr, 0),

@@ -163,7 +163,7 @@ BEGIN
 			@registrazioneNumero = r.Numero,
 			@rentriIdentificativo = r.RentriIdentificativo,
 			@rentriData = r.RentriData,
-			@formularioRentriStato = f.RentriStato,
+			@formularioRentriStato = m.RentriFormularioStato,
 			@nessunaRegistrazioneAssociata = CASE
 				WHEN EXISTS(
 					SELECT 1

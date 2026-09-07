@@ -287,9 +287,9 @@ BEGIN
 		BEGIN TRANSACTION;
 
 			INSERT dbo.tblRifiutiMovimenti
-				(Id, IdRegistro, IdOperazione, IdEer, EerDescrizione, IdStatoFisico, IdUnitaMisura, IdProvenienza, Quantita, FormularioNumero, DataInizioTrasporto, Note)
+				(Id, IdRegistro, IdOperazione, IdEer, EerDescrizione, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, Quantita, FormularioNumero, DataInizioTrasporto, Note)
 			VALUES
-				(@idMovimento, @IdRegistro, @IdOperazione, @Eer, @EerDescrizione, @idStatoFisico, @idUnitaMisura, @Provenienza, @quantitaFinale, @Numero, @dataOraInizioTrasportoFinale, @Note);
+				(@idMovimento, @IdRegistro, @IdOperazione, @Eer, @EerDescrizione, @idStatoFisico, @idAttivitaRs, @idUnitaMisura, @Provenienza, @quantitaFinale, @Numero, @dataOraInizioTrasportoFinale, @Note);
 
 			IF @idAutorizzazioneProduttoreDetentore IS NOT NULL
 				INSERT dbo.tblRifiutiMovimentiProduttori (Id, IdAutorizzazione, Quantita, Pos)

@@ -591,6 +591,7 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiMovimenti_ins_DaAcquisizioneFormulari
 	@ModalitaRitorno CHAR(1) = NULL, -- 'R' Registrazione, 'F' Formulario
 
 	@Numero VARCHAR(20) = NULL,
+	@Stato VARCHAR(40) = NULL,
 	@DataEmissione DATE = NULL,
 	@Esito VARCHAR(5) = NULL,
 	@EsitoCausaleRespingimento VARCHAR(5) = NULL,
@@ -646,6 +647,7 @@ BEGIN
 		SET @IdOperazione = NULLIF(LTRIM(RTRIM(@IdOperazione)), '');
 		SET @ModalitaRitorno = NULLIF(LTRIM(RTRIM(@ModalitaRitorno)), '');
 		SET @Numero = NULLIF(UPPER(LTRIM(RTRIM(@Numero))), '');
+		SET @Stato = NULLIF(LTRIM(RTRIM(@Stato)), '');
 		SET @EerDescrizione = NULLIF(LTRIM(RTRIM(@EerDescrizione)), '');
 		SET @ClassiPericolo = NULLIF(LTRIM(RTRIM(@ClassiPericolo)), '');
 		SET @Note = NULLIF(LTRIM(RTRIM(@Note)), '');
@@ -852,9 +854,9 @@ BEGIN
 		BEGIN TRANSACTION;
 
 			INSERT dbo.tblRifiutiMovimenti
-				(Id, IdRegistro, IdOperazione, IdEer, EerDescrizione, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, Quantita, FormularioNumero, DataInizioTrasporto, Note)
+				(Id, IdRegistro, IdOperazione, IdEer, EerDescrizione, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, Quantita, FormularioNumero, RentriFormularioStato, DataInizioTrasporto, Note)
 			VALUES
-				(@idMovimento, @IdRegistro, @IdOperazione, @Eer, @EerDescrizione, @idStatoFisico, @idAttivitaRs, @idUnitaMisura, @Provenienza, @quantitaFinale, @Numero, @dataOraInizioTrasportoFinale, @Note);
+				(@idMovimento, @IdRegistro, @IdOperazione, @Eer, @EerDescrizione, @idStatoFisico, @idAttivitaRs, @idUnitaMisura, @Provenienza, @quantitaFinale, @Numero, @Stato, @dataOraInizioTrasportoFinale, @Note);
 
 			IF @idAutorizzazioneProduttoreDetentore IS NOT NULL
 				INSERT dbo.tblRifiutiMovimentiProduttori (Id, IdAutorizzazione, Quantita, Pos)

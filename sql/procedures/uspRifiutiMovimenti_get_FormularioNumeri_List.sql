@@ -46,14 +46,20 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Un formulario può risultare "già presente" tramite una Registrazione (senza riga in
+		-- tblRifiutiFormulari, per acquisizioni da Rifiuti/Registrazioni) o tramite un Formulario vero e
+		-- proprio (per acquisizioni da Rifiuti/Formulari) - controllare entrambe le tabelle, mai solo
+		-- un INNER JOIN su una delle due (altrimenti l'altro percorso di acquisizione resta invisibile).
 		SELECT DISTINCT m.FormularioNumero
-		FROM
-			dbo.tblRifiutiMovimenti m
-			INNER JOIN dbo.tblRifiutiFormulari f ON f.IdMovimento = m.Id
+		FROM dbo.tblRifiutiMovimenti m
 		WHERE
 			m.IdRegistro = @IdRegistro
 			AND m.FormularioNumero IS NOT NULL
-			AND f.Lock < 2;
+			AND
+				(
+				EXISTS (SELECT 1 FROM dbo.tblRifiutiRegistrazioni r WHERE r.IdMovimento = m.Id AND r.Lock < 2)
+				OR EXISTS (SELECT 1 FROM dbo.tblRifiutiFormulari f WHERE f.IdMovimento = m.Id AND f.Lock < 2)
+				);
 
 	END TRY
 	BEGIN CATCH

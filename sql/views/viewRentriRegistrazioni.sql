@@ -121,7 +121,9 @@ SELECT
 	IsTrasportatore = CAST(IIF(ISNULL(o.IsTrasportatore, 0) = 1 AND m.IdSedeTrasportatore1 IS NOT NULL, 1, 0) AS BIT),
 	IsDestinatario = CAST(IIF(ISNULL(o.IsDestinatario, 0) = 1 AND m.IdSedeDestinatario IS NOT NULL, 1, 0) AS BIT),
 	IsIntermediario = CAST(IIF(ISNULL(o.IsIntermediario, 0) = 1 AND m.IdSedeIntermediario1 IS NOT NULL, 1, 0) AS BIT),
-	IsEsito = ISNULL(o.IsEsito, 0),
+	-- Non da tblRifiutiOperazioni.IsEsito (colonna statica, disallineata rispetto agli altri Is* di questa
+	-- view): la regola RENTRI reale e' sul Codice operazione, stesso principio di IsFormulario sotto.
+	IsEsito = CAST(IIF(o.Codice IN ('aT', 'T*aT'), 1, 0) AS BIT),
 	-- Non da tblRifiutiOperazioni.IsFormulario (governa il comportamento applicativo, non la
 	-- compilazione RENTRI): l'API dati-registri vieta il blocco integrazione_fir solo per causali
 	-- diverse da aT/TR/T*/T*aT (schema OpenAPI dati-registri v1.0, campo integrazione_fir) - con la

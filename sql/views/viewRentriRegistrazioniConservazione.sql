@@ -98,7 +98,9 @@ SELECT
 	IsTrasportatore = CAST(IIF(ISNULL(o.IsTrasportatore, 0) = 1 AND m.IdSedeTrasportatore1 IS NOT NULL, 1, 0) AS BIT),
 	IsDestinatario = CAST(IIF(ISNULL(o.IsDestinatario, 0) = 1 AND m.IdSedeDestinatario IS NOT NULL, 1, 0) AS BIT),
 	IsIntermediario = CAST(IIF(ISNULL(o.IsIntermediario, 0) = 1 AND m.IdSedeIntermediario1 IS NOT NULL, 1, 0) AS BIT),
-	IsEsito = ISNULL(o.IsEsito, 0),
+	-- Non da tblRifiutiOperazioni.IsEsito (colonna statica, disallineata rispetto agli altri Is* di questa
+	-- view): la regola RENTRI reale e' sul Codice operazione, stesso principio di IsFormulario sotto.
+	IsEsito = CAST(IIF(o.Codice IN ('aT', 'T*aT'), 1, 0) AS BIT),
 	IsFormulario = CAST(IIF(o.Codice IN ('aT', 'TR', 'T*', 'T*aT'), 1, 0) AS BIT),
 	IsTransfrontaliero = CAST(IIF(r.IdTrasportoTransfrontalieroTipo IS NOT NULL, 1, 0) AS BIT),
 	IsStoccaggioIstantaneo = ISNULL(o.IsStoccaggioIstantaneo, 0),

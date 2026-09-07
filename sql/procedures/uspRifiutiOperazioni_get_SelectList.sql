@@ -1,7 +1,12 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiOperazioni_get_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@IsRentri BIT = NULL,
-	@IsFormulario BIT = NULL
+	@IsFormulario BIT = NULL,
+	@IsIntegrazioneFir BIT = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -15,10 +20,14 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		-- @IsRentri     = NULL → nessun filtro; = 1 → solo Rentri
-		-- @IsFormulario = NULL → nessun filtro; = 0 → senza formulario; = 1 → con formulario
+		-- @IsRentri          = NULL → nessun filtro; = 1 → solo Rentri
+		-- @IsFormulario      = NULL → nessun filtro; = 0 → senza formulario; = 1 → con formulario
+		-- @IsIntegrazioneFir = NULL → nessun filtro; = 1 → solo operazioni che integrano un FIR altrui
+		--                     (Rifiuti/Registrazioni, importazione da formulario digitale RENTRI - piu' ampio
+		--                     di IsFormulario: include anche Z/I che non emettono un proprio FIR)
 
 		IF @IsFormulario = 1 SET @IsRentri = NULL;
+		IF @IsIntegrazioneFir = 1 SET @IsRentri = NULL;
 
 		SELECT
 			Id = CAST(REPLICATE('0', 16) AS CHAR(16)),
@@ -47,6 +56,11 @@ BEGIN
 				(
 				@IsFormulario IS NULL
 				OR ISNULL(o.IsFormulario, 0) = @IsFormulario
+				)
+			AND
+				(
+				@IsIntegrazioneFir IS NULL
+				OR ISNULL(o.IsIntegrazioneFir, 0) = @IsIntegrazioneFir
 				)
 		ORDER BY Pos
 		OPTION (RECOMPILE);

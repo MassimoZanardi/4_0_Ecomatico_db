@@ -25,6 +25,7 @@ CREATE TABLE [dbo].[tblRifiutiMovimenti](
 	[RentriFormularioStato] [varchar](40) COLLATE Latin1_General_CI_AS NULL,
 	[RentriFormularioDataCopia] [smalldatetime] NULL,
 	[RentriFormularioDataTrasmissione] [smalldatetime] NULL,
+	[RentriFormularioDataPresaVisione] [smalldatetime] NULL,
  CONSTRAINT [PK_tblRifiutiMovimenti] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC

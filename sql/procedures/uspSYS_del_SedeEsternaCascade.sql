@@ -159,6 +159,14 @@ BEGIN
             DELETE FROM dbo.tblEoWMaterialiRegistri WHERE IdRegistro IN (SELECT Id FROM #RifiutiRegistri);
 
             DELETE FROM dbo.tblRifiutiRegistrazioniEtichette WHERE Id IN (SELECT Id FROM #RifiutiRegistrazioni);
+
+            -- tblRentriRegistrazioniRettifiche: FK su Id/IdRettifica verso tblRifiutiRegistrazioni,
+            -- nessun ON DELETE CASCADE - va rimossa prima, altrimenti la DELETE sottostante fallisce
+            -- per violazione FK se una registrazione in cancellazione è coinvolta in una rettifica.
+            DELETE FROM dbo.tblRentriRegistrazioniRettifiche
+            WHERE Id          IN (SELECT Id FROM #RifiutiRegistrazioni)
+               OR IdRettifica IN (SELECT Id FROM #RifiutiRegistrazioni);
+
             DELETE FROM dbo.tblRifiutiRegistrazioniRelazioni
             WHERE Id       IN (SELECT Id FROM #RifiutiRegistrazioni)
                OR IdParent IN (SELECT Id FROM #RifiutiRegistrazioni);
@@ -209,6 +217,8 @@ BEGIN
             UPDATE dbo.tblRifiutiModelli SET IdAutorizzazioneProduttoreDetentore = NULL  WHERE IdAutorizzazioneProduttoreDetentore  IN (SELECT Id FROM #RifiutiAutorizzazioni);
             SET @rifEsterniRimossi += @@ROWCOUNT;
             UPDATE dbo.tblRifiutiModelli SET IdAutorizzazioneTrasportatore1 = NULL       WHERE IdAutorizzazioneTrasportatore1       IN (SELECT Id FROM #RifiutiAutorizzazioni);
+            SET @rifEsterniRimossi += @@ROWCOUNT;
+            UPDATE dbo.tblRifiutiModelli SET IdAutorizzazioneTrasportatore2 = NULL       WHERE IdAutorizzazioneTrasportatore2       IN (SELECT Id FROM #RifiutiAutorizzazioni);
             SET @rifEsterniRimossi += @@ROWCOUNT;
 
             DELETE FROM dbo.tblRifiutiMovimentiDestinatari   WHERE IdAutorizzazione IN (SELECT Id FROM #RifiutiAutorizzazioni);

@@ -78,6 +78,13 @@ BEGIN
 
             DELETE FROM dbo.tblRifiutiRegistrazioniEtichette WHERE Id IN (SELECT Id FROM #RifiutiRegistrazioni);
 
+            -- tblRentriRegistrazioniRettifiche: FK su Id/IdRettifica verso tblRifiutiRegistrazioni,
+            -- nessun ON DELETE CASCADE - va rimossa prima, altrimenti la DELETE sottostante fallisce
+            -- per violazione FK se una registrazione in cancellazione è coinvolta in una rettifica.
+            DELETE FROM dbo.tblRentriRegistrazioniRettifiche
+            WHERE Id          IN (SELECT Id FROM #RifiutiRegistrazioni)
+               OR IdRettifica IN (SELECT Id FROM #RifiutiRegistrazioni);
+
             -- tblRifiutiRegistrazioniRelazioni.IdParent è NOT NULL: una registrazione di un ALTRO
             -- registro (non in cancellazione) può avere come genitore una registrazione di questo
             -- registro. Non essendo azzerabile, la riga di relazione va cancellata anche quando

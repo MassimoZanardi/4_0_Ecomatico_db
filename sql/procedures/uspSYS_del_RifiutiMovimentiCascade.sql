@@ -1,3 +1,7 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER PROCEDURE dbo.uspSYS_del_RifiutiMovimentiCascade
     @Conferma VARCHAR(50) = NULL
 AS
@@ -42,6 +46,10 @@ BEGIN
             -- collegamento anziché cancellare il movimento, che resta un record di magazzino
             -- valido anche senza la registrazione di origine.
             UPDATE dbo.tblEoWMovimenti SET IdRegistrazione = NULL WHERE IdRegistrazione IN (SELECT Id FROM #tr);
+            -- tblRentriRegistrazioniRettifiche: FK su Id/IdRettifica verso tblRifiutiRegistrazioni,
+            -- nessun ON DELETE CASCADE - va svuotata prima, altrimenti la DELETE sottostante fallisce
+            -- per violazione FK se esiste anche una sola rettifica.
+            DELETE dbo.tblRentriRegistrazioniRettifiche;
             DELETE dbo.tblRifiutiFormulari;
             DELETE dbo.tblRifiutiRegistrazioni;
             DELETE dbo.tblRifiutiMovimentiLog;

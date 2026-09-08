@@ -13,10 +13,12 @@ GO
 -- verificato empiricamente sia per Scarico che per Materiale), MaterialeSecondarioDescrizione (tblRifiutiRegistrazioni.MaterialeDescrizione),
 -- EsitoCausaleRespingimento/RespingimentoMotivo/RespingimentoQuantita (IdCausaleRespingimento/
 -- CausaleRespingimentoAltro/QuantitaRespinta), TransfrontalieroTipo (IdTrasportoTransfrontalieroTipo),
--- Rettifica* (tblRentriRegistrazioniRettifiche - vedi sotto). Resta invece a NULL/0 (nessun concetto
--- equivalente, l'hub lo gestisce già con ISNULL/CASE lato C#): il secondo Intermediario (Intermediario2* lato
--- 31 - qui tblRifiutiMovimenti ha solo IdSedeIntermediario1, nessun supporto multi-intermediario su
--- Registrazioni). La logica di Provenienza=NULL per le operazioni di Trasporto/Intermediazione (equivalente
+-- Rettifica* (tblRentriRegistrazioniRettifiche - vedi sotto). Fino a 3 intermediari (Intermediario2Nome/
+-- Intermediario3Nome, Pos 1/2 su tblRifiutiMovimentiIntermediari, stesso schema del formulario digitale
+-- - vedi viewRentriFormulariDigitali): risolti via mi2/mi3 (posizione), non via una colonna diretta su
+-- tblRifiutiMovimenti (che ha solo IdSedeIntermediario1 per il 1°). Il branch gemello @App='31' ha gia'
+-- Intermediario2* nella propria vista (3_1_ecomatico..viewRentriRegistrazioni) e non ne risente. La logica
+-- di Provenienza=NULL per le operazioni di Trasporto/Intermediazione (equivalente
 -- delle causali CSF/CSM/CST/CSX/TRD di 3_1) è replicata filtrando su tblRifiutiOperazioni.Codice ('T*aT'/'TR',
 -- i codici RENTRI reali - non su Operazione CHAR(1), che è solo una classificazione interna C/S/X senza
 -- mappatura univoca verso le causali di 3_1), confermato dall'utente.
@@ -106,11 +108,14 @@ SELECT
 	IntermediarioCodiceFiscale = ISNULL(si.CodiceFiscale, si.PartitaIva),
 	IntermediarioNazione = nzi.Sigla,
 	IntermediarioAutorizzazione = ai.Numero,
-	-- Nessun supporto multi-intermediario su Registrazioni in questo schema (solo IdSedeIntermediario1)
-	Intermediario2Nome = CAST(NULL AS VARCHAR(200)),
-	Intermediario2CodiceFiscale = CAST(NULL AS VARCHAR(20)),
-	Intermediario2Nazione = CAST(NULL AS CHAR(2)),
-	Intermediario2Autorizzazione = CAST(NULL AS VARCHAR(20)),
+	Intermediario2Nome = si2.NomeCompleto,
+	Intermediario2CodiceFiscale = ISNULL(si2.CodiceFiscale, si2.PartitaIva),
+	Intermediario2Nazione = nzi2.Sigla,
+	Intermediario2Autorizzazione = ai2.Numero,
+	Intermediario3Nome = si3.NomeCompleto,
+	Intermediario3CodiceFiscale = ISNULL(si3.CodiceFiscale, si3.PartitaIva),
+	Intermediario3Nazione = nzi3.Sigla,
+	Intermediario3Autorizzazione = ai3.Numero,
 	-- ISNULL su tutti gli Is*: Registrazione lato hub li mappa su bool non nullable, o e' una LEFT JOIN.
 	-- Il flag su tblRifiutiOperazioni indica solo che il TIPO di operazione ammette quel ruolo in
 	-- generale - va combinato con la presenza reale della Sede su QUESTA registrazione, altrimenti
@@ -171,6 +176,18 @@ FROM
 	LEFT JOIN dbo.tblNazioni nzi ON ii_.IdNazione = nzi.Id
 	LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi ON m.Id = mi.Id AND mi.Pos = 0
 	LEFT JOIN dbo.tblRifiutiAutorizzazioni ai ON mi.IdAutorizzazione = ai.Id
+	LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi2 ON m.Id = mi2.Id AND mi2.Pos = 1
+	LEFT JOIN dbo.tblRifiutiAutorizzazioni ai2 ON mi2.IdAutorizzazione = ai2.Id
+	LEFT JOIN dbo.tblSedi si2 ON ai2.IdSede = si2.Id
+	LEFT JOIN dbo.tblSediIndirizzi sii2 ON si2.Id = sii2.Id
+	LEFT JOIN dbo.tblIndirizzi ii2_ ON sii2.IdIndirizzo = ii2_.Id
+	LEFT JOIN dbo.tblNazioni nzi2 ON ii2_.IdNazione = nzi2.Id
+	LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi3 ON m.Id = mi3.Id AND mi3.Pos = 2
+	LEFT JOIN dbo.tblRifiutiAutorizzazioni ai3 ON mi3.IdAutorizzazione = ai3.Id
+	LEFT JOIN dbo.tblSedi si3 ON ai3.IdSede = si3.Id
+	LEFT JOIN dbo.tblSediIndirizzi sii3 ON si3.Id = sii3.Id
+	LEFT JOIN dbo.tblIndirizzi ii3_ ON sii3.IdIndirizzo = ii3_.Id
+	LEFT JOIN dbo.tblNazioni nzi3 ON ii3_.IdNazione = nzi3.Id
 	LEFT JOIN (
 		SELECT
 			mc.Id,

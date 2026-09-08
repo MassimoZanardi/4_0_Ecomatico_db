@@ -87,13 +87,17 @@ SELECT
 	IntermediarioCodiceFiscale = ISNULL(si.CodiceFiscale, si.PartitaIva),
 	IntermediarioNazione = nzi.Sigla,
 	IntermediarioAutorizzazione = ai.Numero,
-	-- Nessun supporto multi-intermediario su Registrazioni in questo schema (solo IdSedeIntermediario1),
-	-- stessa scelta gia' fatta in viewRentriRegistrazioni - la vista gemella 3_1 per la conservazione
-	-- non referenzia Intermediario2* neanche lei
-	Intermediario2Nome = CAST(NULL AS VARCHAR(200)),
-	Intermediario2CodiceFiscale = CAST(NULL AS VARCHAR(20)),
-	Intermediario2Nazione = CAST(NULL AS CHAR(2)),
-	Intermediario2Autorizzazione = CAST(NULL AS VARCHAR(20)),
+	-- Fino a 3 intermediari (Pos 1/2 su tblRifiutiMovimentiIntermediari), stessa risoluzione e stesso
+	-- fix gia' applicato in viewRentriRegistrazioni (schema Movimento XSD rentri-movimenti-1.0:
+	-- Intermediario ha maxOccurs="unbounded")
+	Intermediario2Nome = si2.NomeCompleto,
+	Intermediario2CodiceFiscale = ISNULL(si2.CodiceFiscale, si2.PartitaIva),
+	Intermediario2Nazione = nzi2.Sigla,
+	Intermediario2Autorizzazione = ai2.Numero,
+	Intermediario3Nome = si3.NomeCompleto,
+	Intermediario3CodiceFiscale = ISNULL(si3.CodiceFiscale, si3.PartitaIva),
+	Intermediario3Nazione = nzi3.Sigla,
+	Intermediario3Autorizzazione = ai3.Numero,
 	IsProduttore = CAST(IIF(ISNULL(o.IsProduttore, 0) = 1 AND m.IdSedeProduttoreDetentore IS NOT NULL, 1, 0) AS BIT),
 	IsTrasportatore = CAST(IIF(ISNULL(o.IsTrasportatore, 0) = 1 AND m.IdSedeTrasportatore1 IS NOT NULL, 1, 0) AS BIT),
 	IsDestinatario = CAST(IIF(ISNULL(o.IsDestinatario, 0) = 1 AND m.IdSedeDestinatario IS NOT NULL, 1, 0) AS BIT),
@@ -145,6 +149,18 @@ FROM
 	LEFT JOIN dbo.tblNazioni nzi ON ii_.IdNazione = nzi.Id
 	LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi ON m.Id = mi.Id AND mi.Pos = 0
 	LEFT JOIN dbo.tblRifiutiAutorizzazioni ai ON mi.IdAutorizzazione = ai.Id
+	LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi2 ON m.Id = mi2.Id AND mi2.Pos = 1
+	LEFT JOIN dbo.tblRifiutiAutorizzazioni ai2 ON mi2.IdAutorizzazione = ai2.Id
+	LEFT JOIN dbo.tblSedi si2 ON ai2.IdSede = si2.Id
+	LEFT JOIN dbo.tblSediIndirizzi sii2 ON si2.Id = sii2.Id
+	LEFT JOIN dbo.tblIndirizzi ii2_ ON sii2.IdIndirizzo = ii2_.Id
+	LEFT JOIN dbo.tblNazioni nzi2 ON ii2_.IdNazione = nzi2.Id
+	LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi3 ON m.Id = mi3.Id AND mi3.Pos = 2
+	LEFT JOIN dbo.tblRifiutiAutorizzazioni ai3 ON mi3.IdAutorizzazione = ai3.Id
+	LEFT JOIN dbo.tblSedi si3 ON ai3.IdSede = si3.Id
+	LEFT JOIN dbo.tblSediIndirizzi sii3 ON si3.Id = sii3.Id
+	LEFT JOIN dbo.tblIndirizzi ii3_ ON sii3.IdIndirizzo = ii3_.Id
+	LEFT JOIN dbo.tblNazioni nzi3 ON ii3_.IdNazione = nzi3.Id
 	LEFT JOIN (
 		SELECT
 			mc.Id,

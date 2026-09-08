@@ -8,7 +8,10 @@ GO
 -- sono rinominabili/estendibili senza coordinarsi con l'hub. Colonne allineate a RentriApi.Domain.Models.FormularioDigitale
 -- (Dapper QuerySingle, match per nome colonna). A differenza del branch gemello @App='31' (3_1_ecomatico..viewRentriFormulariDigitali,
 -- schema legacy solo trasporto su gomma) questo schema supporta anche Ferroviario/Marittimo (tblRifiutiMovimentiTrasportatori.IdTipo
--- G/T/N), quindi valorizza anche TrasportoTipo/Trasporto2Tipo/IdentificativoTreno/Tratta/Nave/OpzioneTrenoNave, assenti nel branch 31.
+-- G/T/N), quindi valorizza anche TrasportoTipo/Trasporto2Tipo/Trasporto3Tipo/IdentificativoTreno/Tratta/Nave/OpzioneTrenoNave, assenti nel branch 31.
+-- Fino a 3 trasportatori/intermediari (Pos 0/1/2 su tblRifiutiMovimentiTrasportatori/Intermediari): il 3° set esiste solo
+-- lato app 4.0 (RentriApi.Domain.Models.FormularioDigitale.Trasportatore3*/Intermediario3*); il branch gemello @App='31'
+-- resta fermo a 2 e non ne risente.
 -- Note sui campi lasciati a NULL/default (nessun concetto equivalente in questo schema, non usati dal blocco
 -- dati_partenza costruito da ApiHelpers.BuildFormularioContent per le azioni Crea/Modifica):
 -- - Produttore/DestinatarioSede: nessun uso lato hub, sempre NULL.
@@ -94,6 +97,11 @@ SELECT
 	Trasportatore2AutorizzazioneAlbo = CASE WHEN ISNULL(ta2.Nessuna, 0) = 1 THEN NULL ELSE ta2.Numero END,
 	Trasportatore2Nazione = nzt2.Sigla,
 	Trasporto2Tipo = CASE mt2.IdTipo WHEN 'T' THEN 'Ferroviario' WHEN 'N' THEN 'Marittimo' ELSE 'Terrestre' END,
+	Trasportatore3Nome = UPPER(st3.NomeCompleto),
+	Trasportatore3CodiceFiscale = ISNULL(st3.CodiceFiscale, st3.PartitaIva),
+	Trasportatore3AutorizzazioneAlbo = CASE WHEN ISNULL(ta3.Nessuna, 0) = 1 THEN NULL ELSE ta3.Numero END,
+	Trasportatore3Nazione = nzt3.Sigla,
+	Trasporto3Tipo = CASE mt3.IdTipo WHEN 'T' THEN 'Ferroviario' WHEN 'N' THEN 'Marittimo' ELSE 'Terrestre' END,
 	IntermediarioNome = UPPER(si1.NomeCompleto),
 	IntermediarioCodiceFiscale = ISNULL(si1.CodiceFiscale, si1.PartitaIva),
 	IntermediarioAutorizzazioneAlbo = CASE WHEN ISNULL(ia1.Nessuna, 0) = 1 THEN NULL ELSE ia1.Numero END,
@@ -102,6 +110,10 @@ SELECT
 	Intermediario2CodiceFiscale = ISNULL(si2.CodiceFiscale, si2.PartitaIva),
 	Intermediario2AutorizzazioneAlbo = CASE WHEN ISNULL(ia2.Nessuna, 0) = 1 THEN NULL ELSE ia2.Numero END,
 	Intermediario2Nazione = nzi2.Sigla,
+	Intermediario3Nome = UPPER(si3.NomeCompleto),
+	Intermediario3CodiceFiscale = ISNULL(si3.CodiceFiscale, si3.PartitaIva),
+	Intermediario3AutorizzazioneAlbo = CASE WHEN ISNULL(ia3.Nessuna, 0) = 1 THEN NULL ELSE ia3.Numero END,
+	Intermediario3Nazione = nzi3.Sigla,
 	Eer = m.IdEer,
 	EerDescrizione = m.EerDescrizione,
 	StatoFisico = sf.Codice,
@@ -188,7 +200,7 @@ FROM
 			LEFT JOIN dbo.tblSediIndirizzi sid ON sd.Id = sid.Id
 			LEFT JOIN dbo.tblIndirizzi id_ ON sid.IdIndirizzo = id_.Id
 			LEFT JOIN dbo.tblNazioni nzd ON id_.IdNazione = nzd.Id
-	-- Trasportatore 1/2
+	-- Trasportatore 1/2/3
 			LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt1 ON m.Id = mt1.Id AND mt1.Pos = 0
 			LEFT JOIN dbo.tblRifiutiAutorizzazioni ta1 ON mt1.IdAutorizzazione = ta1.Id
 			LEFT JOIN dbo.tblSedi st1 ON ta1.IdSede = st1.Id
@@ -201,7 +213,13 @@ FROM
 			LEFT JOIN dbo.tblSediIndirizzi sit2 ON st2.Id = sit2.Id
 			LEFT JOIN dbo.tblIndirizzi it2 ON sit2.IdIndirizzo = it2.Id
 			LEFT JOIN dbo.tblNazioni nzt2 ON it2.IdNazione = nzt2.Id
-	-- Intermediario 1/2
+			LEFT JOIN dbo.tblRifiutiMovimentiTrasportatori mt3 ON m.Id = mt3.Id AND mt3.Pos = 2
+			LEFT JOIN dbo.tblRifiutiAutorizzazioni ta3 ON mt3.IdAutorizzazione = ta3.Id
+			LEFT JOIN dbo.tblSedi st3 ON ta3.IdSede = st3.Id
+			LEFT JOIN dbo.tblSediIndirizzi sit3 ON st3.Id = sit3.Id
+			LEFT JOIN dbo.tblIndirizzi it3 ON sit3.IdIndirizzo = it3.Id
+			LEFT JOIN dbo.tblNazioni nzt3 ON it3.IdNazione = nzt3.Id
+	-- Intermediario 1/2/3
 			LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi1 ON m.Id = mi1.Id AND mi1.Pos = 0
 			LEFT JOIN dbo.tblRifiutiAutorizzazioni ia1 ON mi1.IdAutorizzazione = ia1.Id
 			LEFT JOIN dbo.tblSedi si1 ON ia1.IdSede = si1.Id
@@ -214,6 +232,12 @@ FROM
 			LEFT JOIN dbo.tblSediIndirizzi sii2 ON si2.Id = sii2.Id
 			LEFT JOIN dbo.tblIndirizzi ii2 ON sii2.IdIndirizzo = ii2.Id
 			LEFT JOIN dbo.tblNazioni nzi2 ON ii2.IdNazione = nzi2.Id
+			LEFT JOIN dbo.tblRifiutiMovimentiIntermediari mi3 ON m.Id = mi3.Id AND mi3.Pos = 2
+			LEFT JOIN dbo.tblRifiutiAutorizzazioni ia3 ON mi3.IdAutorizzazione = ia3.Id
+			LEFT JOIN dbo.tblSedi si3 ON ia3.IdSede = si3.Id
+			LEFT JOIN dbo.tblSediIndirizzi sii3 ON si3.Id = sii3.Id
+			LEFT JOIN dbo.tblIndirizzi ii3 ON sii3.IdIndirizzo = ii3.Id
+			LEFT JOIN dbo.tblNazioni nzi3 ON ii3.IdNazione = nzi3.Id
 	-- Trasporti (dettaglio per modalita')
 			LEFT JOIN dbo.tblRifiutiFormulariTrasportiTerresti fg ON f.Id = fg.Id
 			LEFT JOIN dbo.tblRifiutiFormulariTrasportiFerroviari ft ON f.Id = ft.Id

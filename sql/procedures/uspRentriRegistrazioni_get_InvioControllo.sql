@@ -103,9 +103,11 @@ BEGIN
 			r.IsTrasportatore, r.TrasportatoreAutorizzazione,
 			r.IsDestinatario, r.DestinatarioAutorizzazione,
 			r.IsIntermediario, r.IntermediarioAutorizzazione,
-			r.IsProduttore, r.ProduttoreIdComune, r.ProduttoreNazione,
+			r.IsProduttore, c.Id, r.ProduttoreNazione,
 			r.Lock
-		FROM dbo.viewRentriRegistrazioni r WITH (NOLOCK)
+		FROM
+			dbo.viewRentriRegistrazioni r WITH (NOLOCK)
+			LEFT JOIN [1_0_rentri]..tblComuni c WITH (NOLOCK) ON r.ProduttoreIdComune = c.Id COLLATE DATABASE_DEFAULT
 		WHERE
 			r.IDRegistro = @IdRegistro
 			AND r.RentriIdentificativo IS NULL

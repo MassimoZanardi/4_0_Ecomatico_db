@@ -11,21 +11,17 @@ GO
 -- risoluzione Esito/CausaleRespingimento -> Id locale riusa uspRifiutiRegistrazioni_get_MatchCodiciImportazione
 -- (stessa lookup gia' usata dall'acquisizione formulario digitale), mai un CASE hardcoded.
 --
--- UPDATE mirato SOLO sulle colonne Esito, MAI tramite uspRifiutiRegistrazioni_upd: una Registrazione con
--- IsEsito=1 e' per definizione un conferimento a terzi gia' inviato al registro RENTRI (RentriIdentificativo/
--- RentriData valorizzati) PRIMA che il destinatario trasmetta l'esito - il "blocco modifica post-invio"
--- della SP generica bloccherebbe sistematicamente questo aggiornamento, che invece deve sempre essere
--- consentito. La clausola SET dell'UPDATE sotto e' la garanzia strutturale che nessun'altra colonna venga
--- toccata (a differenza di un ipotetico bypass del blocco esteso all'intera SP generica, che dipenderebbe
--- solo dalla correttezza di un pass-through di valori invariati, senza alcuna rete di sicurezza residua).
--- Il blocco "vieta la modifica SE gia' inviata" viene rimosso, ma sostituito dal prerequisito opposto: un
--- esito ha senso solo per una Registrazione GIA' inviata (RentriIdentificativo IS NOT NULL), quindi qui si
--- richiede esplicitamente il contrario di quel blocco, non semplicemente la sua assenza. Il blocco per
--- conservazione sostitutiva (ConservazioneSostitutiva) e' indipendente dal timing di invio al registro e
--- resta valido invariato - replicato esplicitamente sotto (audit di tutti i GOTO BRANCH_END di
--- uspRifiutiRegistrazioni_upd: gli altri controlli lì presenti riguardano solo campi mai toccati da questo
--- UPDATE - FormularioNumero, RegistrazioneNumero/Data, EER/StatoFisico/UnitaMisura, Quantita - quindi non
--- applicabili qui).
+-- UPDATE mirato SOLO sulle colonne Esito, MAI tramite uspRifiutiRegistrazioni_upd: la clausola SET
+-- dell'UPDATE sotto e' la garanzia strutturale che nessun'altra colonna venga toccata. Il blocco
+-- RentriIdentificativo/RentriData e quello per ConservazioneSostitutiva restano ENTRAMBI validi e sono
+-- replicati esplicitamente sotto (audit di tutti i GOTO BRANCH_END di uspRifiutiRegistrazioni_upd: gli
+-- altri controlli lì presenti riguardano solo campi mai toccati da questo UPDATE - FormularioNumero,
+-- RegistrazioneNumero/Data, EER/StatoFisico/UnitaMisura, Quantita - quindi non applicabili qui). Verificato
+-- contro lo spec RENTRI (dati-registri v1.0, POST /operatore/{identificativo_registro}/movimenti): un
+-- movimento gia' trasmesso al registro cronologico non e' mai modificabile, l'esito incluso - le
+-- correzioni vanno fatte con una registrazione di Rettifica separata (funzione gia' esistente in
+-- Rifiuti/Registrazioni), MAI con una modifica diretta dell'originale. Se invece la registrazione non e'
+-- ancora stata inviata, l'aggiornamento diretto e' pienamente legittimo.
 --
 -- Normalizzazione Esito replicata identica a quella di uspRifiutiRegistrazioni_upd (righe 265-266, 357-377
 -- alla data di questa modifica), limitata al solo ramo "esito presente" dato che qui @IdEsito non e' mai
@@ -100,12 +96,12 @@ BEGIN
 		END
 
 		-- Una registrazione portata/bloccata per la conservazione sostitutiva non può più essere
-		-- modificata (stesso controllo di uspRifiutiRegistrazioni_upd - indipendente dal blocco post-invio
-		-- RENTRI rimosso sopra, resta valido anche per il solo aggiornamento dell'esito)
-		DECLARE @conservazioneSostitutiva BIT, @rentriIdentificativo VARCHAR(20);
+		-- modificata (stesso controllo di uspRifiutiRegistrazioni_upd)
+		DECLARE @conservazioneSostitutiva BIT, @rentriIdentificativo VARCHAR(20), @rentriData DATETIME2(0);
 		SELECT
 			@conservazioneSostitutiva = ConservazioneSostitutiva,
-			@rentriIdentificativo = RentriIdentificativo
+			@rentriIdentificativo = RentriIdentificativo,
+			@rentriData = RentriData
 		FROM dbo.tblRifiutiRegistrazioni
 		WHERE Id = @Id;
 
@@ -116,12 +112,15 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Prerequisito positivo (non il blocco rimosso sopra, che vietava la modifica DOPO l'invio): un
-		-- esito di conferimento non ha senso per una Registrazione mai trasmessa al registro RENTRI
-		IF @rentriIdentificativo IS NULL
+		-- Il registro cronologico RENTRI non ammette modifiche a un movimento gia' trasmesso (spec
+		-- dati-registri v1.0, POST /operatore/{identificativo_registro}/movimenti - le correzioni ad un
+		-- movimento gia' inviato, incluso l'esito, richiedono una registrazione di Rettifica separata, non
+		-- una modifica diretta). Se la registrazione non e' ancora stata inviata, l'aggiornamento diretto
+		-- e' invece pienamente legittimo (nessun movimento immutabile in gioco).
+		IF @rentriIdentificativo IS NOT NULL OR @rentriData IS NOT NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'La registrazione non è ancora stata inviata al RENTRI: non è possibile registrare l''esito';
+			SET @returnMessage = 'La registrazione risulta già trasmessa al RENTRI, è pertanto necessario inserire una nuova registrazione di rettifica';
 			GOTO BRANCH_END;
 		END
 

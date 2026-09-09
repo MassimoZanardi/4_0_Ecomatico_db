@@ -128,6 +128,9 @@ BEGIN
 			FormularioDataEmissione = ISNULL(f.DataEmissione, GETDATE()),
 			RentriFormularioStato = m.RentriFormularioStato,
 			RentriFormularioDataPresaVisione = m.RentriFormularioDataPresaVisione,
+			r.RentriIdentificativo,
+			r.RentriData,
+			ConservazioneSostitutiva = ISNULL(r.ConservazioneSostitutiva, 0),
 
 			IsTrasportoTransfrontaliero = CAST(IIF(r.IdTrasportoTransfrontalieroTipo IS NOT NULL, 1, 0) AS BIT),
 			IdTrasportoTransfrontalieroTipo = ISNULL(r.IdTrasportoTransfrontalieroTipo, 'D'),

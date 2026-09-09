@@ -4,19 +4,31 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 -- Salvataggio dedicato per l'esito di conferimento letto da RENTRI ("RENTRI - Verifica esito",
--- Rifiuti/Registrazioni/Edit, solo Registrazioni aT/T*aT con IsEsito=1) - stesso schema di
--- uspRifiutiRegistrazioni_upd_Annullamento: rilegge pass-through tutti i campi non toccati e richiama
--- uspRifiutiRegistrazioni_upd. I parametri @Esito/@EsitoCausaleRespingimento/@RespingimentoMotivo/
--- @QuantitaDestino/@DataOraFineTrasporto sono gli stessi nomi/valori di
--- RentriHubFormularioDigitaleDettaglioResponse (GET formulario-digitale/{app}/{id}/{numero}), passati
--- pari pari dal chiamante come per uspRifiutiMovimenti_ins_DaAcquisizioneFormulario. La risoluzione
--- Esito/CausaleRespingimento -> Id locale riusa uspRifiutiRegistrazioni_get_MatchCodiciImportazione
--- (stessa lookup gia' usata dall'acquisizione formulario digitale), mai un CASE hardcoded. Solo
--- QuantitaVerificata/DataFineTrasporto vengono aggiornati dall'esito RENTRI (come nell'acquisizione):
--- QuantitaRespinta/IdUnitaMisuraQuantitaRespinta restano invariati, RENTRI non li trasmette.
+-- Rifiuti/Registrazioni/Edit, solo Registrazioni aT/T*aT con IsEsito=1). I parametri
+-- @Esito/@EsitoCausaleRespingimento/@RespingimentoMotivo/@QuantitaDestino/@DataOraFineTrasporto sono gli
+-- stessi nomi/valori di RentriHubFormularioDigitaleDettaglioResponse (GET formulario-digitale/{app}/{id}/
+-- {numero}), passati pari pari dal chiamante come per uspRifiutiMovimenti_ins_DaAcquisizioneFormulario. La
+-- risoluzione Esito/CausaleRespingimento -> Id locale riusa uspRifiutiRegistrazioni_get_MatchCodiciImportazione
+-- (stessa lookup gia' usata dall'acquisizione formulario digitale), mai un CASE hardcoded.
+--
+-- UPDATE mirato SOLO sulle colonne Esito, MAI tramite uspRifiutiRegistrazioni_upd: una Registrazione con
+-- IsEsito=1 e' per definizione un conferimento a terzi gia' inviato al registro RENTRI (RentriIdentificativo/
+-- RentriData valorizzati) PRIMA che il destinatario trasmetta l'esito - il "blocco modifica post-invio"
+-- della SP generica bloccherebbe sistematicamente questo aggiornamento, che invece deve sempre essere
+-- consentito. La clausola SET dell'UPDATE sotto e' la garanzia strutturale che nessun'altra colonna venga
+-- toccata (a differenza di un ipotetico bypass del blocco esteso all'intera SP generica, che dipenderebbe
+-- solo dalla correttezza di un pass-through di valori invariati, senza alcuna rete di sicurezza residua).
+--
+-- Normalizzazione Esito replicata identica a quella di uspRifiutiRegistrazioni_upd (righe 265-266, 357-377
+-- alla data di questa modifica), limitata al solo ramo "esito presente" dato che qui @IdEsito non e' mai
+-- '0' (garantito dal controllo su @idEsito IS NULL sotto): Accettato ('A') pulisce causale/quantita
+-- respinta, Respinto ('R') forza quantita respinta = quantita registrata e azzera la verificata, Parziale
+-- ('P') valorizza l'unita' di misura respinta di default se assente, il motivo testuale sopravvive solo se
+-- la causale e' "Altro". QuantitaRespinta/IdUnitaMisuraQuantitaRespinta partono dal valore attuale (RENTRI
+-- non li trasmette) e vengono normalizzati secondo le stesse regole di un salvataggio manuale via UI.
+--
 -- RentriFormularioDataPresaVisione viene valorizzata qui con GETDATE() dopo l'aggiornamento dei campi
--- Esito: e' l'unico punto dell'app che scrive questo campo, non e' un parametro di
--- uspRifiutiRegistrazioni_upd (che resta cosi' invariata per tutti gli altri chiamanti).
+-- Esito: e' l'unico punto dell'app che scrive questo campo.
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistrazioni_upd_Esito]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -51,8 +63,7 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Permesso + titolarità su @Id, PRIMA di leggere qualunque dato suo (stesso pattern di
-		-- uspRifiutiRegistrazioni_upd_Annullamento)
+		-- Permesso + titolarità su @Id, PRIMA di leggere qualunque dato suo
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
@@ -128,150 +139,62 @@ BEGIN
 
 		DECLARE @respingimentoMotivoFinale VARCHAR(100) = LEFT(@RespingimentoMotivo, 100);
 
-		-- Rilettura pass-through di tutti i campi non toccati dall'esito RENTRI (stessa forma di
-		-- uspRifiutiRegistrazioni_upd_Annullamento), cosi' uspRifiutiRegistrazioni_upd non vede alcuna
-		-- differenza rispetto ai valori gia' presenti oltre a quelli qui sotto sovrascritti
-		DECLARE
-			@idMovimento CHAR(16), @idEer CHAR(6), @idProvenienza CHAR(1), @eerDescrizione VARCHAR(200),
-			@idStatoFisico CHAR(1), @idAttivitaRs CHAR(2), @idUnitaMisura CHAR(2), @quantita DECIMAL(18, 2),
-			@dataInizioTrasporto SMALLDATETIME, @idDocumentoTrasportoTipo CHAR(1), @formularioNumero VARCHAR(20),
-			@idAutorizzazioneProduttoreDetentore CHAR(16), @idAutorizzazioneDestinatario CHAR(16),
-			@idAutorizzazioneTrasportatore1 CHAR(16), @idAutorizzazioneTrasportatore2 CHAR(16), @idAutorizzazioneTrasportatore3 CHAR(16),
-			@idAutorizzazioneIntermediario1 CHAR(16), @idAutorizzazioneIntermediario2 CHAR(16), @idAutorizzazioneIntermediario3 CHAR(16),
-			@utenteNote VARCHAR(500), @registrazioneNote VARCHAR(500),
-			@isVeicoloFuoriUso BIT, @veicoloFuoriUsoNumero VARCHAR(50), @veicoloFuoriUsoData DATE,
-			@idRaee CHAR(1), @quantitaRespinta DECIMAL(18, 2), @idUnitaMisuraQuantitaRespinta CHAR(2),
-			@idMateriale CHAR(2), @materialeDescrizione VARCHAR(200),
-			@idAttivitaProvenienza CHAR(1), @registrazioneData DATE, @registrazioneNumero INT;
+		DECLARE @idMovimento CHAR(16), @quantita DECIMAL(18, 2), @idUnitaMisura CHAR(2),
+			@quantitaRespinta DECIMAL(18, 2), @idUnitaMisuraQuantitaRespinta CHAR(2);
 
 		SELECT
 			@idMovimento = m.Id,
-			@idEer = m.IdEer,
-			@idProvenienza = m.IdProvenienza,
-			@eerDescrizione = m.EerDescrizione,
-			@idStatoFisico = m.IdStatoFisico,
-			@idAttivitaRs = m.IdAttivita,
-			@idUnitaMisura = m.IdUnitaMisura,
 			@quantita = m.Quantita,
-			@dataInizioTrasporto = m.DataInizioTrasporto,
-			@idDocumentoTrasportoTipo = r.IdTrasportoTransfrontalieroTipo,
-			@formularioNumero = m.FormularioNumero,
-			@utenteNote = m.Note,
-			@registrazioneNote = r.Note,
-			@isVeicoloFuoriUso = ISNULL(r.VeicoloFuoriUso, 0),
-			@veicoloFuoriUsoNumero = r.VeicoloFuoriUsoNumero,
-			@veicoloFuoriUsoData = r.VeicoloFuoriUsoData,
-			@idRaee = r.IdRaee,
+			@idUnitaMisura = m.IdUnitaMisura,
 			@quantitaRespinta = r.QuantitaRespinta,
-			@idUnitaMisuraQuantitaRespinta = r.IdUnitaMisuraQuantitaRespinta,
-			@idMateriale = r.IdMateriale,
-			@materialeDescrizione = r.MaterialeDescrizione,
-			@idAttivitaProvenienza = r.IdAttivitaProvenienza,
-			@registrazioneData = r.[Data],
-			@registrazioneNumero = r.Numero
+			@idUnitaMisuraQuantitaRespinta = r.IdUnitaMisuraQuantitaRespinta
 		FROM
 			dbo.tblRifiutiRegistrazioni r
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 		WHERE r.Id = @Id;
 
-		SELECT @idAutorizzazioneProduttoreDetentore = IdAutorizzazione
-		FROM dbo.tblRifiutiMovimentiProduttori
-		WHERE
-			Id = @idMovimento
-			AND Pos = 0;
-		SELECT @idAutorizzazioneDestinatario = IdAutorizzazione
-		FROM dbo.tblRifiutiMovimentiDestinatari
-		WHERE
-			Id = @idMovimento
-			AND Pos = 0;
-		SELECT @idAutorizzazioneTrasportatore1 = IdAutorizzazione
-		FROM dbo.tblRifiutiMovimentiTrasportatori
-		WHERE
-			Id = @idMovimento
-			AND Pos = 0;
-		SELECT @idAutorizzazioneTrasportatore2 = IdAutorizzazione
-		FROM dbo.tblRifiutiMovimentiTrasportatori
-		WHERE
-			Id = @idMovimento
-			AND Pos = 1;
-		SELECT @idAutorizzazioneTrasportatore3 = IdAutorizzazione
-		FROM dbo.tblRifiutiMovimentiTrasportatori
-		WHERE
-			Id = @idMovimento
-			AND Pos = 2;
-		SELECT @idAutorizzazioneIntermediario1 = IdAutorizzazione
-		FROM dbo.tblRifiutiMovimentiIntermediari
-		WHERE
-			Id = @idMovimento
-			AND Pos = 0;
-		SELECT @idAutorizzazioneIntermediario2 = IdAutorizzazione
-		FROM dbo.tblRifiutiMovimentiIntermediari
-		WHERE
-			Id = @idMovimento
-			AND Pos = 1;
-		SELECT @idAutorizzazioneIntermediario3 = IdAutorizzazione
-		FROM dbo.tblRifiutiMovimentiIntermediari
-		WHERE
-			Id = @idMovimento
-			AND Pos = 2;
+		-- Stessa regola di uspRifiutiRegistrazioni_upd: una quantita' verificata identica a quella
+		-- registrata equivale a "non specificata"
+		DECLARE @quantitaVerificataFinale DECIMAL(18, 2) = @QuantitaDestino;
+		IF @quantitaVerificataFinale = @quantita SET @quantitaVerificataFinale = NULL;
 
-		DECLARE @classiPericolo VARCHAR(50) = (
-			SELECT STRING_AGG(c.Codice, ';')
-			FROM
-				dbo.tblRifiutiMovimentiClassiPericolo mc
-				INNER JOIN dbo.tblRifiutiClassiPericolo c ON mc.IdClasse = c.Id
-			WHERE mc.Id = @idMovimento);
+		IF @idEsito = 'A'
+		BEGIN
+			SET @idCausaleRespingimento = NULL;
+			SET @respingimentoMotivoFinale = NULL;
+			SET @idUnitaMisuraQuantitaRespinta = NULL;
+			SET @quantitaRespinta = NULL;
+		END
+		IF @idEsito = 'R'
+		BEGIN
+			SET @quantitaRespinta = @quantita;
+			SET @idUnitaMisuraQuantitaRespinta = @idUnitaMisura;
+			SET @quantitaVerificataFinale = NULL;
+		END
+		IF @idEsito = 'P'
+			SET @idUnitaMisuraQuantitaRespinta = ISNULL(@idUnitaMisuraQuantitaRespinta, 'KG');
+		IF ISNULL(@idCausaleRespingimento, '') <> 'A'
+			SET @respingimentoMotivoFinale = NULL;
 
-		DECLARE @idEtichette VARCHAR(50) = (
-			SELECT STRING_AGG(IdEtichetta, ';')
-			FROM dbo.tblRifiutiRegistrazioniEtichette
-			WHERE Id = @Id);
+		UPDATE dbo.tblRifiutiRegistrazioni
+		SET
+			IdEsito = @idEsito,
+			IdCausaleRespingimento = @idCausaleRespingimento,
+			CausaleRespingimentoAltro = @respingimentoMotivoFinale,
+			QuantitaVerificata = @quantitaVerificataFinale,
+			IdUnitaMisuraQuantitaRespinta = @idUnitaMisuraQuantitaRespinta,
+			QuantitaRespinta = @quantitaRespinta,
+			DataFineTrasporto = @dataOraFineTrasportoFinale
+		WHERE Id = @Id;
 
-		EXEC dbo.uspRifiutiRegistrazioni_upd
-			@Id = @Id,
-			@IdSessione = @IdSessione,
-			@IdEer = @idEer,
-			@IdProvenienza = @idProvenienza,
-			@EerDescrizione = @eerDescrizione,
-			@IdStatoFisico = @idStatoFisico,
-			@ClassiPericolo = @classiPericolo,
-			@IdAttivitaRs = @idAttivitaRs,
-			@RegistrazioneData = @registrazioneData,
-			@RegistrazioneNumero = @registrazioneNumero,
-			@IdUnitaMisura = @idUnitaMisura,
-			@Quantita = @quantita,
-			@DataInizioTrasporto = @dataInizioTrasporto,
-			@IdDocumentoTrasportoTipo = @idDocumentoTrasportoTipo,
-			@FormularioNumero = @formularioNumero,
-			@IdAutorizzazioneProduttoreDetentore = @idAutorizzazioneProduttoreDetentore,
-			@IdAutorizzazioneDestinatario = @idAutorizzazioneDestinatario,
-			@IdAutorizzazioneTrasportatore1 = @idAutorizzazioneTrasportatore1,
-			@IdAutorizzazioneTrasportatore2 = @idAutorizzazioneTrasportatore2,
-			@IdAutorizzazioneTrasportatore3 = @idAutorizzazioneTrasportatore3,
-			@IdAutorizzazioneIntermediario1 = @idAutorizzazioneIntermediario1,
-			@IdAutorizzazioneIntermediario2 = @idAutorizzazioneIntermediario2,
-			@IdAutorizzazioneIntermediario3 = @idAutorizzazioneIntermediario3,
-			@RegistrazioneNote = @registrazioneNote,
-			@UtenteNote = @utenteNote,
-			@IdEtichette = @idEtichette,
-			@IsVeicoloFuoriUso = @isVeicoloFuoriUso,
-			@VeicoloFuoriUsoNumero = @veicoloFuoriUsoNumero,
-			@VeicoloFuoriUsoData = @veicoloFuoriUsoData,
-			@IdRaee = @idRaee,
-			-- Esito RENTRI: unici campi sovrascritti qui
-			@IdEsito = @idEsito,
-			@QuantitaVerificata = @QuantitaDestino,
-			@DataFineTrasporto = @dataOraFineTrasportoFinale,
-			@IdCausaleRespingimento = @idCausaleRespingimento,
-			@CausaleRespingimentoAltro = @respingimentoMotivoFinale,
-			@IdUnitaMisuraQuantitaRespinta = @idUnitaMisuraQuantitaRespinta,
-			@QuantitaRespinta = @quantitaRespinta,
-			@IdMateriale = @idMateriale,
-			@MaterialeDescrizione = @materialeDescrizione,
-			@IdAttivitaProvenienza = @idAttivitaProvenienza;
+		IF @@ROWCOUNT = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Registrazione non trovata';
+			GOTO BRANCH_END;
+		END
 
-		-- Unico punto dell'app che scrive questo campo: non e' un parametro di
-		-- uspRifiutiRegistrazioni_upd, che resta invariata per tutti gli altri chiamanti
+		-- Unico punto dell'app che scrive questo campo
 		UPDATE dbo.tblRifiutiMovimenti
 		SET RentriFormularioDataPresaVisione = GETDATE()
 		WHERE Id = @idMovimento;

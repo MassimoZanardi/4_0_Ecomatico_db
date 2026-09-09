@@ -128,6 +128,7 @@ BEGIN
 			FormularioDataEmissione = ISNULL(f.DataEmissione, GETDATE()),
 			RentriFormularioStato = m.RentriFormularioStato,
 			RentriFormularioDataPresaVisione = m.RentriFormularioDataPresaVisione,
+			RentriFormularioDataCopia = m.RentriFormularioDataCopia,
 			r.RentriIdentificativo,
 			r.RentriData,
 			ConservazioneSostitutiva = ISNULL(r.ConservazioneSostitutiva, 0),

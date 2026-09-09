@@ -1,26 +1,24 @@
 /*
-	Deploy produzione - 2026-09-09 - Traccia il caricamento copia FIR in "RENTRI - Carica copia FIR"
+	Deploy produzione - 2026-09-09 - Espone RentriFormularioDataCopia in Registrazioni/Edit
 
 	Contenuto di questo script (solo 4_0_ecomatico, nessuna modifica all'hub condiviso 1_0_rentri):
 
 	Motivazione: il pulsante "RENTRI - Carica copia FIR" (Rifiuti/Registrazioni/Edit, destinatario di un
-	"carico di rifiuto ricevuti da terzi") non aveva alcun riscontro locale dell'esito - il gate restava
-	aperto (RentriFormularioStato in Accettato/RespintoAccettatoParzialmente) anche dopo l'esecuzione
-	riuscita, quindi il pulsante non scompariva mai dal menu Azioni. Riusata la colonna
-	tblRifiutiMovimenti.RentriFormularioDataCopia, gia' presente ma mai valorizzata lato app (migrata da
-	tblRifiutiFormulari il 2026-09-07, propedeutica a questo sviluppo).
+	"carico di rifiuto ricevuti da terzi") restava visibile e ricliccabile anche dopo l'esecuzione riuscita.
+	La colonna tblRifiutiMovimenti.RentriFormularioDataCopia viene GIA' valorizzata automaticamente
+	dall'hub RENTRI stesso come side-effect della chiamata POST /formulario-digitale/{app}/caricamento-
+	copia-digitale/... (ApiFormularioDigitale.cs -> FormularioService.UpdateFormularioDigitaleDataCopia ->
+	uspFormulariDigitali_upd_DataCopia branch @App='40', gia' deployato nel repo 1_0_rentri il 2026-09-07)
+	- semplicemente non era mai stata esposta dalla SELECT di uspRifiutiRegistrazioni_get ne' letta dal
+	gate lato app (Edit.cshtml.cs, fix separato nel repo applicativo). Nessuna nuova SP necessaria qui:
+	un primo tentativo in questa sessione aggiungeva una SP ridondante che duplicava esattamente questo
+	aggiornamento gia' fatto dall'hub, scartato dopo la segnalazione dell'utente.
 
-	1) CREATE OR ALTER PROCEDURE dbo.uspRentriRegistrazioni_upd_CaricamentoCopia: nuova SP, valorizza
-	   RentriFormularioDataCopia = GETDATE() sul Movimento - stesso pattern di
-	   uspRentriRegistrazioni_upd_PresaVisione (permesso RRG, verifica o.IsRentriAccettazione = 1 invece di
-	   o.IsEsito = 1, blocco se gia' valorizzata). La chiamata all'hub RENTRI e' gia' avvenuta lato chiamante
-	   (RentriRegistrazioneAccettazioneService.CaricamentoCopiaInviaAsync) prima di questa SP.
-
-	2) CREATE OR ALTER PROCEDURE dbo.uspRifiutiRegistrazioni_get: aggiunta 1 colonna alla SELECT esistente
+	1) CREATE OR ALTER PROCEDURE dbo.uspRifiutiRegistrazioni_get: aggiunta 1 colonna alla SELECT esistente
 	   (nessun'altra modifica alla SP) - RentriFormularioDataCopia = m.RentriFormularioDataCopia.
 
-	Verificato su DB dev: nuova SP deployata senza errori di compilazione, smoke test con sessione a basso
-	privilegio (diniego pulito), blocco su doppia esecuzione verificato con dati reali (ROLLBACK esplicito).
+	Verificato su DB dev: SP deployata senza errori di compilazione, smoke test con sessione reale
+	(colonna presente e valorizzata correttamente su un Movimento di prova).
 
 	Eseguire con:
 	  sqlcmd -S <server_produzione> -d "4_0_ecomatico" -E -f 65001 -i deploy_produzione_2026-09-09_caricamento_copia_stato.sql
@@ -28,122 +26,7 @@
 */
 
 --------------------------------------------------------------------------------
--- 1) dbo.uspRentriRegistrazioni_upd_CaricamentoCopia (nuova SP)
---------------------------------------------------------------------------------
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-
--- Conferma locale del caricamento su RENTRI della copia del FIR digitale ("RENTRI - Carica copia FIR",
--- Rifiuti/Registrazioni/Edit, lato destinatario di un "carico di rifiuto ricevuti da terzi" - IsRentriAccettazione).
--- Riusa la colonna tblRifiutiMovimenti.RentriFormularioDataCopia (esistente ma mai valorizzata lato app,
--- vedi migrazione 2026-09-07 da tblRifiutiFormulari), stesso pattern di uspRentriRegistrazioni_upd_PresaVisione:
--- la chiamata all'hub RENTRI (RentriHubFormularioDigitaleService.CaricamentoCopiaAsync) e' gia' avvenuta lato
--- chiamante prima di questa SP, qui si registra solo l'esito in locale per nascondere l'azione dal menu.
-CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistrazioni_upd_CaricamentoCopia]
-	@Id CHAR(16) = NULL,
-	@IdSessione CHAR(16) = NULL
-AS
-BEGIN
-	SET NOCOUNT, XACT_ABORT ON;
-	BEGIN TRY
-		DECLARE @returnValue INT = 0;
-		DECLARE @returnMessage NVARCHAR(200) = NULL;
-
-		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
-		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
-
-		IF @Id IS NULL
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
-			GOTO BRANCH_END;
-		END
-		IF @IdSessione IS NULL
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
-			GOTO BRANCH_END;
-		END
-
-		DECLARE @permesso TINYINT;
-		EXEC dbo.uspSessione_get_FunzionePermesso
-			@Id = @IdSessione,
-			@IdFunzione = 'RRG',
-			@Permesso = @permesso OUTPUT;
-
-		IF 2 > @permesso
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Non si dispone dei diritti necessari';
-			GOTO BRANCH_END;
-		END
-
-		DECLARE @idMovimento CHAR(16), @rentriFormularioDataCopia SMALLDATETIME;
-		SELECT
-			@idMovimento = m.Id,
-			@rentriFormularioDataCopia = m.RentriFormularioDataCopia
-		FROM
-			dbo.tblRifiutiRegistrazioni r
-			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
-		WHERE r.Id = @Id;
-
-		IF @idMovimento IS NULL
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Non si dispone dei diritti necessari';
-			GOTO BRANCH_END;
-		END
-
-		IF NOT EXISTS (
-			SELECT 1
-			FROM
-				dbo.tblRifiutiRegistrazioni r
-				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
-			WHERE
-				r.Id = @Id
-				AND o.IsRentriAccettazione = 1
-		)
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Operazione non consentita: questa registrazione non è di tipo "carico da terzi"';
-			GOTO BRANCH_END;
-		END
-
-		IF @rentriFormularioDataCopia IS NOT NULL
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Il caricamento della copia del FIR è già stato registrato per questa registrazione';
-			GOTO BRANCH_END;
-		END
-
-		UPDATE dbo.tblRifiutiMovimenti
-		SET RentriFormularioDataCopia = GETDATE()
-		WHERE Id = @idMovimento;
-
-		SELECT @returnValue AS ReturnValue;
-
-	END TRY
-	BEGIN CATCH
-		THROW;
-	END CATCH
-	BRANCH_END:
-	SET NOCOUNT, XACT_ABORT OFF;
-	IF @returnValue < 0
-	BEGIN
-		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
-		THROW 50001, @returnMessage, 1;
-	END
-
-END;
-GO
-
---------------------------------------------------------------------------------
--- 2) dbo.uspRifiutiRegistrazioni_get (estesa)
+-- 1) dbo.uspRifiutiRegistrazioni_get (estesa)
 --------------------------------------------------------------------------------
 SET ANSI_NULLS ON
 GO

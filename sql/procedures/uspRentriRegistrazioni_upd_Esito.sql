@@ -18,11 +18,14 @@ GO
 -- consentito. La clausola SET dell'UPDATE sotto e' la garanzia strutturale che nessun'altra colonna venga
 -- toccata (a differenza di un ipotetico bypass del blocco esteso all'intera SP generica, che dipenderebbe
 -- solo dalla correttezza di un pass-through di valori invariati, senza alcuna rete di sicurezza residua).
--- Il SOLO blocco RentriIdentificativo/RentriData viene bypassato: quello per conservazione sostitutiva
--- (ConservazioneSostitutiva) e' indipendente dal timing di invio al registro e resta valido anche qui -
--- replicato esplicitamente sotto (audit di tutti i GOTO BRANCH_END di uspRifiutiRegistrazioni_upd: gli
--- altri controlli lì presenti riguardano solo campi mai toccati da questo UPDATE - FormularioNumero,
--- RegistrazioneNumero/Data, EER/StatoFisico/UnitaMisura, Quantita - quindi non applicabili qui).
+-- Il blocco "vieta la modifica SE gia' inviata" viene rimosso, ma sostituito dal prerequisito opposto: un
+-- esito ha senso solo per una Registrazione GIA' inviata (RentriIdentificativo IS NOT NULL), quindi qui si
+-- richiede esplicitamente il contrario di quel blocco, non semplicemente la sua assenza. Il blocco per
+-- conservazione sostitutiva (ConservazioneSostitutiva) e' indipendente dal timing di invio al registro e
+-- resta valido invariato - replicato esplicitamente sotto (audit di tutti i GOTO BRANCH_END di
+-- uspRifiutiRegistrazioni_upd: gli altri controlli lì presenti riguardano solo campi mai toccati da questo
+-- UPDATE - FormularioNumero, RegistrazioneNumero/Data, EER/StatoFisico/UnitaMisura, Quantita - quindi non
+-- applicabili qui).
 --
 -- Normalizzazione Esito replicata identica a quella di uspRifiutiRegistrazioni_upd (righe 265-266, 357-377
 -- alla data di questa modifica), limitata al solo ramo "esito presente" dato che qui @IdEsito non e' mai
@@ -98,9 +101,11 @@ BEGIN
 
 		-- Una registrazione portata/bloccata per la conservazione sostitutiva non può più essere
 		-- modificata (stesso controllo di uspRifiutiRegistrazioni_upd - indipendente dal blocco post-invio
-		-- RENTRI bypassato sopra, resta valido anche per il solo aggiornamento dell'esito)
-		DECLARE @conservazioneSostitutiva BIT;
-		SELECT @conservazioneSostitutiva = ConservazioneSostitutiva
+		-- RENTRI rimosso sopra, resta valido anche per il solo aggiornamento dell'esito)
+		DECLARE @conservazioneSostitutiva BIT, @rentriIdentificativo VARCHAR(20);
+		SELECT
+			@conservazioneSostitutiva = ConservazioneSostitutiva,
+			@rentriIdentificativo = RentriIdentificativo
 		FROM dbo.tblRifiutiRegistrazioni
 		WHERE Id = @Id;
 
@@ -108,6 +113,15 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'La registrazione è bloccata per la conservazione sostitutiva: non può più essere modificata';
+			GOTO BRANCH_END;
+		END
+
+		-- Prerequisito positivo (non il blocco rimosso sopra, che vietava la modifica DOPO l'invio): un
+		-- esito di conferimento non ha senso per una Registrazione mai trasmessa al registro RENTRI
+		IF @rentriIdentificativo IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La registrazione non è ancora stata inviata al RENTRI: non è possibile registrare l''esito';
 			GOTO BRANCH_END;
 		END
 

@@ -26,6 +26,8 @@ CREATE TABLE [dbo].[tblRifiutiMovimenti](
 	[RentriFormularioDataCopia] [smalldatetime] NULL,
 	[RentriFormularioDataTrasmissione] [smalldatetime] NULL,
 	[RentriFormularioDataPresaVisione] [smalldatetime] NULL,
+	[RentriFormularioDataConservazione] [smalldatetime] NULL,
+	[RentriFormularioInviiConservazione] [int] NULL,
  CONSTRAINT [PK_tblRifiutiMovimenti] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC

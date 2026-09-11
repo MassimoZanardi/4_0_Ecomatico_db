@@ -72,6 +72,7 @@ BEGIN
 			ServiziMax,
 			RentriMax,
 			ConservazioniMax = ISNULL(ConservazioniMax, 0),
+			ConservazioniXfirMax = ISNULL(ConservazioniXfirMax, 0),
 			Demo,
 			Logo,
 			Codice = LOWER(ISNULL(Codice, RIGHT(CONVERT(VARCHAR(36), NEWID()), 5))),

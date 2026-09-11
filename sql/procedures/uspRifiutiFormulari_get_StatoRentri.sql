@@ -7,7 +7,8 @@ GO
 -- ma chiave e' il Formulario (@Id), non la Registrazione. Un Formulario puo' esistere senza una Registrazione
 -- associata (LEFT JOIN, stesso schema di uspRifiutiFormulari_get): quando manca, RentriData/DataEsito/
 -- RentriDataInvioConservazione restano NULL, mentre i campi di solo Formulario (RentriFormularioStato e date
--- collegate, su tblRifiutiMovimenti) sono sempre disponibili.
+-- collegate, su tblRifiutiMovimenti - inclusa RentriFormularioDataConservazione, la conservazione del
+-- singolo xFIR) sono sempre disponibili.
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_get_StatoRentri]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
@@ -69,7 +70,8 @@ BEGIN
 			RentriFormularioDataPresaVisione = m.RentriFormularioDataPresaVisione,
 			DataEsito = r.DataFineTrasporto,
 			RentriFormularioDataTrasmissione = m.RentriFormularioDataTrasmissione,
-			RentriDataInvioConservazione = cons.Data
+			RentriDataInvioConservazione = cons.Data,
+			RentriFormularioDataConservazione = m.RentriFormularioDataConservazione
 		FROM
 			dbo.tblRifiutiFormulari f
 			INNER JOIN dbo.tblRifiutiMovimenti m ON f.IdMovimento = m.Id

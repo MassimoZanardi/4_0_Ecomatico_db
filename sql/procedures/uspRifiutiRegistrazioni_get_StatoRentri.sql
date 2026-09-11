@@ -1,13 +1,16 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 
--- Pannello "RENTRI - Stato" (Rifiuti/Registrazioni/Edit): 6 stati/date RENTRI in sola lettura, letti solo
+-- Pannello "RENTRI - Stato" (Rifiuti/Registrazioni/Edit): stati/date RENTRI in sola lettura, letti solo
 -- all'apertura del pannello (SP dedicata, non parte di uspRifiutiRegistrazioni_get usata dal caricamento
 -- pagina, su richiesta esplicita dell'utente). RentriDataInvioConservazione e' risolta con un JOIN
 -- cross-database sull'hub 1_0_rentri: la stessa registrazione puo' essere stata portata in conservazione
 -- piu' volte, si prende sempre la data piu' recente con Conservazione = 1 (TOP 1 ... ORDER BY Data DESC).
+-- RentriFormularioDataConservazione e' invece la conservazione del singolo xFIR ("RENTRI - Conservazione
+-- sostitutiva xFIR", Rifiuti/Registrazioni/Index), gia' su tblRifiutiMovimenti - cosa diversa dalla
+-- conservazione del registro nel suo insieme sopra (RentriDataInvioConservazione).
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_StatoRentri]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
@@ -69,7 +72,8 @@ BEGIN
 			RentriFormularioDataPresaVisione = m.RentriFormularioDataPresaVisione,
 			DataEsito = r.DataFineTrasporto,
 			RentriFormularioDataTrasmissione = m.RentriFormularioDataTrasmissione,
-			RentriDataInvioConservazione = cons.Data
+			RentriDataInvioConservazione = cons.Data,
+			RentriFormularioDataConservazione = m.RentriFormularioDataConservazione
 		FROM
 			dbo.tblRifiutiRegistrazioni r
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id

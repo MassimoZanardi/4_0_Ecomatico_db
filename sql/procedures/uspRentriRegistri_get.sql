@@ -74,7 +74,8 @@ BEGIN
 			Conservazione = ISNULL(h.Conservazione, 0),
 			ConservazioneNome = ISNULL(h.ConservazioneNome, ''),
 			ConservazioneCodiceFiscale = ISNULL(h.ConservazioneCodiceFiscale, ''),
-			ConservazioneEmail = ISNULL(h.ConservazioneEmail, '')
+			ConservazioneEmail = ISNULL(h.ConservazioneEmail, ''),
+			ConservazioniXfirMax = ISNULL(g.ConservazioniXfirMax, 0)
 		FROM
 			dbo.tblRifiutiRegistri g
 			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id

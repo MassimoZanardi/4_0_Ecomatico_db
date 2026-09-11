@@ -14,6 +14,7 @@ CREATE TABLE [dbo].[tblRifiutiRegistri](
 	[ControlloConducenti] [bit] NULL,
 	[ControlloPatenti] [bit] NULL,
 	[ControlloAttivitaRs] [bit] NULL,
+	[ConservazioniXfirMax] [int] NULL,
 	[Lock] [tinyint] NULL,
  CONSTRAINT [PK_tblRifiutiRegistri] PRIMARY KEY CLUSTERED 
 (

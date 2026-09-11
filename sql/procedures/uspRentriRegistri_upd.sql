@@ -12,7 +12,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRentriRegistri_upd]
 	@Conservazione BIT = 0,
 	@ConservazioneNome VARCHAR(50) = NULL,
 	@ConservazioneCodiceFiscale VARCHAR(20) = NULL,
-	@ConservazioneEmail VARCHAR(50) = NULL
+	@ConservazioneEmail VARCHAR(50) = NULL,
+	@ConservazioniXfirMax INT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -29,6 +30,7 @@ BEGIN
 		SET @ConservazioneNome = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneNome, 0, 1);
 		SET @ConservazioneCodiceFiscale = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneCodiceFiscale, 0, 1);
 		SET @ConservazioneEmail = dbo.ufnStringhe_get_SenzaSpazi(@ConservazioneEmail, 0, 1);
+		SET @ConservazioniXfirMax = ISNULL(@ConservazioniXfirMax, 0);
 
 		IF @Id IS NULL
 		BEGIN
@@ -151,9 +153,38 @@ BEGIN
 				SET @returnMessage = 'È stato raggiunto il numero massimo di registri con conservazione sostitutiva abilitata';
 				GOTO BRANCH_END;
 			END
+
+			-- Limite di conservazioni xFIR per Dominio (tblDomini.ConservazioniXfirMax); somma il nuovo
+			-- valore con quello degli altri registri con conservazione attiva sullo stesso Dominio
+			IF ISNULL((SELECT ConservazioniXfirMax FROM dbo.tblDomini WHERE Id = @idDominio), 0)
+				<
+				(@ConservazioniXfirMax
+				 + ISNULL((SELECT SUM(r.ConservazioniXfirMax)
+					 FROM
+						 dbo.tblRifiutiRegistri r
+						 INNER JOIN dbo.tblSediInterne i ON r.IdSede = i.Id
+						 INNER JOIN dbo.tblRentriRegistri rr ON r.Id = rr.Id
+						 INNER JOIN [1_0_rentri]..tblRegistri h ON rr.IdRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
+					 WHERE
+						 i.IdDominio = @idDominio
+						 AND h.Conservazione = 1
+						 AND r.Lock = 0
+						 AND r.Id <> @Id), 0))
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'È stato raggiunto il numero massimo di conservazioni xFIR consentito per il Dominio';
+				GOTO BRANCH_END;
+			END
 		END
 
 		BEGIN TRANSACTION;
+			-- Igiene dati: azzerato quando la conservazione e' disattivata, cosi' un futuro utilizzo
+			-- del campo che dimentichi il filtro h.Conservazione=1 non trova valori residui fuorvianti
+			-- (la validazione sopra e' comunque gia' corretta di per se', perche' filtra su h.Conservazione)
+			UPDATE dbo.tblRifiutiRegistri
+			SET ConservazioniXfirMax = IIF(@Conservazione = 1, @ConservazioniXfirMax, 0)
+			WHERE Id = @Id;
+
 			IF @idRentri IS NULL
 			BEGIN
 				SET @idRentri = LOWER(REPLACE(LEFT(CONVERT(VARCHAR(36), NEWID()), 18), '-', ''));

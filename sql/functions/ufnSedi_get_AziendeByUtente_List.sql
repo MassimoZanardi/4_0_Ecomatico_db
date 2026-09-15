@@ -10,8 +10,9 @@ WITH SCHEMABINDING
 AS
 RETURN
 (
-	-- Aziende radice (IdTipo = 'L', IdParent NULL) della IdAziendaInterna indicata,
-	-- sia interne (l'azienda interna stessa) sia esterne (clienti/fornitori/terzi
+	-- Sedi radice (IdParent NULL, qualunque IdTipo: Sede legale, Persona fisica,
+	-- Pubblica amministrazione, Condominio...) della IdAziendaInterna indicata, sia
+	-- interne (l'azienda interna stessa) sia esterne (clienti/fornitori/terzi
 	-- registrati sotto la stessa azienda interna, es. per studi di consulenza che
 	-- inviano MUD per conto dei propri assistiti)
 	SELECT
@@ -24,7 +25,6 @@ RETURN
 		dbo.tblSedi s
 	WHERE
 		s.IdParent IS NULL
-		AND s.IdTipo = 'L'
 		AND s.IdAziendaInterna = @IdAziendaInterna
 		AND s.Lock = 0
 		AND EXISTS (

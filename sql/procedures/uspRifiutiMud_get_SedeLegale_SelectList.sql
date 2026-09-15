@@ -62,30 +62,41 @@ BEGIN
 				Selected = CAST(IIF(@IdSelected = @idSediciZeri, 1, 0) AS BIT),
 				Pos = 0
 
-			UNION ALL -- azienda selezionata: sempre presente, anche se non combacia con @Search
+			UNION ALL -- sede radice selezionata: sempre presente, anche se non combacia con @Search
+			-- (stessa lista di base dell'Unità locale — ufnSedi_get_SediByUtente_List, già
+			-- permesso-scoped su interne+esterne — ristretta alle sole radici IdParent NULL)
 
 			SELECT
-				a.Id,
-				[Text] = a.Nome + ' ' + a.IndirizzoCompleto,
+				s.Id,
+				[Text] = s.NomeCompleto + ' ' + s.IndirizzoCompleto,
 				Selected = CAST(1 AS BIT),
 				Pos = 1
-			FROM dbo.ufnSedi_get_AziendeByUtente_List(@idUtente, @idAzienda) a
-			WHERE a.Id = @IdSelected
+			FROM
+				dbo.ufnSedi_get_SediByUtente_List(@idUtente) i
+				INNER JOIN dbo.tblSedi s ON i.Id = s.Id
+			WHERE
+				i.IdAziendaInterna = @idAzienda
+				AND s.IdParent IS NULL
+				AND s.Id = @IdSelected
 
-			UNION ALL -- altre aziende (interne/esterne) della stessa azienda interna, filtrabili per @Search
+			UNION ALL -- altre sedi radice (interne/esterne) della stessa azienda interna, filtrabili per @Search
 
 			SELECT
-				a.Id,
-				[Text] = a.Nome + ' ' + a.IndirizzoCompleto,
+				s.Id,
+				[Text] = s.NomeCompleto + ' ' + s.IndirizzoCompleto,
 				Selected = CAST(0 AS BIT),
 				Pos = 2
-			FROM dbo.ufnSedi_get_AziendeByUtente_List(@idUtente, @idAzienda) a
+			FROM
+				dbo.ufnSedi_get_SediByUtente_List(@idUtente) i
+				INNER JOIN dbo.tblSedi s ON i.Id = s.Id
 			WHERE
-				a.Id <> @IdSelected
+				i.IdAziendaInterna = @idAzienda
+				AND s.IdParent IS NULL
+				AND s.Id <> @IdSelected
 				AND
 					(
 					@Search IS NULL
-					OR a.Nome + ' ' + a.IndirizzoCompleto LIKE '%' + @Search + '%'
+					OR s.NomeCompleto + ' ' + s.IndirizzoCompleto LIKE '%' + @Search + '%'
 					)
 		)
 		SELECT TOP 50 Id, [Text], Selected

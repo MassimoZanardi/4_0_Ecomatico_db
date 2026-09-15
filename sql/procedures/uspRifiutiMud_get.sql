@@ -75,8 +75,14 @@ BEGIN
 			c.IdSede,
 			c.IdSedeLegale,
 			SedeLegaleNome = sl.Nome + ' ' + sl.IndirizzoCompleto,
+			LegaleNome = ld.LegaleNome,
+			LegaleCognome = ld.LegaleCognome,
 			c.IdSedeUnitaLocale,
 			SedeUnitaLocaleNome = su.Nome + ' ' + su.IndirizzoCompleto,
+			IdAteco = ud.IdAteco,
+			AtecoDescrizione = a.Descrizione,
+			CodiceRea = ud.CodiceRea,
+			Dipendenti = ud.Dipendenti,
 			c.Data,
 			c.Anno,
 			c.DataGenerazione,
@@ -84,7 +90,10 @@ BEGIN
 		FROM
 			dbo.tblRifiutiMud c
 			LEFT JOIN dbo.tblSedi sl ON c.IdSedeLegale = sl.Id
+			LEFT JOIN dbo.tblSediDatiEstesi ld ON sl.Id = ld.Id
 			LEFT JOIN dbo.tblSedi su ON c.IdSedeUnitaLocale = su.Id
+			LEFT JOIN dbo.tblSediDatiEstesi ud ON su.Id = ud.Id
+			LEFT JOIN dbo.tblAteco a ON ud.IdAteco = a.Id
 		WHERE
 			c.Id = @Id
 			AND c.Lock <= 2;

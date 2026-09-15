@@ -45,10 +45,13 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Titolarità sulla dichiarazione padre (scope azienda interna corrente della
-		-- sessione) + risoluzione dell'unità locale dichiarata
-		DECLARE @idSedeUnitaLocale CHAR(16);
-		SELECT @idSedeUnitaLocale = c.IdSedeUnitaLocale
+		-- Titolarità sulla dichiarazione padre: scope azienda interna corrente della
+		-- sessione. tblRifiutiMud.IdSede è già l'Id dell'azienda radice (valorizzato
+		-- da uspRifiutiMud_ins con tblSessioni.IdAzienda), quindi i registri proponibili
+		-- sono tutti quelli riconducibili a questa azienda, non solo alla singola
+		-- unità locale dichiarata
+		DECLARE @idAzienda CHAR(16);
+		SELECT @idAzienda = c.IdSede
 		FROM
 			dbo.tblRifiutiMud c
 			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
@@ -57,7 +60,7 @@ BEGIN
 			c.Id = @Id
 			AND e.Id = @IdSessione;
 
-		IF @idSedeUnitaLocale IS NULL
+		IF @idAzienda IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
@@ -78,7 +81,7 @@ BEGIN
 				r.Nome;
 		END
 
-		-- Ramo 2: Registri della stessa unità locale non ancora associati, filtrabili per @Search
+		-- Ramo 2: Registri della stessa azienda interna non ancora associati, filtrabili per @Search
 		ELSE
 		BEGIN
 			SELECT TOP 50
@@ -86,8 +89,9 @@ BEGIN
 				r.Nome
 			FROM
 				dbo.tblRifiutiRegistri r
+				INNER JOIN dbo.tblSedi rs ON r.IdSede = rs.Id
 			WHERE
-				r.IdSede = @idSedeUnitaLocale
+				rs.IdAziendaInterna = @idAzienda
 				AND r.Lock = 0
 				AND r.Id NOT IN (SELECT IdRegistro FROM dbo.tblRifiutiMudRegistri WHERE Id = @Id)
 				AND

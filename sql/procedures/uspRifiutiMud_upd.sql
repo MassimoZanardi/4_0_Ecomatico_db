@@ -8,7 +8,12 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiMud_upd]
 	@IdSedeLegale CHAR(16) = NULL,
 	@IdSedeUnitaLocale CHAR(16) = NULL,
 	@Data DATE = NULL,
-	@Anno INT = NULL
+	@Anno INT = NULL,
+	@LegaleNome VARCHAR(50) = NULL,
+	@LegaleCognome VARCHAR(50) = NULL,
+	@IdAteco VARCHAR(10) = NULL,
+	@CodiceRea VARCHAR(10) = NULL,
+	@Dipendenti INT = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -20,6 +25,10 @@ BEGIN
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdSedeLegale = NULLIF(LTRIM(RTRIM(@IdSedeLegale)), '');
 		SET @IdSedeUnitaLocale = NULLIF(LTRIM(RTRIM(@IdSedeUnitaLocale)), '');
+		SET @LegaleNome = dbo.ufnStringhe_get_SenzaSpazi(@LegaleNome, 0, 1);
+		SET @LegaleCognome = dbo.ufnStringhe_get_SenzaSpazi(@LegaleCognome, 0, 1);
+		SET @IdAteco = NULLIF(LTRIM(RTRIM(@IdAteco)), '');
+		SET @CodiceRea = dbo.ufnStringhe_get_SenzaSpazi(@CodiceRea, 0, 1);
 
 		IF @Id IS NULL
 		BEGIN
@@ -55,6 +64,18 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Anno esercizio non valido';
+			GOTO BRANCH_END;
+		END
+		IF @Dipendenti IS NOT NULL AND @Dipendenti < 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il numero di addetti non può essere negativo';
+			GOTO BRANCH_END;
+		END
+		IF @IdAteco IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.tblAteco WHERE Id = @IdAteco)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Codice ATECO non valido';
 			GOTO BRANCH_END;
 		END
 
@@ -155,6 +176,32 @@ BEGIN
 				SET @returnMessage = 'Dichiarazione MUD non trovata o già eliminata';
 				GOTO BRANCH_END;
 			END
+
+			-- Dati estesi Sede legale (Legale rappresentante): UPDATE mirato alle sole
+			-- colonne di competenza, per non toccare ATECO/REA/Addetti quando Sede legale
+			-- e Unità locale coincidono (caso comune: azienda mono-sede)
+			IF EXISTS (SELECT 1 FROM dbo.tblSediDatiEstesi WHERE Id = @IdSedeLegale)
+				UPDATE dbo.tblSediDatiEstesi
+				SET
+					LegaleNome = @LegaleNome,
+					LegaleCognome = @LegaleCognome
+				WHERE Id = @IdSedeLegale;
+			ELSE
+				INSERT dbo.tblSediDatiEstesi (Id, LegaleNome, LegaleCognome)
+				VALUES (@IdSedeLegale, @LegaleNome, @LegaleCognome);
+
+			-- Dati estesi Unità locale (ATECO/REA/Addetti): stesso principio, colonne
+			-- disgiunte da quelle della Sede legale
+			IF EXISTS (SELECT 1 FROM dbo.tblSediDatiEstesi WHERE Id = @IdSedeUnitaLocale)
+				UPDATE dbo.tblSediDatiEstesi
+				SET
+					IdAteco = @IdAteco,
+					CodiceRea = @CodiceRea,
+					Dipendenti = @Dipendenti
+				WHERE Id = @IdSedeUnitaLocale;
+			ELSE
+				INSERT dbo.tblSediDatiEstesi (Id, IdAteco, CodiceRea, Dipendenti)
+				VALUES (@IdSedeUnitaLocale, @IdAteco, @CodiceRea, @Dipendenti);
 		COMMIT TRANSACTION;
 
 		-- Log FUORI dalla transazione

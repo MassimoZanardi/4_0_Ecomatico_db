@@ -50,10 +50,12 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Titolarità sulla dichiarazione padre (scope azienda interna corrente della
-		-- sessione) + risoluzione dell'unità locale dichiarata
-		DECLARE @idSedeUnitaLocale CHAR(16);
-		SELECT @idSedeUnitaLocale = c.IdSedeUnitaLocale
+		-- Titolarità sulla dichiarazione padre: scope azienda interna corrente della
+		-- sessione. tblRifiutiMud.IdSede è già l'Id dell'azienda radice, quindi i
+		-- registri associabili sono tutti quelli riconducibili a questa azienda, non
+		-- solo alla singola unità locale dichiarata
+		DECLARE @idAzienda CHAR(16);
+		SELECT @idAzienda = c.IdSede
 		FROM
 			dbo.tblRifiutiMud c
 			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
@@ -63,7 +65,7 @@ BEGIN
 			AND e.Id = @IdSessione
 			AND c.Lock <= 2;
 
-		IF @idSedeUnitaLocale IS NULL
+		IF @idAzienda IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
@@ -71,7 +73,7 @@ BEGIN
 		END
 
 		-- @Registri: lista di Id registro separati da ';'. Sono associabili solo i registri
-		-- della stessa unità locale dichiarata, attivi.
+		-- riconducibili alla stessa azienda interna, attivi.
 		BEGIN TRANSACTION;
 			INSERT INTO dbo.tblRifiutiMudRegistri (Id, IdRegistro)
 			SELECT
@@ -80,9 +82,10 @@ BEGIN
 			FROM
 				STRING_SPLIT(@Registri, ';') s
 				INNER JOIN dbo.tblRifiutiRegistri r ON s.value = r.Id
+				INNER JOIN dbo.tblSedi rs ON r.IdSede = rs.Id
 			WHERE
 				s.value <> ''
-				AND r.IdSede = @idSedeUnitaLocale
+				AND rs.IdAziendaInterna = @idAzienda
 				AND r.Lock = 0
 				AND r.Id NOT IN (SELECT IdRegistro FROM dbo.tblRifiutiMudRegistri WHERE Id = @Id);
 

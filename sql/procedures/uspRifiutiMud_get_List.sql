@@ -53,10 +53,11 @@ BEGIN
 		FROM
 			dbo.tblRifiutiMud c
 			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
+			INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
 			LEFT JOIN dbo.tblSedi su ON c.IdSedeUnitaLocale = su.Id
 		WHERE
-			c.Lock = 0
+			e.Id = @IdSessione
+			AND c.Lock = 0
 			AND
 				(
 				@Search IS NULL

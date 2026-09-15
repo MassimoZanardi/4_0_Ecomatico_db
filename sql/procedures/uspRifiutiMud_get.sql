@@ -41,14 +41,17 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Controlla il permesso sul record (scope: azienda interna, non singola sede)
+		-- Controlla il permesso sul record: scope azienda interna corrente della sessione
+		-- (tblSessioni.IdAzienda), non tutte le aziende accessibili all'utente
 		IF NOT EXISTS (
 			SELECT 1
 			FROM
 				dbo.tblRifiutiMud c
 				INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
-				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
-			WHERE c.Id = @Id)
+				INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
+			WHERE
+				c.Id = @Id
+				AND e.Id = @IdSessione)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';

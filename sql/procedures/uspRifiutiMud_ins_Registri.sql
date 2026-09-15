@@ -50,16 +50,17 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Titolarità sulla dichiarazione padre (scope azienda interna) + risoluzione
-		-- dell'unità locale dichiarata
+		-- Titolarità sulla dichiarazione padre (scope azienda interna corrente della
+		-- sessione) + risoluzione dell'unità locale dichiarata
 		DECLARE @idSedeUnitaLocale CHAR(16);
 		SELECT @idSedeUnitaLocale = c.IdSedeUnitaLocale
 		FROM
 			dbo.tblRifiutiMud c
 			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
+			INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
 		WHERE
 			c.Id = @Id
+			AND e.Id = @IdSessione
 			AND c.Lock <= 2;
 
 		IF @idSedeUnitaLocale IS NULL

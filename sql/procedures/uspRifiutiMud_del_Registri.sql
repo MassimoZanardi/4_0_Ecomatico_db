@@ -50,15 +50,16 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Titolarità sulla dichiarazione padre (scope azienda interna)
+		-- Titolarità sulla dichiarazione padre (scope azienda interna corrente della sessione)
 		IF NOT EXISTS (
 			SELECT 1
 			FROM
 				dbo.tblRifiutiMud c
 				INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
-				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
+				INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
 			WHERE
 				c.Id = @Id
+				AND e.Id = @IdSessione
 				AND c.Lock <= 2
 		)
 		BEGIN

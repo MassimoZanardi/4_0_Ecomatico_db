@@ -34,15 +34,15 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		DECLARE @idSede CHAR(16);
-		SELECT @idSede = IdSede
+		DECLARE @idAzienda CHAR(16);
+		SELECT @idAzienda = IdAzienda
 		FROM dbo.tblSessioni
 		WHERE Id = @IdSessione;
 
-		IF @idSede IS NULL
+		IF @idAzienda IS NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Selezionare la sede';
+			SET @returnMessage = 'Selezionare l''azienda';
 			GOTO BRANCH_END;
 		END
 
@@ -51,7 +51,7 @@ BEGIN
 
 		BEGIN TRANSACTION;
 			INSERT dbo.tblRifiutiMud (Id, IdSede, Lock)
-			VALUES (@returnId, @idSede, 2);
+			VALUES (@returnId, @idAzienda, 2);
 		COMMIT TRANSACTION;
 
 		SELECT Id = @returnId;

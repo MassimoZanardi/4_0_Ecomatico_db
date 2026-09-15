@@ -62,13 +62,15 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Titolarità sulla sede indicata (scope azienda interna)
+		-- Titolarità sulla sede indicata (scope azienda interna corrente della sessione)
 		IF NOT EXISTS (
 			SELECT 1
 			FROM
 				dbo.tblSedi s
-				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
-			WHERE s.Id = @IdSede)
+				INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
+			WHERE
+				s.Id = @IdSede
+				AND e.Id = @IdSessione)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';

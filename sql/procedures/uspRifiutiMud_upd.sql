@@ -71,15 +71,17 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Controlla il permesso sul record (titolarità, scope azienda interna) e recupera
-		-- la sede reale della dichiarazione
+		-- Controlla il permesso sul record: scope azienda interna corrente della sessione
+		-- (tblSessioni.IdAzienda), e recupera la sede reale della dichiarazione
 		DECLARE @idSede CHAR(16);
 		SELECT @idSede = c.IdSede
 		FROM
 			dbo.tblRifiutiMud c
 			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
-		WHERE c.Id = @Id;
+			INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
+		WHERE
+			c.Id = @Id
+			AND e.Id = @IdSessione;
 
 		IF @idSede IS NULL
 		BEGIN
@@ -88,13 +90,15 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Sede legale e unità locale devono appartenere all'azienda interna dell'utente
+		-- Sede legale e unità locale devono appartenere all'azienda interna corrente della sessione
 		IF NOT EXISTS (
 			SELECT 1
 			FROM
 				dbo.tblSedi s
-				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
-			WHERE s.Id = @IdSedeLegale
+				INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
+			WHERE
+				s.Id = @IdSedeLegale
+				AND e.Id = @IdSessione
 		)
 		BEGIN
 			SET @returnValue = -1;
@@ -105,8 +109,10 @@ BEGIN
 			SELECT 1
 			FROM
 				dbo.tblSedi s
-				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.IdAziendaInterna = i.Id
-			WHERE s.Id = @IdSedeUnitaLocale
+				INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
+			WHERE
+				s.Id = @IdSedeUnitaLocale
+				AND e.Id = @IdSessione
 		)
 		BEGIN
 			SET @returnValue = -1;

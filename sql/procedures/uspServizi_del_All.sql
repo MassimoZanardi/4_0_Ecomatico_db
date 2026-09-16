@@ -1,3 +1,9 @@
+﻿SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspServizi_del_All]
 	@Conferma VARCHAR(50) = NULL
 AS
@@ -26,7 +32,8 @@ BEGIN
 			DELETE dbo.tblEventiUtenti
 			WHERE Id IN (SELECT Id FROM #tEventi);
 			DELETE dbo.tblRicorrenzeEccezioni
-			WHERE IdEvento IN (SELECT Id FROM #tEventi);
+			WHERE Id IN (SELECT Id FROM #tEventi)
+			   OR IdEvento IN (SELECT Id FROM #tEventi);
 			DELETE dbo.tblRicorrenze
 			WHERE Id IN (SELECT Id FROM #tEventi);
 			DELETE dbo.tblEventiProprieta
@@ -72,3 +79,4 @@ BEGIN
 	SET NOCOUNT, XACT_ABORT OFF;
 
 END;
+GO

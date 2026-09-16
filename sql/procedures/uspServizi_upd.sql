@@ -1,3 +1,9 @@
+﻿SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspServizi_upd]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -242,14 +248,17 @@ BEGIN
 				WHERE
 					Id = @idEventoParent
 					AND [Data] > @dataFineParent;
-
-				-- Sblocca le eccezioni della serie padre che referenziano questo evento sostitutivo
-				UPDATE dbo.tblRicorrenzeEccezioni
-				SET Lock = 0
-				WHERE
-					IdEvento = @IdEvento
-					AND Lock <= 2;
 			END
+
+			-- Sblocca l'eccezione di ricorrenza che referenzia questo evento come sostituto
+			-- (occorrenza singola modificata): senza questo sblocco l'occorrenza originale
+			-- resta visibile in calendario insieme a quella modificata. No-op se @IdEvento
+			-- non e' il sostituto di nessuna eccezione.
+			UPDATE dbo.tblRicorrenzeEccezioni
+			SET Lock = 0
+			WHERE
+				IdEvento = @IdEvento
+				AND Lock <= 2;
 
 			-- Gestione firma richiedente
 			IF @FirmaRichiedente IS NULL
@@ -365,3 +374,4 @@ BEGIN
 	END
 
 END;
+GO

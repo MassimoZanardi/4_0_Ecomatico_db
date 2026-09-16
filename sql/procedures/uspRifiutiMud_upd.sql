@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -13,7 +13,9 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiMud_upd]
 	@LegaleCognome VARCHAR(50) = NULL,
 	@IdAteco VARCHAR(10) = NULL,
 	@CodiceRea VARCHAR(10) = NULL,
-	@Dipendenti INT = NULL
+	@Dipendenti INT = NULL,
+	@Telefono VARCHAR(100) = NULL,
+	@Email VARCHAR(100) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -29,6 +31,8 @@ BEGIN
 		SET @LegaleCognome = dbo.ufnStringhe_get_SenzaSpazi(@LegaleCognome, 0, 1);
 		SET @IdAteco = NULLIF(LTRIM(RTRIM(@IdAteco)), '');
 		SET @CodiceRea = dbo.ufnStringhe_get_SenzaSpazi(@CodiceRea, 0, 1);
+		SET @Telefono = dbo.ufnStringhe_get_SenzaSpazi(@Telefono, 0, 1);
+		SET @Email = dbo.ufnStringhe_get_SenzaSpazi(@Email, 0, 1);
 
 		IF @Id IS NULL
 		BEGIN
@@ -202,6 +206,16 @@ BEGIN
 			ELSE
 				INSERT dbo.tblSediDatiEstesi (Id, IdAteco, CodiceRea, Dipendenti)
 				VALUES (@IdSedeUnitaLocale, @IdAteco, @CodiceRea, @Dipendenti);
+
+			-- Telefono/e-mail: aggiornano l'anagrafica reale della Sede (Unità locale),
+			-- upsert mirato sui soli recapiti T0/M0 per non toccare T1/T2/M1/M2
+			DELETE dbo.tblSediRecapiti
+			WHERE Id = @IdSedeUnitaLocale AND IdRecapito IN ('T0', 'M0');
+
+			INSERT dbo.tblSediRecapiti (Id, IdRecapito, Valore) SELECT @IdSedeUnitaLocale, 'T0', @Telefono
+			WHERE @Telefono IS NOT NULL;
+			INSERT dbo.tblSediRecapiti (Id, IdRecapito, Valore) SELECT @IdSedeUnitaLocale, 'M0', @Email
+			WHERE @Email IS NOT NULL;
 		COMMIT TRANSACTION;
 
 		-- Log FUORI dalla transazione

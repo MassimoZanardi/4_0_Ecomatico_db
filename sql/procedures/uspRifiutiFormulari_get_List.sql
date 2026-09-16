@@ -14,7 +14,10 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_get_List]
 	@Eer VARCHAR(50) = NULL,
 	@Formulario VARCHAR(50) = NULL,
 	@Numeri VARCHAR(50) = NULL,
-	@Etichetta VARCHAR(50) = NULL
+	@Etichetta VARCHAR(50) = NULL,
+	@XfirAttesaAccettazione BIT = 0,
+	@XfirCopiaNonCaricata BIT = 0,
+	@XfirCopiaNonTrasmessa BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -160,6 +163,18 @@ BEGIN
 		-- FormularioNumero ora su tblRifiutiMovimenti (alias m)
 		IF @Formulario IS NOT NULL
 			SET @stmt = @stmt + N' AND m.FormularioNumero LIKE ''%'' + @Formulario + ''%''';
+
+		-- I 3 flag sotto riguardano solo formulari con un xFIR RENTRI collegato (RentriFormularioStato
+		-- valorizzato): altrimenti il filtro intercetterebbe anche i formulari cartacei, per i quali le
+		-- date sotto sono banalmente NULL (stesso principio di uspRifiutiRegistrazioni_get_List).
+		IF @XfirAttesaAccettazione = 1
+			SET @stmt = @stmt + N' AND m.RentriFormularioStato = ''InserimentoAccettazione''';
+
+		IF @XfirCopiaNonCaricata = 1
+			SET @stmt = @stmt + N' AND m.RentriFormularioStato IS NOT NULL AND m.RentriFormularioDataCopia IS NULL';
+
+		IF @XfirCopiaNonTrasmessa = 1
+			SET @stmt = @stmt + N' AND m.RentriFormularioStato IS NOT NULL AND m.RentriFormularioDataTrasmissione IS NULL';
 
 		SET @stmt = @stmt + N'
         )

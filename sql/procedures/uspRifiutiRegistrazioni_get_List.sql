@@ -14,7 +14,14 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_List]
 	@Eer VARCHAR(50) = NULL,
 	@Formulario VARCHAR(50) = NULL,
 	@Numeri VARCHAR(50) = NULL,
-	@Etichetta VARCHAR(50) = NULL
+	@Etichetta VARCHAR(50) = NULL,
+	@NonTrasmesseRentri BIT = 0,
+	@NonInConservazione BIT = 0,
+	@SenzaEsito BIT = 0,
+	@XfirSenzaPresaVisione BIT = 0,
+	@XfirAttesaAccettazione BIT = 0,
+	@XfirCopiaNonCaricata BIT = 0,
+	@XfirCopiaNonTrasmessa BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -166,6 +173,39 @@ BEGIN
 
 		IF @Formulario IS NOT NULL
 			SET @stmt = @stmt + N' AND m.FormularioNumero LIKE ''%'' + @Formulario + ''%''';
+
+		IF @NonTrasmesseRentri = 1
+			SET @stmt = @stmt + N' AND r.RentriData IS NULL';
+
+		-- "Non inviate in conservazione" = conservazione del registro (RentriDataInvioConservazione nel
+		-- pannello "RENTRI - Stato"): NOT EXISTS anziché OUTER APPLY per non pagare il join cross-database
+		-- su ogni riga quando il flag non è richiesto.
+		IF @NonInConservazione = 1
+			SET @stmt = @stmt + N' AND NOT EXISTS (
+                SELECT 1 FROM [1_0_rentri]..tblRegistriConservazioni con
+                WHERE con.IdRegistro = z.IdRentri COLLATE DATABASE_DEFAULT
+                    AND con.Anno = YEAR(r.[Data])
+                    AND r.Numero BETWEEN con.DalNumero AND con.AlNumero
+                    AND con.Conservazione = 1
+            )';
+
+		IF @SenzaEsito = 1
+			SET @stmt = @stmt + N' AND r.DataFineTrasporto IS NULL';
+
+		-- I successivi 3 flag riguardano solo registrazioni con un xFIR collegato (RentriFormularioStato
+		-- valorizzato): altrimenti il filtro intercetterebbe anche tutte le registrazioni senza alcun
+		-- formulario digitale, per le quali le date sotto sono banalmente NULL.
+		IF @XfirSenzaPresaVisione = 1
+			SET @stmt = @stmt + N' AND m.RentriFormularioStato IS NOT NULL AND m.RentriFormularioDataPresaVisione IS NULL';
+
+		IF @XfirAttesaAccettazione = 1
+			SET @stmt = @stmt + N' AND m.RentriFormularioStato = ''InserimentoAccettazione''';
+
+		IF @XfirCopiaNonCaricata = 1
+			SET @stmt = @stmt + N' AND m.RentriFormularioStato IS NOT NULL AND m.RentriFormularioDataCopia IS NULL';
+
+		IF @XfirCopiaNonTrasmessa = 1
+			SET @stmt = @stmt + N' AND m.RentriFormularioStato IS NOT NULL AND m.RentriFormularioDataTrasmissione IS NULL';
 
 		SET @stmt = @stmt + N'
         )

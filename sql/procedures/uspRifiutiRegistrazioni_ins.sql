@@ -412,9 +412,9 @@ BEGIN
 				ELSE IF @IdModello IS NOT NULL
 				BEGIN
 					INSERT dbo.tblRifiutiMovimenti
-						(Id, IdRegistro, IdOperazione, IdEer, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, Note)
+						(Id, IdRegistro, IdOperazione, IdModello, IdEer, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, Note)
 					VALUES
-						(@idMovimento, @idRegistroFinale, @mIdOperazione, @mIdEer, @mIdStatoFisico, @mIdAttivita, @mIdUnitaMisura, @mIdProvenienza, @mUtenteNote);
+						(@idMovimento, @idRegistroFinale, @mIdOperazione, @IdModello, @mIdEer, @mIdStatoFisico, @mIdAttivita, @mIdUnitaMisura, @mIdProvenienza, @mUtenteNote);
 
 					IF @mIdAutorizzazioneProduttoreDetentore IS NOT NULL
 						INSERT dbo.tblRifiutiMovimentiProduttori (Id, IdAutorizzazione, Pos)

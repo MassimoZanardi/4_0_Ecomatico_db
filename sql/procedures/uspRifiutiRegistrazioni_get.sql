@@ -85,6 +85,7 @@ BEGIN
 			m.IdRegistro,
 			IdOperazione = ISNULL(m.IdOperazione, '0'),
 			OperazioneNome = ISNULL(o.Nome, ''),
+			OperazioneCodice = ISNULL(o.Codice, ''),
 			IdEer = ISNULL(m.IdEer, '000000'),
 			EerDescrizione = ISNULL(m.EerDescrizione, ''),
 			IdStatoFisico = ISNULL(m.IdStatoFisico, '0'),

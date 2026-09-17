@@ -1,3 +1,7 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiModelli_del]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -113,6 +117,12 @@ BEGIN
 				WHERE Id = @Id;
 				DELETE dbo.tblRifiutiModelliEtichette
 				WHERE Id = @Id;
+				DELETE dbo.tblRifiutiModelliRegistrazioniAutoEtichette
+				WHERE Id IN (SELECT Id
+				FROM dbo.tblRifiutiModelliRegistrazioniAuto
+				WHERE IdModello = @Id);
+				DELETE dbo.tblRifiutiModelliRegistrazioniAuto
+				WHERE IdModello = @Id;
 				DELETE dbo.tblRifiutiModelli
 				WHERE Id = @Id;
 				DELETE dbo.tblIdLog

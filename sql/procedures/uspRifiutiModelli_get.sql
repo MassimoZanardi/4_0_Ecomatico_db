@@ -64,6 +64,7 @@ BEGIN
 			Nome = ISNULL(m.Nome, ''),
 			IdOperazione = ISNULL(m.IdOperazione, '0'),
 			OperazioneNome = ISNULL(o.Nome, ''),
+			OperazioneCodice = ISNULL(o.Codice, ''),
 			IsFormulario = ISNULL(o.IsFormulario, 0),
 			IdEer = ISNULL(m.IdEer, '000000'),
 			IdProvenienza = ISNULL(m.IdProvenienza, 'S'),

@@ -8,6 +8,7 @@ CREATE TABLE [dbo].[tblRifiutiMovimenti](
 	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdRegistro] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdOperazione] [char](1) COLLATE Latin1_General_CI_AS NULL,
+	[IdModello] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdEer] [char](6) COLLATE Latin1_General_CI_AS NULL,
 	[IdStatoFisico] [char](1) COLLATE Latin1_General_CI_AS NULL,
 	[IdAttivita] [char](2) COLLATE Latin1_General_CI_AS NULL,
@@ -59,6 +60,13 @@ REFERENCES [dbo].[tblRifiutiEer] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiMovimenti] CHECK CONSTRAINT [FK_tblRifiutiMovimenti_tblRifiutiEer]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiMovimenti]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiMovimenti_tblRifiutiModelli] FOREIGN KEY([IdModello])
+REFERENCES [dbo].[tblRifiutiModelli] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiMovimenti] CHECK CONSTRAINT [FK_tblRifiutiMovimenti_tblRifiutiModelli]
 GO
 
 ALTER TABLE [dbo].[tblRifiutiMovimenti]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiMovimenti_tblRifiutiOperazioni] FOREIGN KEY([IdOperazione])

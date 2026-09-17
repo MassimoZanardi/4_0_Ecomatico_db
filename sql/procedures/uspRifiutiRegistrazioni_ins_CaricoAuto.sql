@@ -106,9 +106,15 @@ BEGIN
 		END
 
 		-- Operazione destinazione via lookup su Codice (mai sul singolo carattere Id, che non è
-		-- mnemonico: Id='M' ha Codice='NP', Id='K' ha Codice='M').
+		-- mnemonico: Id='M' ha Codice='NP', Id='K' ha Codice='M'). @operazioneGruppo è la colonna
+		-- 'Operazione' (raggruppamento S/C/X usato da tblRifiutiRegistrazioni.Operazione), diversa
+		-- dall'Id specifico che invece va su tblRifiutiMovimenti.IdOperazione — stesso schema di
+		-- uspRifiutiRegistrazioni_ins (@mOperazione vs @mIdOperazione).
 		DECLARE @idOperazioneDestinazione CHAR(1);
-		SELECT @idOperazioneDestinazione = Id
+		DECLARE @operazioneGruppo CHAR(1);
+		SELECT
+			@idOperazioneDestinazione = Id,
+			@operazioneGruppo = Operazione
 		FROM dbo.tblRifiutiOperazioni
 		WHERE Codice = IIF(@idMateriale IS NOT NULL, 'M', 'NP');
 
@@ -160,7 +166,7 @@ BEGIN
 			INSERT dbo.tblRifiutiRegistrazioni
 				(Id, IdMovimento, Operazione, [Data], Numero, QuantitaVerificata, IdMateriale, MaterialeDescrizione, Lock)
 			VALUES
-				(@returnId, @idMovimento, @idOperazioneDestinazione, @data, @numero, @Quantita, @idMateriale, @materialeDescrizione, 0);
+				(@returnId, @idMovimento, @operazioneGruppo, @data, @numero, @Quantita, @idMateriale, @materialeDescrizione, 0);
 
 			INSERT dbo.tblRifiutiRegistrazioniEtichette (Id, IdEtichetta)
 			SELECT @returnId, IdEtichetta

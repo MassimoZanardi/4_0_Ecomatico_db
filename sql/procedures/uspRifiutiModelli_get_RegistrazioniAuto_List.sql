@@ -63,19 +63,23 @@ BEGIN
 			ra.IdStatoFisico,
 			StatoFisicoNome = sf.Nome,
 			ra.IdUnitaMisura,
-			UnitaMisuraNome = um.Nome,
-			EtichetteNomi = (
-				SELECT STRING_AGG(e.Nome, ', ')
+			Etichette = (
+				SELECT
+					e.Nome,
+					Colore = IIF(e.Visualizzazione = 'C', c.Hex, c.Css),
+					e.Descrizione,
+					e.Visualizzazione
 				FROM
 					dbo.tblRifiutiModelliRegistrazioniAutoEtichette re
 					INNER JOIN dbo.tblEtichette e ON re.IdEtichetta = e.Id
-				WHERE re.Id = ra.Id)
+					INNER JOIN dbo.tblColori c ON e.IdColore = c.Id
+				WHERE re.Id = ra.Id
+				FOR JSON PATH)
 		FROM
 			dbo.tblRifiutiModelliRegistrazioniAuto ra
 			LEFT JOIN dbo.tblRifiutiEer eer ON ra.IdEer = eer.Id
 			LEFT JOIN dbo.tblRifiutiMateriali mat ON ra.IdMateriale = mat.Id
 			LEFT JOIN dbo.tblRifiutiStatiFisici sf ON ra.IdStatoFisico = sf.Id
-			LEFT JOIN dbo.tblUnitaMisura um ON ra.IdUnitaMisura = um.Id
 		WHERE
 			ra.IdModello = @IdModello
 			AND ra.Lock = 0

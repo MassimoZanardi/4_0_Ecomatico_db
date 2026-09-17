@@ -50,12 +50,15 @@ BEGIN
 			SET @returnMessage = 'Selezionare Eer oppure Materiale, non entrambi';
 			GOTO BRANCH_END;
 		END
-		IF @IdStatoFisico IS NULL
+		-- Lo Stato fisico non ha senso per il Materiale (per cui deve restare NULL).
+		IF @IdMateriale IS NULL AND @IdStatoFisico IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Il parametro @IdStatoFisico non può essere vuoto';
 			GOTO BRANCH_END;
 		END
+		IF @IdMateriale IS NOT NULL
+			SET @IdStatoFisico = NULL;
 		IF @IdUnitaMisura IS NULL
 		BEGIN
 			SET @returnValue = -1;

@@ -4,12 +4,19 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
+SET ANSI_PADDING ON
+GO
+
 CREATE TABLE [dbo].[tblEoWLotti](
 	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
-	[IdMagazzino] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdMateriale] [char](2) COLLATE Latin1_General_CI_AS NULL,
 	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
-	[QuantitaMax] [decimal](18, 2) NULL,
-	[Lock] [tinyint] NULL
+	[DataApertura] [date] NULL,
+	[DataChiusura] [date] NULL,
+	[QuantitaMax] [int] NULL,
+	[Disabilitato] [bit] NULL,
+	[Lock] [tinyint] NULL,
  CONSTRAINT [PK_tblEoWLotti] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
@@ -18,10 +25,18 @@ CREATE TABLE [dbo].[tblEoWLotti](
 
 GO
 
-ALTER TABLE [dbo].[tblEoWLotti]  WITH CHECK ADD  CONSTRAINT [FK_tblEoWLotti_tblEoWMagazzini] FOREIGN KEY([IdMagazzino])
-REFERENCES [dbo].[tblEoWMagazzini] ([Id])
+SET ANSI_PADDING OFF
 GO
 
-ALTER TABLE [dbo].[tblEoWLotti] CHECK CONSTRAINT [FK_tblEoWLotti_tblEoWMagazzini]
+ALTER TABLE [dbo].[tblEoWLotti]  WITH CHECK ADD  CONSTRAINT [FK_tblEoWLotti_tblRifiutiMateriali] FOREIGN KEY([IdMateriale])
+REFERENCES [dbo].[tblRifiutiMateriali] ([Id])
 GO
 
+ALTER TABLE [dbo].[tblEoWLotti] CHECK CONSTRAINT [FK_tblEoWLotti_tblRifiutiMateriali]
+GO
+
+ALTER TABLE [dbo].[tblEoWLotti]  WITH CHECK ADD  CONSTRAINT [FK_tblEoWLotti_tblSedi] FOREIGN KEY([IdSede])
+REFERENCES [dbo].[tblSedi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblEoWLotti] CHECK CONSTRAINT [FK_tblEoWLotti_tblSedi]

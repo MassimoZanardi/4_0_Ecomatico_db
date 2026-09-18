@@ -55,28 +55,39 @@ BEGIN
 		END
 
 		-- Registrazione di origine (scarico 'I'): titolarità + dati da ereditare (stessa Sede/Data/Registro).
+		-- Il produttore/detentore NON viene dalla registrazione di origine (uno scarico a trattamento
+		-- interno non ne ha uno), ma dal Modello usato per configurare la registrazione automatica.
 		DECLARE @idRegistro CHAR(16);
 		DECLARE @idModello CHAR(16);
 		DECLARE @data DATE;
-		DECLARE @idAutorizzazioneProduttoreDetentore CHAR(16);
 
 		SELECT
 			@idRegistro = m.IdRegistro,
 			@idModello = m.IdModello,
-			@data = r.[Data],
-			@idAutorizzazioneProduttoreDetentore = mp.IdAutorizzazione
+			@data = r.[Data]
 		FROM
 			dbo.tblRifiutiRegistrazioni r
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
 			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
-			LEFT JOIN dbo.tblRifiutiMovimentiProduttori mp ON m.Id = mp.Id AND mp.Pos = 0
 		WHERE r.Id = @IdRegistrazioneOrigine;
 
 		IF @idRegistro IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Registrazione di origine non trovata o non disponibile';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idAutorizzazioneProduttoreDetentore CHAR(16);
+		SELECT @idAutorizzazioneProduttoreDetentore = IdAutorizzazioneProduttoreDetentore
+		FROM dbo.tblRifiutiModelli
+		WHERE Id = @idModello;
+
+		IF @idAutorizzazioneProduttoreDetentore IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il modello non ha impostato il produttore o detentore, obbligatorio per le registrazioni automatiche';
 			GOTO BRANCH_END;
 		END
 
@@ -159,9 +170,8 @@ BEGIN
 			VALUES
 				(@idMovimento, @idRegistro, @idOperazioneDestinazione, @idEer, @eerDescrizione, @idStatoFisico, @idUnitaMisura, @Quantita);
 
-			IF @idAutorizzazioneProduttoreDetentore IS NOT NULL
-				INSERT dbo.tblRifiutiMovimentiProduttori (Id, IdAutorizzazione, Pos)
-				VALUES (@idMovimento, @idAutorizzazioneProduttoreDetentore, 0);
+			INSERT dbo.tblRifiutiMovimentiProduttori (Id, IdAutorizzazione, Pos)
+			VALUES (@idMovimento, @idAutorizzazioneProduttoreDetentore, 0);
 
 			INSERT dbo.tblRifiutiRegistrazioni
 				(Id, IdMovimento, Operazione, [Data], Numero, QuantitaVerificata, IdMateriale, MaterialeDescrizione, Lock)

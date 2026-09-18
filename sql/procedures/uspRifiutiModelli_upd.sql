@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiModelli_upd]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiModelli_upd]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@IdRegistro CHAR(16) = NULL,
@@ -142,6 +146,20 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Il produttore/detentore del Modello viene copiato sui carichi generati automaticamente
+		-- (uspRifiutiRegistrazioni_ins_CaricoAuto): con almeno una combinazione già configurata,
+		-- non può restare vuoto.
+		IF @IdAutorizzazioneProduttoreDetentore IS NULL AND EXISTS (
+			SELECT 1
+			FROM dbo.tblRifiutiModelliRegistrazioniAuto
+			WHERE IdModello = @Id AND Lock = 0
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare il produttore o detentore, obbligatorio con registrazioni automatiche impostate';
+			GOTO BRANCH_END;
+		END
+
 		-- IdOperazione è fisso sul modello (scelto alla creazione, non modificabile qui): da esso
 		-- deriviamo quali campi sono applicabili, imponendo NULL su quelli non pertinenti a
 		-- prescindere da cosa viene passato dal chiamante — non ci si fida che client/C# l'abbiano
@@ -262,3 +280,4 @@ BEGIN
 	END
 
 END;
+GO

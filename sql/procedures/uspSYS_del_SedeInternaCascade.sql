@@ -76,11 +76,10 @@ BEGIN
         SELECT Id INTO #Oggetti FROM dbo.tblOggetti WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #Magazzini FROM dbo.tblMagazzini WHERE IdSede IN (SELECT Id FROM #Sedi);
 
-        -- Gestione EoW: magazzini specifici EoW di proprietà della sede (solo sedi interne), con
-        -- i rispettivi lotti e movimenti - vedi project_eow_module_design in memoria persistente.
-        SELECT Id INTO #EoWMagazzini FROM dbo.tblEoWMagazzini WHERE IdSede IN (SELECT Id FROM #Sedi);
-        SELECT Id INTO #EoWLotti FROM dbo.tblEoWLotti WHERE IdMagazzino IN (SELECT Id FROM #EoWMagazzini);
-        SELECT Id INTO #EoWMovimenti FROM dbo.tblEoWMovimenti WHERE IdLotto IN (SELECT Id FROM #EoWLotti);
+        -- Gestione EoW: lotti/allocazioni specifici EoW di proprietà della sede (solo sedi interne,
+        -- IdSede diretto su entrambe le tabelle) - vedi project_eow_module_design in memoria persistente.
+        SELECT Id INTO #EoWLotti FROM dbo.tblEoWLotti WHERE IdSede IN (SELECT Id FROM #Sedi);
+        SELECT Id INTO #EoWAllocazioni FROM dbo.tblEoWAllocazioni WHERE IdSede IN (SELECT Id FROM #Sedi);
 
         -- tblSedi/tblPersone/tblOggetti sono sottotipi a chiave condivisa di tblOsepe (stesso Id)
         SELECT Id INTO #OsepeIds FROM (
@@ -156,20 +155,21 @@ BEGIN
             DELETE FROM dbo.tblRifiutiFormulariTrasportiTerresti     WHERE Id IN (SELECT Id FROM #RifiutiFormulari);
             DELETE FROM dbo.tblRifiutiFormulari                      WHERE Id IN (SELECT Id FROM #RifiutiFormulari);
 
-            -- Gestione EoW: va fatta prima di cancellare Registrazioni/Registri sottostanti, per
-            -- rispettare le FK di tblEoWMovimenti.IdRegistrazione e tblEoWMaterialiRegistri.IdRegistro/
-            -- IdLotto. I movimenti/lotti/magazzini EoW di questa sede vengono cancellati per intero
-            -- (non azzerati) perché sono risorse di proprietà esclusiva della sede stessa, non
-            -- condivise con altre sedi.
-            DELETE FROM dbo.tblEoWMovimentiRelazioni
-            WHERE Id       IN (SELECT Id FROM #EoWMovimenti)
-               OR IdParent IN (SELECT Id FROM #EoWMovimenti);
-            DELETE FROM dbo.tblEoWMovimenti WHERE Id IN (SELECT Id FROM #EoWMovimenti);
-            DELETE FROM dbo.tblEoWMaterialiRegistri
-            WHERE IdLotto    IN (SELECT Id FROM #EoWLotti)
-               OR IdRegistro IN (SELECT Id FROM #RifiutiRegistri);
-            DELETE FROM dbo.tblEoWLotti     WHERE Id IN (SELECT Id FROM #EoWLotti);
-            DELETE FROM dbo.tblEoWMagazzini WHERE Id IN (SELECT Id FROM #EoWMagazzini);
+            -- Gestione EoW: va fatta prima di cancellare Registrazioni sottostanti, per rispettare
+            -- la FK di tblEoWLottiRifiutiRegistrazioni.IdRegistrazione (NOT NULL, parte della PK
+            -- composta con IdLotto - non azzerabile, la riga di collegamento va sempre rimossa,
+            -- anche quando referenzia una Registrazione di questa sede legata a un Lotto di un'altra:
+            -- stesso motivo dell'OR su #RifiutiRegistrazioni). I lotti/allocazioni EoW di questa sede
+            -- vengono invece cancellati per intero (non azzerati) perché sono risorse di proprietà
+            -- esclusiva della sede stessa, non condivise con altre sedi.
+            DELETE FROM dbo.tblEoWLottiRifiutiRegistrazioni
+            WHERE IdLotto        IN (SELECT Id FROM #EoWLotti)
+               OR IdRegistrazione IN (SELECT Id FROM #RifiutiRegistrazioni);
+            DELETE FROM dbo.tblEoWLottiAllocazioni
+            WHERE IdLotto      IN (SELECT Id FROM #EoWLotti)
+               OR IdAllocazione IN (SELECT Id FROM #EoWAllocazioni);
+            DELETE FROM dbo.tblEoWLotti       WHERE Id IN (SELECT Id FROM #EoWLotti);
+            DELETE FROM dbo.tblEoWAllocazioni WHERE Id IN (SELECT Id FROM #EoWAllocazioni);
 
             DELETE FROM dbo.tblRifiutiRegistrazioniEtichette WHERE Id IN (SELECT Id FROM #RifiutiRegistrazioni);
 
@@ -295,9 +295,8 @@ BEGIN
                 UNION SELECT Id FROM #Etichette
                 UNION SELECT Id FROM #Eventi
                 UNION SELECT Id FROM #Magazzini
-                UNION SELECT Id FROM #EoWMagazzini
                 UNION SELECT Id FROM #EoWLotti
-                UNION SELECT Id FROM #EoWMovimenti
+                UNION SELECT Id FROM #EoWAllocazioni
                 UNION SELECT Id FROM #RifiutiAutorizzazioni
                 UNION SELECT Id FROM #RifiutiFormulari
                 UNION SELECT Id FROM #RifiutiModelli
@@ -317,7 +316,7 @@ BEGIN
 
         COMMIT TRANSACTION;
 
-        SET @returnMessage = CONCAT('Cancellazione completata. Sedi rimosse: ', @totaleSedi, '. Riferimenti esterni azzerati/rimossi su Etichette/Autorizzazioni condivise: ', @rifEsterniRimossi, '. Movimenti EoW rimossi: ', (SELECT COUNT(*) FROM #EoWMovimenti), ', Lotti EoW rimossi: ', (SELECT COUNT(*) FROM #EoWLotti), ', Magazzini EoW rimossi: ', (SELECT COUNT(*) FROM #EoWMagazzini), ', Limiti rifiuti rimossi: ', (SELECT COUNT(*) FROM #RifiutiLimiti), '.');
+        SET @returnMessage = CONCAT('Cancellazione completata. Sedi rimosse: ', @totaleSedi, '. Riferimenti esterni azzerati/rimossi su Etichette/Autorizzazioni condivise: ', @rifEsterniRimossi, '. Lotti EoW rimossi: ', (SELECT COUNT(*) FROM #EoWLotti), ', Allocazioni EoW rimosse: ', (SELECT COUNT(*) FROM #EoWAllocazioni), ', Limiti rifiuti rimossi: ', (SELECT COUNT(*) FROM #RifiutiLimiti), '.');
 
         SELECT @returnValue AS ReturnValue, @returnMessage AS ReturnMessage;
     END TRY

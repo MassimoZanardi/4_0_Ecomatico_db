@@ -68,13 +68,11 @@ BEGIN
             DELETE FROM dbo.tblRifiutiFormulariTrasportiTerresti   WHERE Id IN (SELECT Id FROM #RifiutiFormulari);
             DELETE FROM dbo.tblRifiutiFormulari                    WHERE Id IN (SELECT Id FROM #RifiutiFormulari);
 
-            -- Gestione EoW: il registro non ha magazzini/lotti propri, ma le sue Registrazioni
-            -- possono essere referenziate da tblEoWMovimenti.IdRegistrazione (nullable - si azzera
-            -- anziché cancellare il movimento, che resta un record di magazzino valido anche senza
-            -- la registrazione di origine) e la sua chiave da tblEoWMaterialiRegistri (configurazione
-            -- dell'automatismo per questo registro, va rimossa insieme al registro).
-            UPDATE dbo.tblEoWMovimenti SET IdRegistrazione = NULL WHERE IdRegistrazione IN (SELECT Id FROM #RifiutiRegistrazioni);
-            DELETE FROM dbo.tblEoWMaterialiRegistri WHERE IdRegistro = @IdRegistro;
+            -- Gestione EoW: il registro non ha più alcun legame con lotti/allocazioni EoW (che
+            -- referenziano solo Sede+Materiale), ma le sue Registrazioni in cancellazione possono
+            -- essere referenziate da tblEoWLottiRifiutiRegistrazioni.IdRegistrazione (NOT NULL,
+            -- parte della PK composta con IdLotto) - non azzerabile, va rimossa la riga di collegamento.
+            DELETE FROM dbo.tblEoWLottiRifiutiRegistrazioni WHERE IdRegistrazione IN (SELECT Id FROM #RifiutiRegistrazioni);
 
             DELETE FROM dbo.tblRifiutiRegistrazioniEtichette WHERE Id IN (SELECT Id FROM #RifiutiRegistrazioni);
 

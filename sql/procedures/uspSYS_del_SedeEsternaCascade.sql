@@ -150,13 +150,12 @@ BEGIN
             DELETE FROM dbo.tblRifiutiFormulariTrasportiTerresti     WHERE Id IN (SELECT Id FROM #RifiutiFormulari);
             DELETE FROM dbo.tblRifiutiFormulari                      WHERE Id IN (SELECT Id FROM #RifiutiFormulari);
 
-            -- Gestione EoW: questa sede esterna non ha magazzini/lotti EoW propri, ma il suo Registro
-            -- può essere referenziato da tblEoWMaterialiRegistri e le sue Registrazioni da
-            -- tblEoWMovimenti.IdRegistrazione (nullable - si azzera anziché cancellare il movimento,
-            -- che resta un record di magazzino valido di un magazzino interno anche senza la
-            -- registrazione di origine).
-            UPDATE dbo.tblEoWMovimenti SET IdRegistrazione = NULL WHERE IdRegistrazione IN (SELECT Id FROM #RifiutiRegistrazioni);
-            DELETE FROM dbo.tblEoWMaterialiRegistri WHERE IdRegistro IN (SELECT Id FROM #RifiutiRegistri);
+            -- Gestione EoW: questa sede esterna non ha lotti/allocazioni EoW propri (che referenziano
+            -- solo Sede Interna), ma le sue Registrazioni possono essere referenziate da
+            -- tblEoWLottiRifiutiRegistrazioni.IdRegistrazione (NOT NULL, parte della PK composta con
+            -- IdLotto) - non azzerabile come il vecchio tblEoWMovimenti.IdRegistrazione (nullable),
+            -- va rimossa la riga di collegamento; il Lotto di una sede interna resta intatto.
+            DELETE FROM dbo.tblEoWLottiRifiutiRegistrazioni WHERE IdRegistrazione IN (SELECT Id FROM #RifiutiRegistrazioni);
 
             DELETE FROM dbo.tblRifiutiRegistrazioniEtichette WHERE Id IN (SELECT Id FROM #RifiutiRegistrazioni);
 

@@ -39,13 +39,11 @@ BEGIN
             DELETE dbo.tblRifiutiFormulariTrasportiMarittimi  WHERE Id  IN (SELECT Id FROM #tf);
             DELETE dbo.tblRifiutiFormulariTrasportiTerresti   WHERE Id  IN (SELECT Id FROM #tf);
             DELETE dbo.tblRifiutiRegistrazioniEtichette  WHERE Id       IN (SELECT Id FROM #tr);
-            -- Gestione EoW: nessun registro viene cancellato da questa SP, solo movimenti/
-            -- registrazioni/formulari - tblEoWMaterialiRegistri resta quindi intatto (i suoi
-            -- IdRegistro restano validi). tblEoWMovimenti.IdRegistrazione è invece nullable e
-            -- referenzia le Registrazioni che stanno per essere cancellate: si azzera il
-            -- collegamento anziché cancellare il movimento, che resta un record di magazzino
-            -- valido anche senza la registrazione di origine.
-            UPDATE dbo.tblEoWMovimenti SET IdRegistrazione = NULL WHERE IdRegistrazione IN (SELECT Id FROM #tr);
+            -- Gestione EoW: tblEoWLottiRifiutiRegistrazioni.IdRegistrazione referenzia le
+            -- Registrazioni che stanno per essere cancellate ed è NOT NULL (parte della PK
+            -- composta con IdLotto) - non azzerabile come il vecchio tblEoWMovimenti.IdRegistrazione
+            -- (nullable), va rimossa la riga di collegamento; i Lotti/Allocazioni restano intatti.
+            DELETE dbo.tblEoWLottiRifiutiRegistrazioni WHERE IdRegistrazione IN (SELECT Id FROM #tr);
             -- tblRentriRegistrazioniRettifiche: FK su Id/IdRettifica verso tblRifiutiRegistrazioni,
             -- nessun ON DELETE CASCADE - va svuotata prima, altrimenti la DELETE sottostante fallisce
             -- per violazione FK se esiste anche una sola rettifica.

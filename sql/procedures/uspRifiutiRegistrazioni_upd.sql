@@ -265,7 +265,8 @@ BEGIN
 		IF @QuantitaVerificata = @Quantita
 			SET @QuantitaVerificata = NULL;
 
-		-- EER / StatoFisico / ClassiPericolo esclusivi con Materiale
+		-- EER / StatoFisico / ClassiPericolo esclusivi con Materiale; l'unità di misura per il
+		-- Materiale è sempre KG, a prescindere da cosa arrivi dal client (campo disabilitato in UI).
 		IF @isMateriale = 1
 		BEGIN
 			SET @IdEer = NULL;
@@ -273,6 +274,7 @@ BEGIN
 			SET @IdStatoFisico = NULL;
 			SET @ClassiPericolo = NULL;
 			SET @EerDescrizione = NULL;
+			SET @IdUnitaMisura = 'KG';
 			IF @IdMateriale = 'AL'
 				SET @MaterialeDescrizione = dbo.ufnStringhe_get_SenzaSpazi(@MaterialeDescrizione, 0, 1);
 			ELSE

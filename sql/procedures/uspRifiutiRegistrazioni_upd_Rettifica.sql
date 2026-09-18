@@ -133,16 +133,24 @@ BEGIN
 		DECLARE @idStatoFisicoNorm CHAR(1) = NULLIF(LTRIM(RTRIM(@IdStatoFisico)), '');
 		DECLARE @idUnitaMisuraNorm CHAR(2) = ISNULL(NULLIF(LTRIM(RTRIM(@IdUnitaMisura)), ''), 'KG');
 
-		DECLARE @originaleIdEer CHAR(6), @originaleIdStatoFisico CHAR(1), @originaleIdUnitaMisura CHAR(2), @originaleQuantita DECIMAL(18, 2);
+		DECLARE @originaleIdEer CHAR(6), @originaleIdStatoFisico CHAR(1), @originaleIdUnitaMisura CHAR(2), @originaleQuantita DECIMAL(18, 2), @originaleIdMateriale CHAR(2);
 		SELECT
 			@originaleIdEer = mo.IdEer,
 			@originaleIdStatoFisico = mo.IdStatoFisico,
 			@originaleIdUnitaMisura = mo.IdUnitaMisura,
-			@originaleQuantita = mo.Quantita
+			@originaleQuantita = mo.Quantita,
+			@originaleIdMateriale = ro.IdMateriale
 		FROM
 			dbo.tblRifiutiRegistrazioni ro
 			INNER JOIN dbo.tblRifiutiMovimenti mo ON ro.IdMovimento = mo.Id
 		WHERE ro.Id = @idOriginale;
+
+		-- L'unità di misura per il Materiale è sempre KG (stesso vincolo di uspRifiutiRegistrazioni_upd,
+		-- richiamata più sotto per il salvataggio della rettifica stessa): qui serve anche per il gate di
+		-- confronto e per la propagazione sull'originale, quindi derivata dal Materiale dell'originale
+		-- (server-side, non dal parametro client) invece di fidarsi di @IdUnitaMisura.
+		IF @originaleIdMateriale IS NOT NULL
+			SET @idUnitaMisuraNorm = 'KG';
 
 		-- Punto 4: relazione carico/scarico attiva sull'originale, su entrambi i lati (figlio e padre) -
 		-- Eer/StatoFisico/UnitaMisura/Quantita restano bloccati sui valori correnti dell'originale

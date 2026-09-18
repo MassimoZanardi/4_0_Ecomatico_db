@@ -172,10 +172,6 @@ BEGIN
 		ELSE IF @lock = 2
 		BEGIN
 			BEGIN TRANSACTION;
-				-- Gestione EoW: la configurazione dell'automatismo per questo registro
-				-- (tblEoWMaterialiRegistri.IdRegistro) va rimossa prima del registro stesso.
-				DELETE dbo.tblEoWMaterialiRegistri
-				WHERE IdRegistro = @Id;
 
 				-- tblRifiutiLimiti.IdRegistro è nullable e il Limite appartiene alla Sede (non al
 				-- Registro): un Limite scoped a questo registro perde solo lo scoping specifico,

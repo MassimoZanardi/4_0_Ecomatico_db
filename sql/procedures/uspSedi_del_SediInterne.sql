@@ -160,16 +160,29 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			-- Gestione EoW: stesso controllo del magazzino tradizionale, sui magazzini EoW propri della sede
+			-- Gestione EoW: stesso controllo del magazzino tradizionale, su lotti/allocazioni EoW
+			-- proprie della sede (IdSede è sempre la Sede Interna, non quella esterna condivisa)
 			IF EXISTS (SELECT 1
-			FROM dbo.tblEoWMagazzini
+			FROM dbo.tblEoWLotti
 			WHERE
 				IdSede = @Id
 				AND Lock = 0
 			)
 			BEGIN
 				SET @returnValue = -1;
-				SET @returnMessage = 'Una sede con magazzini EoW associati non può essere cancellata';
+				SET @returnMessage = 'Una sede con lotti EoW associati non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (SELECT 1
+			FROM dbo.tblEoWAllocazioni
+			WHERE
+				IdSede = @Id
+				AND Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con allocazioni EoW associate non può essere cancellata';
 				GOTO BRANCH_END;
 			END
 
@@ -391,34 +404,26 @@ BEGIN
 				DELETE dbo.tblMagazzini
 				WHERE IdSede = @Id;
 
-				-- Gestione EoW: magazzini/lotti/movimenti EoW di proprietà esclusiva della sede, e
-				-- le configurazioni MaterialiRegistri legate ai lotti o ai registri in cancellazione
-				-- (stesso ordine/logica di uspSYS_del_SedeInternaCascade).
-				DELETE r
-				FROM dbo.tblEoWMovimentiRelazioni r
-				INNER JOIN dbo.tblEoWMovimenti m ON r.Id = m.Id OR r.IdParent = m.Id
-				INNER JOIN dbo.tblEoWLotti l ON m.IdLotto = l.Id
-				INNER JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id
-				WHERE g.IdSede = @Id;
+				-- Gestione EoW: lotti/allocazioni EoW di proprietà esclusiva della sede (IdSede sempre
+				-- Sede Interna) e le loro righe di collegamento M:N, nell'ordine figlio->padre richiesto
+				-- dalle FK NO_ACTION (stesso ordine/logica di uspSYS_del_SedeInternaCascade).
+				DELETE lrr
+				FROM dbo.tblEoWLottiRifiutiRegistrazioni lrr
+				INNER JOIN dbo.tblEoWLotti l ON lrr.IdLotto = l.Id
+				WHERE l.IdSede = @Id;
 
-				DELETE m
-				FROM dbo.tblEoWMovimenti m
-				INNER JOIN dbo.tblEoWLotti l ON m.IdLotto = l.Id
-				INNER JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id
-				WHERE g.IdSede = @Id;
-
-				DELETE mr
-				FROM dbo.tblEoWMaterialiRegistri mr
+				DELETE la
+				FROM dbo.tblEoWLottiAllocazioni la
+				LEFT JOIN dbo.tblEoWLotti l ON la.IdLotto = l.Id
+				LEFT JOIN dbo.tblEoWAllocazioni al ON la.IdAllocazione = al.Id
 				WHERE
-					mr.IdLotto IN (SELECT l.Id FROM dbo.tblEoWLotti l INNER JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id WHERE g.IdSede = @Id)
-					OR mr.IdRegistro IN (SELECT Id FROM dbo.tblRifiutiRegistri WHERE IdSede = @Id);
+					l.IdSede = @Id
+					OR al.IdSede = @Id;
 
-				DELETE l
-				FROM dbo.tblEoWLotti l
-				INNER JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id
-				WHERE g.IdSede = @Id;
+				DELETE dbo.tblEoWLotti
+				WHERE IdSede = @Id;
 
-				DELETE dbo.tblEoWMagazzini
+				DELETE dbo.tblEoWAllocazioni
 				WHERE IdSede = @Id;
 
 				DELETE dbo.tblRifiutiAutorizzazioni

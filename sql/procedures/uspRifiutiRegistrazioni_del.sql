@@ -208,8 +208,10 @@ BEGIN
 						AND @idFormulario IS NULL;
 					DELETE dbo.tblRifiutiRegistrazioniEtichette
 					WHERE Id = @Id;
-					UPDATE dbo.tblEoWMovimenti
-					SET IdRegistrazione = NULL
+					-- Gestione EoW: tblEoWLottiRifiutiRegistrazioni.IdRegistrazione è NOT NULL (fa parte
+					-- della PK composta con IdLotto) - non si può azzerare come il vecchio
+					-- tblEoWMovimenti.IdRegistrazione (nullable), va rimossa la riga di collegamento.
+					DELETE dbo.tblEoWLottiRifiutiRegistrazioni
 					WHERE IdRegistrazione = @Id;
 					DELETE dbo.tblRentriRegistrazioniRettifiche
 					WHERE
@@ -330,13 +332,10 @@ BEGIN
 					AND @idFormulario IS NULL;
 				DELETE dbo.tblRifiutiRegistrazioniEtichette
 				WHERE Id = @Id;
-				-- Gestione EoW: tblEoWMovimenti.IdRegistrazione (nullable) può referenziare questa
-				-- registrazione se l'automatismo sulla causale K l'ha già collegata a un movimento
-				-- di magazzino EoW - si azzera il collegamento anziché bloccare la cancellazione,
-				-- il movimento resta un record di magazzino valido anche senza la registrazione di
-				-- origine (stesso pattern di uspSYS_del_RegistroCascade).
-				UPDATE dbo.tblEoWMovimenti
-				SET IdRegistrazione = NULL
+				-- Gestione EoW: tblEoWLottiRifiutiRegistrazioni.IdRegistrazione è NOT NULL (fa parte
+				-- della PK composta con IdLotto) - non si può azzerare come il vecchio
+				-- tblEoWMovimenti.IdRegistrazione (nullable), va rimossa la riga di collegamento.
+				DELETE dbo.tblEoWLottiRifiutiRegistrazioni
 				WHERE IdRegistrazione = @Id;
 				-- Bozza di rettifica mai confermata: nessun valore è mai stato propagato sull'originale
 				-- (la propagazione avviene solo in uspRifiutiRegistrazioni_upd_Rettifica al salvataggio),

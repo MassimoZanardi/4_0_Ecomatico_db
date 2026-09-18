@@ -59,6 +59,10 @@ BEGIN
 		END
 		IF @IdMateriale IS NOT NULL
 			SET @IdStatoFisico = NULL;
+		-- L'unità di misura per il Materiale è sempre KG: non ci si fida che client/C# l'abbiano
+		-- già impostata correttamente (il campo è disabilitato lato UI quando si seleziona Materiale).
+		IF @IdMateriale IS NOT NULL
+			SET @IdUnitaMisura = 'KG';
 		IF @IdUnitaMisura IS NULL
 		BEGIN
 			SET @returnValue = -1;

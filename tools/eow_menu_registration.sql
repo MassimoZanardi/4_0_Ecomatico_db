@@ -7,7 +7,12 @@ SET NOCOUNT ON;
 
 INSERT INTO dbo.tblModuli (Id, Nome, Attivo) VALUES ('EOW', 'Gestione EoW', 1);
 
-INSERT INTO dbo.tblPagineAree (Id, Nome, Icon) VALUES ('EOW', 'Gestione EoW', 'fal fa-recycle');
+-- Nome DEVE essere una singola parola che, in minuscolo, coincide col prefisso di route
+-- dell'area applicativa (qui "eow", da @page "/eow/..."): SideBarMenuViewComponent
+-- (Pages/Shared/Components/SideBarMenu/Default.cshtml) costruisce l'href della pagina come
+-- "/" + item.Nome.ToLower() + itemSub.Pagina, NON usa un codice separato - "Gestione EoW"
+-- (con spazio) romperebbe il link generando "/gestione eow/..." invece di "/eow/...".
+INSERT INTO dbo.tblPagineAree (Id, Nome, Icon) VALUES ('EOW', 'EoW', 'fal fa-recycle');
 
 INSERT INTO dbo.tblFunzioni (Id, Nome, Master, Admin, Attiva) VALUES ('EOW', 'Gestione EoW', 0, 0, 1);
 

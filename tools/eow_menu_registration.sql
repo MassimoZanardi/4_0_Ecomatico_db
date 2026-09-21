@@ -18,8 +18,10 @@ INSERT INTO dbo.tblPagine (Id, IdFunzione, Nome, Url, Note) VALUES
     ('EWM', 'EOW', 'Magazzini', NULL, NULL),
     ('EWA', 'EOW', 'Allocazioni', NULL, NULL);
 
--- Riga Area (contenitore, Pos=7 = dopo Impostazioni, ultima nella sidebar)
-INSERT INTO dbo.tblMenu (Id, IdParent, IdArea, IdPagina, Pos) VALUES ('AH0', NULL, 'EOW', NULL, 7);
+-- Riga Area (contenitore). Posizione richiesta dall'utente: dopo Rentri (Pos=5), prima di
+-- Impostazioni - Impostazioni (AZ0) va quindi spostata da Pos=6 a Pos=7.
+UPDATE dbo.tblMenu SET Pos = 7 WHERE Id = 'AZ0';
+INSERT INTO dbo.tblMenu (Id, IdParent, IdArea, IdPagina, Pos) VALUES ('AH0', NULL, 'EOW', NULL, 6);
 
 -- Righe pagina sotto l'Area
 INSERT INTO dbo.tblMenu (Id, IdParent, IdArea, IdPagina, Pos) VALUES

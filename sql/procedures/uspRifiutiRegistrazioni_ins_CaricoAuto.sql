@@ -60,11 +60,13 @@ BEGIN
 		DECLARE @idRegistro CHAR(16);
 		DECLARE @idModello CHAR(16);
 		DECLARE @data DATE;
+		DECLARE @operazioneOrigine CHAR(1);
 
 		SELECT
 			@idRegistro = m.IdRegistro,
 			@idModello = m.IdModello,
-			@data = r.[Data]
+			@data = r.[Data],
+			@operazioneOrigine = r.Operazione
 		FROM
 			dbo.tblRifiutiRegistrazioni r
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
@@ -159,6 +161,16 @@ BEGIN
 
 		DECLARE @idMovimento CHAR(16);
 
+		-- Posizione della nuova relazione tra le eventuali altre già esistenti sotto lo stesso padre
+		-- (stesso schema di uspRifiutiRegistrazioni_ins_Relazione)
+		DECLARE @pos INT;
+		SELECT @pos = ISNULL(MAX(s.Pos), -1) + 1
+		FROM dbo.tblRifiutiRegistrazioniRelazioni s
+		INNER JOIN dbo.tblRifiutiRegistrazioni r ON s.Id = r.Id
+		WHERE
+			s.IdParent = @IdRegistrazioneOrigine
+			AND r.Lock < 2;
+
 		-- uspId_get gestisce la propria transazione internamente: chiamate FUORI dalla transazione
 		EXEC dbo.uspId_get @IdSessione = @IdSessione, @NoLog = 1, @Id = @idMovimento OUTPUT;
 		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
@@ -177,6 +189,15 @@ BEGIN
 				(Id, IdMovimento, Operazione, [Data], Numero, QuantitaVerificata, IdMateriale, MaterialeDescrizione, Lock)
 			VALUES
 				(@returnId, @idMovimento, @operazioneGruppo, @data, @numero, @Quantita, @idMateriale, @materialeDescrizione, 0);
+
+			-- Relazione carico(figlio, il nuovo @returnId)/scarico(padre, la registrazione di origine) -
+			-- mancava del tutto, il carico auto restava senza legame con lo scarico che lo ha generato.
+			-- Il padre resta volutamente a Lock=0 (non 1 "da confermare" come nel percorso manuale di
+			-- uspRifiutiRegistrazioni_ins_Relazione): è già stato confermato nello stesso salvataggio
+			-- che genera i carichi automatici, riportarlo a "da confermare" vanificherebbe il flusso a
+			-- salvataggio unico voluto per questa funzionalità.
+			INSERT dbo.tblRifiutiRegistrazioniRelazioni (Id, IdParent, Operazione, Quantita, Pos)
+			VALUES (@returnId, @IdRegistrazioneOrigine, @operazioneOrigine, @Quantita, @pos);
 
 			INSERT dbo.tblRifiutiRegistrazioniEtichette (Id, IdEtichetta)
 			SELECT @returnId, IdEtichetta

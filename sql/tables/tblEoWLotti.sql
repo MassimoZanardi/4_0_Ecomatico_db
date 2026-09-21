@@ -15,7 +15,7 @@ CREATE TABLE [dbo].[tblEoWLotti](
 	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[DataApertura] [date] NULL,
 	[DataChiusura] [date] NULL,
-	[QuantitaMax] [int] NULL,
+	[QuantitaMax] [decimal](18, 2) NULL,
 	[Disabilitato] [bit] NULL,
 	[Lock] [tinyint] NULL,
  CONSTRAINT [PK_tblEoWLotti] PRIMARY KEY CLUSTERED 

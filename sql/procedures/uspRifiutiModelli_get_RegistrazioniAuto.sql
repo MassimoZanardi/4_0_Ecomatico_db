@@ -54,6 +54,11 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- EerNome/MaterialeNome: mancavano del tutto - il payload JSON arrivava al modale di modifica
+		-- (Pages/Rifiuti/Modelli/Edit.cshtml, registrazioneAutoEdit) senza la descrizione necessaria
+		-- per aggiungere l'opzione mancante nella select EER quando il codice non è tra quelle già
+		-- caricate a inizio pagina - stessa risoluzione già presente in
+		-- uspRifiutiModelli_get_RegistrazioniAuto_List, qui replicata.
 		SELECT
 			ra.Id,
 			ra.IdModello,
@@ -61,14 +66,19 @@ BEGIN
 			ra.Percentuale,
 			IsMateriale = CAST(IIF(ra.IdMateriale IS NOT NULL, 1, 0) AS BIT),
 			ra.IdEer,
+			EerNome = eer.Nome + ISNULL(' - ' + eer.Descrizione, ''),
 			ra.IdMateriale,
+			MaterialeNome = mat.Nome,
 			ra.IdStatoFisico,
 			ra.IdUnitaMisura,
 			IdEtichette = (
 				SELECT STRING_AGG(IdEtichetta, ';')
 				FROM dbo.tblRifiutiModelliRegistrazioniAutoEtichette
 				WHERE Id = ra.Id)
-		FROM dbo.tblRifiutiModelliRegistrazioniAuto ra
+		FROM
+			dbo.tblRifiutiModelliRegistrazioniAuto ra
+			LEFT JOIN dbo.tblRifiutiEer eer ON ra.IdEer = eer.Id
+			LEFT JOIN dbo.tblRifiutiMateriali mat ON ra.IdMateriale = mat.Id
 		WHERE ra.Id = @Id;
 
 	END TRY

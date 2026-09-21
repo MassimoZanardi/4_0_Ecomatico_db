@@ -60,11 +60,13 @@ BEGIN
 		DECLARE @idRegistro CHAR(16);
 		DECLARE @idModello CHAR(16);
 		DECLARE @data DATE;
+		DECLARE @quantitaOrigine DECIMAL(18, 2);
 
 		SELECT
 			@idRegistro = m.IdRegistro,
 			@idModello = m.IdModello,
-			@data = r.[Data]
+			@data = r.[Data],
+			@quantitaOrigine = m.Quantita
 		FROM
 			dbo.tblRifiutiRegistrazioni r
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
@@ -76,6 +78,29 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Registrazione di origine non trovata o non disponibile';
+			GOTO BRANCH_END;
+		END
+
+		-- Verifica quantità già scaricata (stesso pattern di uspRifiutiRegistrazioni_upd, righe
+		-- ~554-572): la somma dei carichi già generati/associati dallo scarico di origine, più
+		-- questo nuovo, non può superare la quantità totale dello scarico stesso - altrimenti la
+		-- quantità residua diventa negativa (bug reale trovato sui dati: scarico da 30 kg con 5
+		-- carichi generati per un totale di 33,60 kg).
+		DECLARE @quantitaGiaAssociata DECIMAL(18, 2) = ISNULL((
+			SELECT SUM(l.Quantita)
+			FROM
+				dbo.tblRifiutiRegistrazioniRelazioni l
+				INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
+			WHERE
+				l.Id = @IdRegistrazioneOrigine
+				AND l.Quantita > 0
+				AND rp.Lock < 2
+		), 0);
+
+		IF @quantitaGiaAssociata + @Quantita > ISNULL(@quantitaOrigine, 0)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La quantità supera quella residua disponibile sulla registrazione di origine';
 			GOTO BRANCH_END;
 		END
 

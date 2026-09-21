@@ -159,19 +159,14 @@ BEGIN
 
 		DECLARE @idMovimento CHAR(16);
 
-		-- Posizione della nuova relazione tra le eventuali altre già esistenti sotto lo stesso padre
-		-- (stesso schema di uspRifiutiRegistrazioni_ins_Relazione)
-		DECLARE @pos INT;
-		SELECT @pos = ISNULL(MAX(s.Pos), -1) + 1
-		FROM dbo.tblRifiutiRegistrazioniRelazioni s
-		INNER JOIN dbo.tblRifiutiRegistrazioni r ON s.Id = r.Id
-		WHERE
-			s.IdParent = @IdRegistrazioneOrigine
-			AND r.Lock < 2;
-
 		-- uspId_get gestisce la propria transazione internamente: chiamate FUORI dalla transazione
 		EXEC dbo.uspId_get @IdSessione = @IdSessione, @NoLog = 1, @Id = @idMovimento OUTPUT;
 		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
+
+		-- @returnId è appena stato generato in questa stessa esecuzione: non può già esistere
+		-- nessuna relazione con IdParent = @returnId, la posizione è sempre 0 (stesso schema di
+		-- calcolo di uspRifiutiRegistrazioni_ins_Relazione, qui degenera per costruzione).
+		DECLARE @pos INT = 0;
 
 		BEGIN TRANSACTION;
 
@@ -188,16 +183,18 @@ BEGIN
 			VALUES
 				(@returnId, @idMovimento, @operazioneGruppo, @data, @numero, @Quantita, @idMateriale, @materialeDescrizione, 0);
 
-			-- Relazione carico(figlio, il nuovo @returnId)/scarico(padre, la registrazione di origine) -
-			-- mancava del tutto, il carico auto restava senza legame con lo scarico che lo ha generato.
-			-- Operazione = @operazioneGruppo, l'Operazione del FIGLIO (sempre 'C' per NP/M, già
-			-- calcolata sopra), non quella del padre (che essendo uno scarico 'I' sarebbe 'S').
-			-- Il padre resta volutamente a Lock=0 (non 1 "da confermare" come nel percorso manuale di
-			-- uspRifiutiRegistrazioni_ins_Relazione): è già stato confermato nello stesso salvataggio
-			-- che genera i carichi automatici, riportarlo a "da confermare" vanificherebbe il flusso a
-			-- salvataggio unico voluto per questa funzionalità.
+			-- Relazione mancava del tutto, il carico auto restava senza legame con lo scarico che lo ha
+			-- generato. Verificato sui dati reali (registrazione Id=65bddb1e1fe94a5a, carico K/M) contro
+			-- una relazione creata manualmente: Id = la registrazione di SCARICO (qui l'origine 'I'),
+			-- IdParent = la registrazione di CARICO (qui il nuovo @returnId) - il verso opposto a quanto
+			-- inserito nel primo tentativo. Operazione = @operazioneGruppo, l'Operazione del CARICO
+			-- (sempre 'C' per NP/M, già calcolata sopra) - coerente perché ora è anche l'Operazione
+			-- propria di IdParent, stesso schema di uspRifiutiRegistrazioni_ins_Relazione (Operazione =
+			-- Operazione del padre).
+			-- Il padre (qui il nuovo carico, non l'origine) resta comunque a Lock=0: è la registrazione
+			-- appena creata in questa stessa transazione, non passa mai da "da confermare".
 			INSERT dbo.tblRifiutiRegistrazioniRelazioni (Id, IdParent, Operazione, Quantita, Pos)
-			VALUES (@returnId, @IdRegistrazioneOrigine, @operazioneGruppo, @Quantita, @pos);
+			VALUES (@IdRegistrazioneOrigine, @returnId, @operazioneGruppo, @Quantita, @pos);
 
 			INSERT dbo.tblRifiutiRegistrazioniEtichette (Id, IdEtichetta)
 			SELECT @returnId, IdEtichetta

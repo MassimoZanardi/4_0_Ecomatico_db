@@ -60,13 +60,11 @@ BEGIN
 		DECLARE @idRegistro CHAR(16);
 		DECLARE @idModello CHAR(16);
 		DECLARE @data DATE;
-		DECLARE @operazioneOrigine CHAR(1);
 
 		SELECT
 			@idRegistro = m.IdRegistro,
 			@idModello = m.IdModello,
-			@data = r.[Data],
-			@operazioneOrigine = r.Operazione
+			@data = r.[Data]
 		FROM
 			dbo.tblRifiutiRegistrazioni r
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
@@ -192,12 +190,14 @@ BEGIN
 
 			-- Relazione carico(figlio, il nuovo @returnId)/scarico(padre, la registrazione di origine) -
 			-- mancava del tutto, il carico auto restava senza legame con lo scarico che lo ha generato.
+			-- Operazione = @operazioneGruppo, l'Operazione del FIGLIO (sempre 'C' per NP/M, già
+			-- calcolata sopra), non quella del padre (che essendo uno scarico 'I' sarebbe 'S').
 			-- Il padre resta volutamente a Lock=0 (non 1 "da confermare" come nel percorso manuale di
 			-- uspRifiutiRegistrazioni_ins_Relazione): è già stato confermato nello stesso salvataggio
 			-- che genera i carichi automatici, riportarlo a "da confermare" vanificherebbe il flusso a
 			-- salvataggio unico voluto per questa funzionalità.
 			INSERT dbo.tblRifiutiRegistrazioniRelazioni (Id, IdParent, Operazione, Quantita, Pos)
-			VALUES (@returnId, @IdRegistrazioneOrigine, @operazioneOrigine, @Quantita, @pos);
+			VALUES (@returnId, @IdRegistrazioneOrigine, @operazioneGruppo, @Quantita, @pos);
 
 			INSERT dbo.tblRifiutiRegistrazioniEtichette (Id, IdEtichetta)
 			SELECT @returnId, IdEtichetta

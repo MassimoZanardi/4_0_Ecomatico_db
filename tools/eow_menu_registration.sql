@@ -18,10 +18,15 @@ INSERT INTO dbo.tblFunzioni (Id, Nome, Master, Admin, Attiva) VALUES ('EOW', 'Ge
 
 INSERT INTO dbo.tblModuliFunzioni (Id, IdFunzione) VALUES ('EOW', 'EOW');
 
+-- Giacenze: una sola voce di menu (Url='giacenze/lotto', la vista di default) - Magazzino e
+-- Carichi si raggiungono con un dropdown IN PAGINA (Pages/Eow/Giacenze/Lotto.cshtml), stesso
+-- pattern di uspRifiutiGiacenze/RGC (tblPagine.Url='giacenze/eer', Materiale/Etichette/Carichi
+-- sono link interni alla pagina, non voci di menu separate).
 INSERT INTO dbo.tblPagine (Id, IdFunzione, Nome, Url, Note) VALUES
     ('EWL', 'EOW', 'Lotti', NULL, NULL),
     ('EWM', 'EOW', 'Magazzini', NULL, NULL),
-    ('EWA', 'EOW', 'Allocazioni', NULL, NULL);
+    ('EWA', 'EOW', 'Allocazioni', NULL, NULL),
+    ('EWG', 'EOW', 'Giacenze', 'giacenze/lotto', NULL);
 
 -- Riga Area (contenitore). Posizione richiesta dall'utente: dopo Rentri (Pos=5), prima di
 -- Impostazioni - Impostazioni (AZ0) va quindi spostata da Pos=6 a Pos=7.
@@ -32,4 +37,5 @@ INSERT INTO dbo.tblMenu (Id, IdParent, IdArea, IdPagina, Pos) VALUES ('AH0', NUL
 INSERT INTO dbo.tblMenu (Id, IdParent, IdArea, IdPagina, Pos) VALUES
     ('AH1', 'AH0', NULL, 'EWL', 0),
     ('AH2', 'AH0', NULL, 'EWM', 1),
-    ('AH3', 'AH0', NULL, 'EWA', 2);
+    ('AH3', 'AH0', NULL, 'EWA', 2),
+    ('AH4', 'AH0', NULL, 'EWG', 3);

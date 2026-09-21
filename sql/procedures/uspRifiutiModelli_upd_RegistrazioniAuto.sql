@@ -79,18 +79,37 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Titolarità: incatenata da tblRifiutiModelliRegistrazioniAuto a tblRifiutiModelli.
-		IF NOT EXISTS (
-			SELECT 1
-			FROM
-				dbo.tblRifiutiModelliRegistrazioniAuto ra
-				INNER JOIN dbo.tblRifiutiModelli m ON ra.IdModello = m.Id
-				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
-			WHERE ra.Id = @Id)
+		-- Titolarità: incatenata da tblRifiutiModelliRegistrazioniAuto a tblRifiutiModelli. Recupera
+		-- anche l'IdModello, serve per il controllo di somma percentuali sotto.
+		DECLARE @idModello CHAR(16);
+		SELECT @idModello = ra.IdModello
+		FROM
+			dbo.tblRifiutiModelliRegistrazioniAuto ra
+			INNER JOIN dbo.tblRifiutiModelli m ON ra.IdModello = m.Id
+			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+		WHERE ra.Id = @Id;
+
+		IF @idModello IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- La somma delle percentuali delle righe attive (esclusa questa stessa, che viene
+		-- sostituita) non può superare 100 - stesso motivo di uspRifiutiModelli_ins_RegistrazioniAuto.
+		IF @Percentuale + ISNULL((
+			SELECT SUM(Percentuale)
+			FROM dbo.tblRifiutiModelliRegistrazioniAuto
+			WHERE
+				IdModello = @idModello
+				AND Lock = 0
+				AND Id <> @Id
+		), 0) > 100
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La somma delle percentuali delle registrazioni automatiche non può superare 100';
 			GOTO BRANCH_END;
 		END
 

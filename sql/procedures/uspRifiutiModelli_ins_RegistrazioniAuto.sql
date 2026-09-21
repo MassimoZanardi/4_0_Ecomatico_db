@@ -122,6 +122,22 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- La somma delle percentuali delle righe attive non può superare 100: altrimenti la
+		-- generazione automatica (uspRifiutiRegistrazioni_ins_CaricoAuto) produrrebbe sempre più
+		-- materiale di quanto scaricato, sforando la quantità residua dello scarico di origine.
+		IF @Percentuale + ISNULL((
+			SELECT SUM(Percentuale)
+			FROM dbo.tblRifiutiModelliRegistrazioniAuto
+			WHERE
+				IdModello = @IdModello
+				AND Lock = 0
+		), 0) > 100
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La somma delle percentuali delle registrazioni automatiche non può superare 100';
+			GOTO BRANCH_END;
+		END
+
 		DECLARE @posizione INT = 1 + ISNULL((SELECT MAX(Posizione)
 		FROM dbo.tblRifiutiModelliRegistrazioniAuto
 		WHERE

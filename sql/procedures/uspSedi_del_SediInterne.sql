@@ -187,6 +187,18 @@ BEGIN
 			END
 
 			IF EXISTS (SELECT 1
+			FROM dbo.tblEoWMagazzini
+			WHERE
+				IdSede = @Id
+				AND Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con magazzini EoW associati non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (SELECT 1
 			FROM dbo.tblRifiutiRegistri
 			WHERE
 				IdSede = @Id
@@ -424,6 +436,13 @@ BEGIN
 				WHERE IdSede = @Id;
 
 				DELETE dbo.tblEoWAllocazioni
+				WHERE IdSede = @Id;
+
+				-- tblEoWLotti.IdMagazzino (FK NO_ACTION) va rimosso prima: i Lotti di questa sede sono
+				-- già stati cancellati sopra, un eventuale Lotto esterno che referenziasse un Magazzino
+				-- di questa sede è di fatto irraggiungibile in pratica (bozza non linkabile da UI prima
+				-- della finalizzazione), mantenuto per difesa dalla FK.
+				DELETE dbo.tblEoWMagazzini
 				WHERE IdSede = @Id;
 
 				DELETE dbo.tblRifiutiAutorizzazioni

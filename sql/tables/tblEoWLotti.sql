@@ -10,6 +10,7 @@ GO
 CREATE TABLE [dbo].[tblEoWLotti](
 	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdMagazzino] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdMateriale] [char](2) COLLATE Latin1_General_CI_AS NULL,
 	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[DataApertura] [date] NULL,
@@ -26,6 +27,13 @@ CREATE TABLE [dbo].[tblEoWLotti](
 GO
 
 SET ANSI_PADDING OFF
+GO
+
+ALTER TABLE [dbo].[tblEoWLotti]  WITH CHECK ADD  CONSTRAINT [FK_tblEoWLotti_tblEoWMagazzini] FOREIGN KEY([IdMagazzino])
+REFERENCES [dbo].[tblEoWMagazzini] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblEoWLotti] CHECK CONSTRAINT [FK_tblEoWLotti_tblEoWMagazzini]
 GO
 
 ALTER TABLE [dbo].[tblEoWLotti]  WITH CHECK ADD  CONSTRAINT [FK_tblEoWLotti_tblRifiutiMateriali] FOREIGN KEY([IdMateriale])

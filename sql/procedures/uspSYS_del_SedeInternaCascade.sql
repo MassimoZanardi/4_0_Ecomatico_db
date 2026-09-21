@@ -76,10 +76,12 @@ BEGIN
         SELECT Id INTO #Oggetti FROM dbo.tblOggetti WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #Magazzini FROM dbo.tblMagazzini WHERE IdSede IN (SELECT Id FROM #Sedi);
 
-        -- Gestione EoW: lotti/allocazioni specifici EoW di proprietà della sede (solo sedi interne,
-        -- IdSede diretto su entrambe le tabelle) - vedi project_eow_module_design in memoria persistente.
+        -- Gestione EoW: lotti/allocazioni/magazzini specifici EoW di proprietà della sede (solo sedi
+        -- interne, IdSede diretto su tutte e tre le tabelle) - vedi project_eow_module_design in
+        -- memoria persistente.
         SELECT Id INTO #EoWLotti FROM dbo.tblEoWLotti WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #EoWAllocazioni FROM dbo.tblEoWAllocazioni WHERE IdSede IN (SELECT Id FROM #Sedi);
+        SELECT Id INTO #EoWMagazzini FROM dbo.tblEoWMagazzini WHERE IdSede IN (SELECT Id FROM #Sedi);
 
         -- tblSedi/tblPersone/tblOggetti sono sottotipi a chiave condivisa di tblOsepe (stesso Id)
         SELECT Id INTO #OsepeIds FROM (
@@ -170,6 +172,16 @@ BEGIN
                OR IdAllocazione IN (SELECT Id FROM #EoWAllocazioni);
             DELETE FROM dbo.tblEoWLotti       WHERE Id IN (SELECT Id FROM #EoWLotti);
             DELETE FROM dbo.tblEoWAllocazioni WHERE Id IN (SELECT Id FROM #EoWAllocazioni);
+
+            -- tblEoWLotti.IdMagazzino (nullable, nessun vincolo strutturale che lo leghi allo stesso
+            -- IdSede del Lotto) può referenziare un Magazzino di questa sede anche da un Lotto esterno
+            -- alla cascata - i Lotti di questa sede sono già stati cancellati sopra, quindi qui restano
+            -- solo eventuali riferimenti esterni: azzerati, non cancellati (stessa logica "UPDATE=NULL
+            -- dove possibile" delle risorse condivise più sotto).
+            DECLARE @eoWLottiScollegati INT;
+            UPDATE dbo.tblEoWLotti SET IdMagazzino = NULL WHERE IdMagazzino IN (SELECT Id FROM #EoWMagazzini);
+            SET @eoWLottiScollegati = @@ROWCOUNT;
+            DELETE FROM dbo.tblEoWMagazzini WHERE Id IN (SELECT Id FROM #EoWMagazzini);
 
             DELETE FROM dbo.tblRifiutiRegistrazioniEtichette WHERE Id IN (SELECT Id FROM #RifiutiRegistrazioni);
 
@@ -297,6 +309,7 @@ BEGIN
                 UNION SELECT Id FROM #Magazzini
                 UNION SELECT Id FROM #EoWLotti
                 UNION SELECT Id FROM #EoWAllocazioni
+                UNION SELECT Id FROM #EoWMagazzini
                 UNION SELECT Id FROM #RifiutiAutorizzazioni
                 UNION SELECT Id FROM #RifiutiFormulari
                 UNION SELECT Id FROM #RifiutiModelli
@@ -316,7 +329,7 @@ BEGIN
 
         COMMIT TRANSACTION;
 
-        SET @returnMessage = CONCAT('Cancellazione completata. Sedi rimosse: ', @totaleSedi, '. Riferimenti esterni azzerati/rimossi su Etichette/Autorizzazioni condivise: ', @rifEsterniRimossi, '. Lotti EoW rimossi: ', (SELECT COUNT(*) FROM #EoWLotti), ', Allocazioni EoW rimosse: ', (SELECT COUNT(*) FROM #EoWAllocazioni), ', Limiti rifiuti rimossi: ', (SELECT COUNT(*) FROM #RifiutiLimiti), '.');
+        SET @returnMessage = CONCAT('Cancellazione completata. Sedi rimosse: ', @totaleSedi, '. Riferimenti esterni azzerati/rimossi su Etichette/Autorizzazioni condivise: ', @rifEsterniRimossi, '. Lotti EoW rimossi: ', (SELECT COUNT(*) FROM #EoWLotti), ', Allocazioni EoW rimosse: ', (SELECT COUNT(*) FROM #EoWAllocazioni), ', Magazzini EoW rimossi: ', (SELECT COUNT(*) FROM #EoWMagazzini), ' (Lotti esterni scollegati: ', @eoWLottiScollegati, ')', ', Limiti rifiuti rimossi: ', (SELECT COUNT(*) FROM #RifiutiLimiti), '.');
 
         SELECT @returnValue AS ReturnValue, @returnMessage AS ReturnMessage;
     END TRY

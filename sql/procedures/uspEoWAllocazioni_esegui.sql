@@ -177,25 +177,32 @@ BEGIN
 			END
 			ELSE IF @idAllocazioneTipo = 'P'
 			BEGIN
-				IF (SELECT SUM(ISNULL(Valore, 0)) FROM @righe) <> 100
+				DECLARE @sommaPercentuali DECIMAL(18, 2) = (SELECT SUM(ISNULL(Valore, 0)) FROM @righe);
+				IF @sommaPercentuali > 100
 				BEGIN
 					ROLLBACK TRANSACTION;
 					SET @returnValue = -1;
-					SET @returnMessage = 'Le percentuali configurate non sommano a 100';
+					SET @returnMessage = 'Le percentuali configurate non possono superare 100';
 					GOTO BRANCH_END;
 				END
 
-				-- Arrotondamento a 2 decimali per riga, resto assegnato all'ultimo lotto (per Id) per
-				-- pareggiare esattamente la quantità totale
+				-- Arrotondamento a 2 decimali per riga. Il resto viene pareggiato sull'ultimo lotto (per
+				-- Id) solo se le percentuali configurate coprono l'intero 100%: in quel caso il resto è
+				-- puro errore di arrotondamento da correggere. Se invece sommano a meno di 100 (allocazione
+				-- volutamente parziale, es. un solo lotto al 60%), il resto è quantità non allocata per
+				-- scelta e deve restare tale, non va scaricato sull'ultimo lotto.
 				INSERT INTO @piano (IdLotto, Quantita)
 				SELECT
 					IdLotto,
 					Quantita = ROUND(@quantitaDaAllocare * Valore / 100.0, 2)
 				FROM @righe;
 
-				DECLARE @idUltimoLotto CHAR(16) = (SELECT TOP 1 IdLotto FROM @righe ORDER BY IdLotto DESC);
-				DECLARE @resto DECIMAL(18, 2) = @quantitaDaAllocare - (SELECT SUM(Quantita) FROM @piano);
-				UPDATE @piano SET Quantita = Quantita + @resto WHERE IdLotto = @idUltimoLotto;
+				IF @sommaPercentuali = 100
+				BEGIN
+					DECLARE @idUltimoLotto CHAR(16) = (SELECT TOP 1 IdLotto FROM @righe ORDER BY IdLotto DESC);
+					DECLARE @resto DECIMAL(18, 2) = @quantitaDaAllocare - (SELECT SUM(Quantita) FROM @piano);
+					UPDATE @piano SET Quantita = Quantita + @resto WHERE IdLotto = @idUltimoLotto;
+				END
 			END
 			ELSE IF @idAllocazioneTipo = 'C'
 			BEGIN

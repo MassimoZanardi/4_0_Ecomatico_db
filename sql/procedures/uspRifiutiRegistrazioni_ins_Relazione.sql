@@ -64,6 +64,17 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Una registrazione di produzione Materiale (causale K) è l'ultima fase del ciclo: può
+		-- derivare da un precedente scarico (es. R, trattamento interno) come IdParent, ma non può
+		-- mai comparire come @Id (figlio) - significherebbe che qualcos'altro la consuma a sua volta,
+		-- cosa che non deve poter accadere.
+		IF EXISTS (SELECT 1 FROM dbo.tblRifiutiRegistrazioni WHERE Id = @Id AND IdMateriale IS NOT NULL)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Una registrazione di produzione Materiale è l''ultima fase del ciclo e non può essere associata come figlia di un''altra registrazione';
+			GOTO BRANCH_END;
+		END
+
 		-- La registrazione padre, già trasmessa a RENTRI, non può cambiare le proprie associazioni
 		IF @rentriIdentificativo IS NOT NULL OR @rentriData IS NOT NULL
 		BEGIN

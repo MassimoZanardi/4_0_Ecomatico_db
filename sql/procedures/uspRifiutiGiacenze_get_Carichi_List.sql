@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiGiacenze_get_Carichi_List]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiGiacenze_get_Carichi_List]
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
 	@IdSessione CHAR(16) = NULL,
@@ -117,6 +121,16 @@ BEGIN
 				AND p.[Data] <= @Data
 			GROUP BY l.Id
 		),
+		-- Una registrazione Materiale non compare mai come Id (figlio) in tblRifiutiRegistrazioniRelazioni
+		-- (blocco applicativo in uspRifiutiRegistrazioni_ins_Relazione/_ins_RelazioniTutte): l'unica causa
+		-- di riduzione della sua giacenza è l'allocazione a un lotto EoW.
+		QuantitaAllocataEoW AS (
+			SELECT
+				w.IdRegistrazione AS Id,
+				Quantita = SUM(w.Quantita)
+			FROM dbo.tblEoWLottiRifiutiRegistrazioni w
+			GROUP BY w.IdRegistrazione
+		),
 		Carichi AS (
 			SELECT
 				r.Id,
@@ -212,7 +226,7 @@ BEGIN
 				dbo.tblRifiutiRegistrazioni r
 				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
-				LEFT JOIN QuantitaAssegnata a ON r.Id = a.Id
+				LEFT JOIN QuantitaAllocataEoW a ON r.Id = a.Id
 				INNER JOIN dbo.tblRifiutiMateriali e ON r.IdMateriale = e.Id
 			WHERE
 				(@Tipo IS NULL OR @Tipo = 'M')
@@ -262,3 +276,4 @@ BEGIN
 	END
 
 END;
+GO

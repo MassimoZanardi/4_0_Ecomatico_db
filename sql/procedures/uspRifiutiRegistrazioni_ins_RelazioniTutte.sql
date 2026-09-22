@@ -194,6 +194,9 @@ BEGIN
 					)
 				AND m.IdOperazione IN ( SELECT IdParent FROM dbo.tblRifiutiOperazioniRelazioni WHERE Id = @idOperazione )
 				AND m.Quantita - ISNULL(a.Quantita, 0) > 0 -- QuantitaResidua > 0
+				-- Una registrazione di produzione Materiale è l'ultima fase del ciclo: non può mai
+				-- diventare figlia (Id) di un'altra registrazione tramite questo inserimento massivo
+				AND r.IdMateriale IS NULL
 				AND NOT EXISTS ( SELECT 1 FROM dbo.tblRifiutiRegistrazioniRelazioni x WHERE x.Id = r.Id AND x.IdParent = @IdParent )
 				-- Una registrazione di rettifica o annullamento non ha mai relazioni carico/scarico
 				-- proprie: non deve mai comparire come candidata da associare

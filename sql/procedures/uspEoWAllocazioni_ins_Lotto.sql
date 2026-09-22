@@ -137,10 +137,32 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		IF @idAllocazioneTipo = 'P' AND @Valore + ISNULL((
+				SELECT SUM(la.Valore)
+				FROM dbo.tblEoWLottiAllocazioni la
+				WHERE la.IdAllocazione = @Id
+			), 0) > 100
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La somma delle percentuali dei lotti non può superare 100';
+			GOTO BRANCH_END;
+		END
+
 		IF @idAllocazioneTipo = 'C' AND (@Valore IS NULL OR @Valore <= 0)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'La priorità deve essere un valore maggiore di zero';
+			GOTO BRANCH_END;
+		END
+
+		IF @idAllocazioneTipo = 'C' AND EXISTS (
+				SELECT 1
+				FROM dbo.tblEoWLottiAllocazioni la
+				WHERE la.IdAllocazione = @Id AND la.Valore = @Valore
+			)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Questa priorità è già assegnata a un altro lotto dell''allocazione';
 			GOTO BRANCH_END;
 		END
 

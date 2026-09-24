@@ -14,7 +14,6 @@ BEGIN
      *   1 = Azienda    → IdAzienda
      *   2 = Sede       → IdSede
      *   3 = Registro   → IdRegistro
-     *   4 = Magazzino  → IdMagazzino
      *   5 = Calendario → IdCalendario
      *
      */
@@ -98,18 +97,10 @@ BEGIN
 				AND r.Id = @IdContesto
 				AND r.Lock = 0;
 		END
-		ELSE IF @Contesto = 4 -- Magazzino
-		BEGIN
-			UPDATE x
-			SET IdMagazzino = @IdContesto
-			FROM dbo.tblSessioni x
-			CROSS APPLY dbo.ufnSedi_get_SediInterneByUtente_List(x.IdUtente) u
-			INNER JOIN dbo.tblMagazzini m ON u.Id = m.IdSede
-			WHERE
-				x.Id = @Id
-				AND m.Id = @IdContesto
-				AND m.Lock = 0;
-		END
+		-- Contesto = 4 (Magazzino) rimosso: tblMagazzini non esiste più nello schema
+		-- e non era mai usato da nessuna pagina (funzionalità superata dal nuovo modulo
+		-- "Gestione Magazzino", che usa Contesto.Azienda/Contesto.Sede esistenti).
+		-- tblSessioni.IdMagazzino resta come colonna orfana, non più aggiornata da qui.
 		ELSE IF @Contesto = 5 -- Calendario
 		BEGIN
 			UPDATE x

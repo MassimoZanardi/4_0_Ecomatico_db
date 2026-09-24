@@ -148,15 +148,47 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			IF EXISTS (SELECT 1
-			FROM dbo.tblMagazzini
-			WHERE
-				IdSede = @Id
-				AND Lock = 0
-			)
+			-- Modulo Magazzino: Articoli/Movimenti hanno IdSede = Azienda; Lotti/Righe hanno
+			-- IdSede = sede operativa (può essere una sede figlia diversa dall'Azienda)
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniArticoli WHERE IdSede = @Id AND Lock = 0)
 			BEGIN
 				SET @returnValue = -1;
-				SET @returnMessage = 'Una sede con magazzini associati non può essere cancellata';
+				SET @returnMessage = 'Una sede con articoli di magazzino associati non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniLotti WHERE IdSede = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con lotti di magazzino associati non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimenti WHERE IdSede = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con movimenti di magazzino associati non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRighe WHERE IdSede = @Id)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con righe di magazzino associate non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRigheEoW WHERE IdSede = @Id)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con righe EoW di magazzino associate non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniDdt WHERE IdSede = @Id OR IdMittente = @Id OR IdDestinatario = @Id OR IdTrasportatore = @Id)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede associata a un DDT di magazzino non può essere cancellata';
 				GOTO BRANCH_END;
 			END
 
@@ -413,7 +445,46 @@ BEGIN
 				WHERE IdSede = @Id;
 				DELETE dbo.tblEtichette
 				WHERE IdSede = @Id;
-				DELETE dbo.tblMagazzini
+
+				-- Modulo Magazzino: cascata figlio->genitore (FK NO_ACTION, nessun ON DELETE
+				-- CASCADE). Ramo di fatto irraggiungibile in pratica (i blocchi sopra su Lock=0
+				-- impediscono di arrivare in bozza con dati di magazzino già associati),
+				-- mantenuto per difesa dalla FK.
+				DELETE rl
+				FROM dbo.tblMagazziniMovimentiRigheLotti rl
+				INNER JOIN dbo.tblMagazziniMovimentiRighe r ON rl.Id = r.Id
+				LEFT JOIN dbo.tblMagazziniLotti l ON rl.IdLotto = l.Id
+				WHERE r.IdSede = @Id OR l.IdSede = @Id;
+
+				DELETE rel
+				FROM dbo.tblMagazziniMovimentiRigheEoWLotti rel
+				INNER JOIN dbo.tblMagazziniMovimentiRigheEoW re ON rel.Id = re.Id
+				WHERE re.IdSede = @Id;
+
+				DELETE dbo.tblMagazziniDdt
+				WHERE
+					IdMittente = @Id
+					OR IdDestinatario = @Id
+					OR IdTrasportatore = @Id
+					OR IdMovimento IN (SELECT Id FROM dbo.tblMagazziniMovimenti WHERE IdSede = @Id);
+
+				DELETE dbo.tblMagazziniMovimentiRighe
+				WHERE
+					IdSede = @Id
+					OR IdMovimento IN (SELECT Id FROM dbo.tblMagazziniMovimenti WHERE IdSede = @Id);
+
+				DELETE dbo.tblMagazziniMovimentiRigheEoW
+				WHERE
+					IdSede = @Id
+					OR IdMovimento IN (SELECT Id FROM dbo.tblMagazziniMovimenti WHERE IdSede = @Id);
+
+				DELETE dbo.tblMagazziniMovimenti
+				WHERE IdSede = @Id;
+
+				DELETE dbo.tblMagazziniLotti
+				WHERE IdSede = @Id;
+
+				DELETE dbo.tblMagazziniArticoli
 				WHERE IdSede = @Id;
 
 				-- Gestione EoW: lotti/allocazioni EoW di proprietà esclusiva della sede (IdSede sempre

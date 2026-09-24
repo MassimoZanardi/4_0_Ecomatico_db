@@ -163,6 +163,15 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Modulo Magazzino: una sede esterna può comparire solo come destinatario o
+			-- trasportatore di un DDT (Articoli/Lotti/Movimenti/Righe sono sempre su sedi interne)
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniDdt WHERE IdDestinatario = @Id OR IdTrasportatore = @Id)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede associata a un DDT di magazzino (destinatario/trasportatore) non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblSedi
 				SET Lock = 4
@@ -230,6 +239,12 @@ BEGIN
 			END
 
 			BEGIN TRANSACTION;
+				-- Modulo Magazzino: DDT dove questa sede esterna compare come destinatario o
+				-- trasportatore. Ramo di fatto irraggiungibile in pratica (blocco sopra su
+				-- Lock=0), mantenuto per difesa dalla FK.
+				DELETE dbo.tblMagazziniDdt
+				WHERE IdDestinatario = @Id OR IdTrasportatore = @Id;
+
 				DELETE dbo.tblAreeOsepe
 				WHERE IdOsepe = @Id;
 

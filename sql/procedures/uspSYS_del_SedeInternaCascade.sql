@@ -74,7 +74,6 @@ BEGIN
         SELECT Id INTO #TipiProprieta FROM dbo.tblTipiProprieta WHERE Id IN (SELECT Id FROM #Tipi);
         SELECT Id INTO #Persone FROM dbo.tblPersone WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #Oggetti FROM dbo.tblOggetti WHERE IdSede IN (SELECT Id FROM #Sedi);
-        SELECT Id INTO #Magazzini FROM dbo.tblMagazzini WHERE IdSede IN (SELECT Id FROM #Sedi);
 
         -- Gestione EoW: lotti/allocazioni/magazzini specifici EoW di proprietà della sede (solo sedi
         -- interne, IdSede diretto su tutte e tre le tabelle) - vedi project_eow_module_design in
@@ -82,6 +81,13 @@ BEGIN
         SELECT Id INTO #EoWLotti FROM dbo.tblEoWLotti WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #EoWAllocazioni FROM dbo.tblEoWAllocazioni WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #EoWMagazzini FROM dbo.tblEoWMagazzini WHERE IdSede IN (SELECT Id FROM #Sedi);
+
+        -- Modulo Magazzino: Articoli/Movimenti hanno IdSede = Azienda; Lotti hanno IdSede = sede
+        -- operativa (può essere una sede figlia diversa dall'Azienda) - vedi project_magazzino
+        -- in memoria persistente.
+        SELECT Id INTO #MagArticoli FROM dbo.tblMagazziniArticoli WHERE IdSede IN (SELECT Id FROM #Sedi);
+        SELECT Id INTO #MagLotti FROM dbo.tblMagazziniLotti WHERE IdSede IN (SELECT Id FROM #Sedi);
+        SELECT Id INTO #MagMovimenti FROM dbo.tblMagazziniMovimenti WHERE IdSede IN (SELECT Id FROM #Sedi);
 
         -- tblSedi/tblPersone/tblOggetti sono sottotipi a chiave condivisa di tblOsepe (stesso Id)
         SELECT Id INTO #OsepeIds FROM (
@@ -275,7 +281,38 @@ BEGIN
             DELETE FROM dbo.tblPersoneRuoli WHERE Id IN (SELECT Id FROM #Persone);
             DELETE FROM dbo.tblPersone      WHERE Id IN (SELECT Id FROM #Persone);
             DELETE FROM dbo.tblOggetti      WHERE Id IN (SELECT Id FROM #Oggetti);
-            DELETE FROM dbo.tblMagazzini    WHERE Id IN (SELECT Id FROM #Magazzini);
+
+            -- Modulo Magazzino: cascata figlio->genitore (FK NO_ACTION, nessun ON DELETE CASCADE).
+            DELETE rl
+            FROM dbo.tblMagazziniMovimentiRigheLotti rl
+            INNER JOIN dbo.tblMagazziniMovimentiRighe r ON rl.Id = r.Id
+            WHERE r.IdSede IN (SELECT Id FROM #Sedi) OR r.IdMovimento IN (SELECT Id FROM #MagMovimenti);
+            DELETE rl
+            FROM dbo.tblMagazziniMovimentiRigheLotti rl
+            INNER JOIN dbo.tblMagazziniLotti l ON rl.IdLotto = l.Id
+            WHERE l.Id IN (SELECT Id FROM #MagLotti);
+
+            DELETE rel
+            FROM dbo.tblMagazziniMovimentiRigheEoWLotti rel
+            INNER JOIN dbo.tblMagazziniMovimentiRigheEoW re ON rel.Id = re.Id
+            WHERE re.IdSede IN (SELECT Id FROM #Sedi) OR re.IdMovimento IN (SELECT Id FROM #MagMovimenti);
+
+            DELETE FROM dbo.tblMagazziniDdt
+            WHERE
+                IdSede IN (SELECT Id FROM #Sedi)
+                OR IdMittente IN (SELECT Id FROM #Sedi)
+                OR IdDestinatario IN (SELECT Id FROM #Sedi)
+                OR IdTrasportatore IN (SELECT Id FROM #Sedi)
+                OR IdMovimento IN (SELECT Id FROM #MagMovimenti);
+
+            DELETE FROM dbo.tblMagazziniMovimentiRighe
+            WHERE IdSede IN (SELECT Id FROM #Sedi) OR IdMovimento IN (SELECT Id FROM #MagMovimenti);
+            DELETE FROM dbo.tblMagazziniMovimentiRigheEoW
+            WHERE IdSede IN (SELECT Id FROM #Sedi) OR IdMovimento IN (SELECT Id FROM #MagMovimenti);
+
+            DELETE FROM dbo.tblMagazziniMovimenti WHERE Id IN (SELECT Id FROM #MagMovimenti);
+            DELETE FROM dbo.tblMagazziniLotti WHERE Id IN (SELECT Id FROM #MagLotti);
+            DELETE FROM dbo.tblMagazziniArticoli WHERE Id IN (SELECT Id FROM #MagArticoli);
 
             -- Giunzioni a chiave composita verso risorse condivise (tblAree/tblUtenti non toccate)
             DELETE asi FROM dbo.tblAreeSediInterne asi INNER JOIN #AreeSediInterne t ON t.Id = asi.Id AND t.IdSede  = asi.IdSede;

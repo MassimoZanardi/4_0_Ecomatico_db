@@ -75,7 +75,6 @@ BEGIN
         SELECT Id INTO #TipiProprieta FROM dbo.tblTipiProprieta WHERE Id IN (SELECT Id FROM #Tipi);
         SELECT Id INTO #Persone FROM dbo.tblPersone WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #Oggetti FROM dbo.tblOggetti WHERE IdSede IN (SELECT Id FROM #Sedi);
-        SELECT Id INTO #Magazzini FROM dbo.tblMagazzini WHERE IdSede IN (SELECT Id FROM #Sedi);
 
         -- tblSedi/tblPersone/tblOggetti sono sottotipi a chiave condivisa di tblOsepe (stesso Id)
         SELECT Id INTO #OsepeIds FROM (
@@ -242,7 +241,11 @@ BEGIN
             DELETE FROM dbo.tblPersoneRuoli WHERE Id IN (SELECT Id FROM #Persone);
             DELETE FROM dbo.tblPersone      WHERE Id IN (SELECT Id FROM #Persone);
             DELETE FROM dbo.tblOggetti      WHERE Id IN (SELECT Id FROM #Oggetti);
-            DELETE FROM dbo.tblMagazzini    WHERE Id IN (SELECT Id FROM #Magazzini);
+
+            -- Modulo Magazzino: una sede esterna può comparire solo come destinatario o
+            -- trasportatore di un DDT (Articoli/Lotti/Movimenti/Righe sono sempre su sedi interne).
+            DELETE FROM dbo.tblMagazziniDdt
+            WHERE IdDestinatario IN (SELECT Id FROM #Sedi) OR IdTrasportatore IN (SELECT Id FROM #Sedi);
 
             -- Giunzioni a chiave composita verso risorse condivise (tblAree non toccata)
             DELETE asi FROM dbo.tblAreeSediInterne asi INNER JOIN #AreeSediInterne t ON t.Id = asi.Id AND t.IdSede  = asi.IdSede;

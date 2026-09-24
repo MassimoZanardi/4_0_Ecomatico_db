@@ -60,15 +60,9 @@ BEGIN
 				INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
 			WHERE e.Id = @IdSessione;
 		END
-		ELSE IF @Contesto = 4 -- Magazzino
-		BEGIN
-			SELECT @idAziendaInterna = s.IdAziendaInterna
-			FROM
-				dbo.tblSessioni e
-				INNER JOIN dbo.tblMagazzini c ON e.IdMagazzino = c.Id
-				INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
-			WHERE e.Id = @IdSessione;
-		END
+		-- Contesto = 4 (Magazzino) rimosso: tblMagazzini non esiste più nello schema
+		-- e non era mai usato da nessuna pagina (funzionalità superata dal nuovo modulo
+		-- "Gestione Magazzino", che non usa questo Contesto).
 		ELSE IF @Contesto = 5 -- Calendario
 		BEGIN
 			SELECT @idAziendaInterna = s.IdAziendaInterna

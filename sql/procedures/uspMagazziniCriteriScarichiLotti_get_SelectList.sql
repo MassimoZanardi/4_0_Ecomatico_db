@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -36,14 +36,14 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Fase 1/2 del modulo Magazzino: espone solo i criteri "per lotto" (F/L/E).
-		-- I criteri "per singolo carico" (V/R) sono fuori scope e non vengono proposti.
+		-- Criteri di scarico: M (Manuale, lotto scelto sulla riga), F/L/E per lotto (data di
+		-- apertura / scadenza del lotto), V/R per singolo carico (data del carico)
 		SELECT
 			Id,
 			[Text] = Nome,
 			Selected = CAST(IIF(Id = @IdSelected, 1, 0) AS BIT)
 		FROM dbo.tblMagazziniCriteriScarichiLotti
-		WHERE Id IN ('F', 'L', 'E')
+		WHERE Id IN ('M', 'F', 'L', 'E', 'V', 'R')
 		ORDER BY Pos
 		OPTION (RECOMPILE);
 

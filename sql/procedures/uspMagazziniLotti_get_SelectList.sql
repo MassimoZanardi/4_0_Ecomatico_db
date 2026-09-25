@@ -7,7 +7,8 @@ CREATE OR ALTER PROCEDURE dbo.uspMagazziniLotti_get_SelectList
 	@IdArticolo CHAR(16) = NULL,
 	@IdSelected CHAR(16) = NULL,
 	@Search VARCHAR(50) = NULL,
-	@IdSessione CHAR(16) = NULL
+	@IdSessione CHAR(16) = NULL,
+	@IsScarico BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -21,6 +22,7 @@ BEGIN
 		SET @IdSelected = NULLIF(LTRIM(RTRIM(@IdSelected)), '');
 		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IsScarico = ISNULL(@IsScarico, 0);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -53,13 +55,17 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Solo lotti dello stesso Articolo+Sede, non disabilitati, non chiusi
+		-- Solo lotti dello stesso Articolo+Sede, non disabilitati. Per un carico (lotto in cui
+		-- entra la merce) solo lotti non chiusi; per uno scarico con criterio Manuale (lotto da
+		-- cui prelevare) solo lotti con disponibilità, anche se scaduti. Disponibilità senza
+		-- decimali per gli articoli gestiti a numero (NR).
 		SELECT
 			l.Id,
-			[Text] = l.Nome + ' (disp. ' + FORMAT(ISNULL(q.Caricato, 0) - ISNULL(q.Scaricato, 0), 'N2', 'it-IT') + ')',
+			[Text] = l.Nome + ' (disp. ' + FORMAT(ISNULL(q.Caricato, 0) - ISNULL(q.Scaricato, 0), IIF(a.IdUnitaMisura = 'NR', 'N0', 'N2'), 'it-IT') + ')',
 			Selected = CAST(IIF(l.Id = @IdSelected, 1, 0) AS BIT)
 		FROM
 			dbo.tblMagazziniLotti l
+			LEFT JOIN dbo.tblMagazziniArticoli a ON l.IdArticolo = a.Id
 			-- Caricato: righe di carico confermate del lotto; Scaricato: relazioni di scarichi
 			-- confermati su quelle righe di carico (tblMagazziniMovimentiRigheRelazioni)
 			OUTER APPLY (
@@ -92,7 +98,10 @@ BEGIN
 			AND l.IdArticolo = @IdArticolo
 			AND l.Lock = 0
 			AND ISNULL(l.Disabilitato, 0) = 0
-			AND (l.DataChiusura IS NULL OR l.DataChiusura >= CAST(GETDATE() AS DATE))
+			AND (
+				(@IsScarico = 0 AND (l.DataChiusura IS NULL OR l.DataChiusura >= CAST(GETDATE() AS DATE)))
+				OR (@IsScarico = 1 AND ISNULL(q.Caricato, 0) - ISNULL(q.Scaricato, 0) > 0)
+			)
 			AND (@Search IS NULL OR l.Nome LIKE '%' + @Search + '%')
 		ORDER BY l.Nome
 		OPTION (RECOMPILE);

@@ -161,20 +161,49 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Lotto: la riga di carico indica il lotto in cui entra la merce (obbligatorio, stesso
-		-- Articolo+Sede della riga, attivo, non disabilitato, non chiuso) ed è essa stessa la
-		-- giacenza; la riga di scarico non ha lotto, si relaziona alle righe di carico che
-		-- consuma (tblMagazziniMovimentiRigheRelazioni, costruite in uspMagazziniMovimenti_upd)
+		-- Criterio di scarico: non si applica ai carichi; obbligatorio sugli scarichi
+		-- (M Manuale, F/L/E per lotto, V/R per singolo carico)
+		IF @idOperazione = 'C' AND @IdCriterio IS NOT NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il criterio di scarico non è applicabile a un carico';
+			GOTO BRANCH_END;
+		END
+		IF @idOperazione = 'S' AND @IdCriterio IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare il criterio di scarico';
+			GOTO BRANCH_END;
+		END
+		IF @idOperazione = 'S' AND @IdCriterio NOT IN ('M', 'F', 'L', 'E', 'V', 'R')
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Criterio di scarico non valido';
+			GOTO BRANCH_END;
+		END
+
+		-- Lotto: la riga di carico indica il lotto in cui entra la merce (obbligatorio, attivo,
+		-- non disabilitato, non chiuso) ed è essa stessa la giacenza. La riga di scarico indica
+		-- il lotto solo con il criterio Manuale (obbligatorio): lo scarico preleverà dai carichi
+		-- di quel lotto (relazioni costruite in uspMagazziniMovimenti_upd); il lotto può essere
+		-- anche scaduto (DataChiusura passata), purché non disabilitato. Sempre stesso
+		-- Articolo+Sede della riga.
 		IF @idOperazione = 'C' AND @IdLotto IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Selezionare il lotto di carico';
 			GOTO BRANCH_END;
 		END
-		IF @idOperazione = 'S' AND @IdLotto IS NOT NULL
+		IF @idOperazione = 'S' AND @IdCriterio = 'M' AND @IdLotto IS NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Il lotto si indica solo sulle righe di carico';
+			SET @returnMessage = 'Con il criterio Manuale selezionare il lotto da cui scaricare';
+			GOTO BRANCH_END;
+		END
+		IF @idOperazione = 'S' AND @IdCriterio <> 'M' AND @IdLotto IS NOT NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il lotto si indica sulla riga di scarico solo con il criterio Manuale';
 			GOTO BRANCH_END;
 		END
 		IF @IdLotto IS NOT NULL AND NOT EXISTS (
@@ -186,27 +215,11 @@ BEGIN
 				AND IdSede = @IdSede
 				AND Lock = 0
 				AND ISNULL(Disabilitato, 0) = 0
-				AND (DataChiusura IS NULL OR DataChiusura >= CAST(GETDATE() AS DATE))
+				AND (@idOperazione = 'S' OR DataChiusura IS NULL OR DataChiusura >= CAST(GETDATE() AS DATE))
 		)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Il lotto selezionato non è valido per questa riga';
-			GOTO BRANCH_END;
-		END
-
-		-- Il criterio di scarico non si applica ai carichi (vedi spec: "per il carico non
-		-- applicare FIFO/LIFO/FEFO"); per gli scarichi, solo i criteri per-lotto F/L/E sono
-		-- attivi in questa fase (V/R fuori scope)
-		IF @idOperazione = 'C' AND @IdCriterio IS NOT NULL
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Il criterio di scarico non è applicabile a un carico';
-			GOTO BRANCH_END;
-		END
-		IF @idOperazione = 'S' AND @IdCriterio IS NOT NULL AND @IdCriterio NOT IN ('F', 'L', 'E')
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Criterio di scarico non valido';
 			GOTO BRANCH_END;
 		END
 

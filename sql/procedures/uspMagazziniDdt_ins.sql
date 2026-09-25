@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -27,7 +27,7 @@ BEGIN
 		IF @IdSede IS NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Selezionare la sede interna da cui parte la merce';
+			SET @returnMessage = 'Selezionare la sede';
 			GOTO BRANCH_END;
 		END
 		IF @IdSessione IS NULL

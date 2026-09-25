@@ -57,14 +57,14 @@ BEGIN
 
 		-- Lotti EoW da cui la riga EoW di scarico ha scaricato, nell'ordine di consumo:
 		-- Quantita = quanto questo scarico ne ha scaricato; Residuo = quanto resta oggi del
-		-- lotto (quote di registrazioni M attive meno gli scarichi non eliminati). Carichi =
-		-- le registrazioni rifiuti M attive che hanno prodotto il lotto fino alla data dello
-		-- scarico (lo scarico preleva dal lotto, non dalla singola registrazione)
+		-- lotto (quote di registrazioni M attive meno gli scarichi non eliminati). Carichi = le
+		-- registrazioni rifiuti M attive che hanno prodotto il lotto fino alla data dello scarico
+		-- (lo scarico preleva dal lotto, non dalla singola registrazione): la più recente e il
+		-- numero totale
 		SELECT
 			rl.IdLotto,
 			LottoNome = l.Nome,
 			MagazzinoNome = g.Nome,
-			Carichi = cr.Carichi,
 			CaricoUltimo = cu.CaricoUltimo,
 			CarichiNumero = ISNULL(cr.CarichiNumero, 0),
 			rl.Quantita,
@@ -77,9 +77,7 @@ BEGIN
 			INNER JOIN dbo.tblEoWLotti l ON rl.IdLotto = l.Id
 			LEFT JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id
 			OUTER APPLY (
-				SELECT
-					Carichi = STRING_AGG(CAST(CONCAT('n. ', rc.Numero, ' del ', FORMAT(rc.[Data], 'dd/MM/yyyy')) AS NVARCHAR(MAX)), N', ') WITHIN GROUP (ORDER BY rc.[Data], rc.Numero),
-					CarichiNumero = COUNT(*)
+				SELECT CarichiNumero = COUNT(*)
 				FROM
 					dbo.tblEoWLottiRifiutiRegistrazioni qc
 					INNER JOIN dbo.tblRifiutiRegistrazioni rc ON qc.IdRegistrazione = rc.Id
@@ -89,7 +87,7 @@ BEGIN
 					AND (mv.[Data] IS NULL OR rc.[Data] <= mv.[Data])
 			) cr
 			-- Registrazione più recente, mostrata in forma compatta con il numero delle altre
-			-- (l'elenco completo resta in Carichi, per il tooltip)
+			-- (un lotto può raccogliere molte registrazioni: nessun elenco completo)
 			OUTER APPLY (
 				SELECT TOP 1 CaricoUltimo = CONCAT('n. ', rc.Numero, ' del ', FORMAT(rc.[Data], 'dd/MM/yyyy'))
 				FROM

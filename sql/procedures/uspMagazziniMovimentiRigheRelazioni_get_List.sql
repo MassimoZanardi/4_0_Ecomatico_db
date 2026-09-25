@@ -55,19 +55,32 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Righe di carico relazionate alla riga di scarico @IdParent, nell'ordine di consumo
+		-- Righe di carico relazionate alla riga di scarico @IdParent, nell'ordine di consumo:
+		-- Quantita = quanto questo scarico ha scaricato da quel carico; Residuo = quanto resta
+		-- oggi del carico, al netto di tutti gli scarichi non eliminati
 		SELECT
 			rel.Id,
 			MovimentoNumero = mc.Numero,
 			MovimentoData = mc.[Data],
 			LottoNome = l.Nome,
 			rel.Quantita,
+			Residuo = rc.Quantita - ISNULL(c.Consumata, 0),
 			rel.Pos
 		FROM
 			dbo.tblMagazziniMovimentiRigheRelazioni rel
 			INNER JOIN dbo.tblMagazziniMovimentiRighe rc ON rel.Id = rc.Id
 			INNER JOIN dbo.tblMagazziniMovimenti mc ON rc.IdMovimento = mc.Id
 			LEFT JOIN dbo.tblMagazziniLotti l ON rc.IdLotto = l.Id
+			OUTER APPLY (
+				SELECT Consumata = SUM(rel2.Quantita)
+				FROM
+					dbo.tblMagazziniMovimentiRigheRelazioni rel2
+					INNER JOIN dbo.tblMagazziniMovimentiRighe rp ON rel2.IdParent = rp.Id
+					INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+				WHERE
+					rel2.Id = rc.Id
+					AND mp.Lock IN (0, 2)
+			) c
 		WHERE rel.IdParent = @IdParent
 		ORDER BY rel.Pos
 		OPTION (RECOMPILE);

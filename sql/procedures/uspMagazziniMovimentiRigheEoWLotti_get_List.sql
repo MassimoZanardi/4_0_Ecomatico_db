@@ -57,18 +57,33 @@ BEGIN
 
 		-- Lotti EoW da cui la riga EoW di scarico ha scaricato, nell'ordine di consumo:
 		-- Quantita = quanto questo scarico ne ha scaricato; Residuo = quanto resta oggi del
-		-- lotto (quote di registrazioni M attive meno gli scarichi non eliminati)
+		-- lotto (quote di registrazioni M attive meno gli scarichi non eliminati). Carichi =
+		-- le registrazioni rifiuti M attive che hanno prodotto il lotto fino alla data dello
+		-- scarico (lo scarico preleva dal lotto, non dalla singola registrazione)
 		SELECT
 			rl.IdLotto,
 			LottoNome = l.Nome,
 			MagazzinoNome = g.Nome,
+			Carichi = cr.Carichi,
 			rl.Quantita,
 			Residuo = ISNULL(p.Prodotta, 0) - ISNULL(sc.Scaricata, 0),
 			rl.Pos
 		FROM
 			dbo.tblMagazziniMovimentiRigheEoWLotti rl
+			INNER JOIN dbo.tblMagazziniMovimentiRigheEoW re ON rl.Id = re.Id
+			INNER JOIN dbo.tblMagazziniMovimenti mv ON re.IdMovimento = mv.Id
 			INNER JOIN dbo.tblEoWLotti l ON rl.IdLotto = l.Id
 			LEFT JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id
+			OUTER APPLY (
+				SELECT Carichi = STRING_AGG(CAST(CONCAT('n. ', rc.Numero, ' del ', FORMAT(rc.[Data], 'dd/MM/yyyy')) AS NVARCHAR(MAX)), N', ') WITHIN GROUP (ORDER BY rc.[Data], rc.Numero)
+				FROM
+					dbo.tblEoWLottiRifiutiRegistrazioni qc
+					INNER JOIN dbo.tblRifiutiRegistrazioni rc ON qc.IdRegistrazione = rc.Id
+				WHERE
+					qc.IdLotto = l.Id
+					AND rc.Lock < 2
+					AND (mv.[Data] IS NULL OR rc.[Data] <= mv.[Data])
+			) cr
 			OUTER APPLY (
 				SELECT Prodotta = SUM(q.Quantita)
 				FROM

@@ -1,4 +1,9 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_RegistrazioniDaAssociare_List]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_RegistrazioniDaAssociare_List]
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
 	@IdParent CHAR(16) = NULL,
@@ -89,9 +94,9 @@ BEGIN
 			r.Operazione,
 			r.Numero,
 			r.[Data],
-			m.IdUnitaMisura,
+			v.IdUnitaMisura,
 			Quantita = ISNULL(a.Quantita, 0),
-			QuantitaResidua = m.Quantita - ISNULL(a.Quantita, 0),
+			QuantitaResidua = v.Quantita - ISNULL(a.Quantita, 0),
 			EerNome = e.Nome,
 			StatoFisicoNome = s.Nome,
 			Anno = YEAR(r.[Data])
@@ -99,6 +104,7 @@ BEGIN
 		FROM
 			dbo.tblRifiutiRegistrazioni r
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 			INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 			LEFT JOIN (
 				SELECT
@@ -107,31 +113,33 @@ BEGIN
 				FROM
 					dbo.tblRifiutiRegistrazioniRelazioni l
 					INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
-					INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON p.Id = vp.Id
 				WHERE
 					p.Lock < 2
-					AND mp.Quantita > 0
+					-- Valori effettivi (viewRifiutiRegistrazioniEffettive): uno scarico annullato ha Quantita = 0,
+					-- le sue relazioni restano per la stampa ma non consumano piu' il carico
+					AND vp.Quantita > 0
 				GROUP BY l.Id
 			) a ON r.Id = a.Id
-					LEFT JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
-					LEFT JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
+					LEFT JOIN dbo.tblRifiutiEer e ON v.IdEer = e.Id
+					LEFT JOIN dbo.tblRifiutiStatiFisici s ON v.IdStatoFisico = s.Id
 		WHERE
 			r.Lock = 0
 			AND m.IdRegistro = @IdRegistro
 			AND
 				(
 				@idOperazione IN ('M', 'K')
-				OR m.IdEer = @IdEer
+				OR v.IdEer = @IdEer
 				)
 			AND
 				(
 				@idOperazione IN ('M', 'K')
-				OR m.IdStatoFisico = @IdStatoFisico
+				OR v.IdStatoFisico = @IdStatoFisico
 				)
 			AND
 				(
 				@idOperazione IN ('M', 'K')
-				OR m.IdUnitaMisura = @IdUnitaMisura
+				OR v.IdUnitaMisura = @IdUnitaMisura
 				)
 			AND
 				(
@@ -143,11 +151,11 @@ BEGIN
 					)
 				)
 			AND m.IdOperazione IN ( SELECT IdParent FROM dbo.tblRifiutiOperazioniRelazioni WHERE Id = @idOperazione )
-			AND (m.Quantita - ISNULL(a.Quantita, 0)) > 0
+			AND (v.Quantita - ISNULL(a.Quantita, 0)) > 0
 			AND r.Id NOT IN ( SELECT Id FROM dbo.tblRifiutiRegistrazioniRelazioni WHERE IdParent = @IdParent )
 			-- Una registrazione di rettifica o annullamento non ha mai relazioni carico/scarico
 			-- proprie: non deve mai comparire come candidata da associare
-			AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id);
+			AND v.IsRettifica = 0;
 
 		CREATE UNIQUE CLUSTERED INDEX IX_cte_Anno_Numero ON #cte (Anno, Numero, Id);
 

@@ -1,3 +1,8 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_RegistrazioniAssociate_List]
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
@@ -67,9 +72,9 @@ BEGIN
 				r.Operazione,
 				r.Numero,
 				r.[Data],
-				m.IdUnitaMisura,
-				m.Quantita,
-				QuantitaResidua = m.Quantita - ISNULL(a.Quantita, 0),
+				v.IdUnitaMisura,
+				v.Quantita,
+				QuantitaResidua = v.Quantita - ISNULL(a.Quantita, 0),
 				EerNome = e.Nome,
 				StatoFisicoNome = s.Nome,
 				l.Pos
@@ -77,6 +82,7 @@ BEGIN
 				dbo.tblRifiutiRegistrazioniRelazioni l
 				INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
 				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 				LEFT JOIN (
 					-- Somma delle quantità associate (figlie) per ogni registrazione padre
 					SELECT
@@ -85,14 +91,16 @@ BEGIN
 					FROM
 						dbo.tblRifiutiRegistrazioniRelazioni l2
 						INNER JOIN dbo.tblRifiutiRegistrazioni p ON l2.IdParent = p.Id
-						INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
+						INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON p.Id = vp.Id
 					WHERE
 						p.Lock < 2
-						AND mp.Quantita > 0
+						-- Valori effettivi (viewRifiutiRegistrazioniEffettive): uno scarico annullato ha Quantita = 0,
+						-- le sue relazioni restano per la stampa ma non consumano piu' il carico
+						AND vp.Quantita > 0
 					GROUP BY l2.Id
 				) a ON r.Id = a.Id
-						LEFT JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
-						LEFT JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
+						LEFT JOIN dbo.tblRifiutiEer e ON v.IdEer = e.Id
+						LEFT JOIN dbo.tblRifiutiStatiFisici s ON v.IdStatoFisico = s.Id
 			WHERE
 				l.IdParent = @IdParent
 				AND l.Quantita >= 0

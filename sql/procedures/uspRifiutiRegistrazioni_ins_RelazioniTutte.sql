@@ -139,7 +139,7 @@ BEGIN
 
 		BEGIN TRANSACTION;
 
-			--      QuantitaResidua = m.Quantita - ISNULL(a.Quantita, 0)
+			--      QuantitaResidua = v.Quantita - ISNULL(a.Quantita, 0)
 			INSERT dbo.tblRifiutiRegistrazioniRelazioni
 				(Id, IdParent, Operazione, Quantita, Pos)
 			SELECT TOP(499 - @pos)
@@ -151,6 +151,7 @@ BEGIN
 			FROM
 				dbo.tblRifiutiRegistrazioni r
 				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 				LEFT JOIN (
 					SELECT
@@ -159,10 +160,12 @@ BEGIN
 					FROM
 						dbo.tblRifiutiRegistrazioniRelazioni l
 						INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
-						INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
+						INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON p.Id = vp.Id
 					WHERE
 						p.Lock < 2
-						AND mp.Quantita > 0
+						-- Valori effettivi (viewRifiutiRegistrazioniEffettive): uno scarico annullato ha Quantita = 0,
+						-- le sue relazioni restano per la stampa ma non consumano piu' il carico
+						AND vp.Quantita > 0
 					GROUP BY l.Id
 				) a ON r.Id = a.Id
 			WHERE
@@ -171,17 +174,17 @@ BEGIN
 				AND
 					(
 					@idOperazione IN ('K', 'M')
-					OR m.IdEer = @IdEer
+					OR v.IdEer = @IdEer
 					)
 				AND
 					(
 					@idOperazione IN ('K', 'M')
-					OR m.IdStatoFisico = @IdStatoFisico
+					OR v.IdStatoFisico = @IdStatoFisico
 					)
 				AND
 					(
 					@idOperazione IN ('K', 'M')
-					OR m.IdUnitaMisura = @IdUnitaMisura
+					OR v.IdUnitaMisura = @IdUnitaMisura
 					)
 				AND
 					(
@@ -193,14 +196,14 @@ BEGIN
 						)
 					)
 				AND m.IdOperazione IN ( SELECT IdParent FROM dbo.tblRifiutiOperazioniRelazioni WHERE Id = @idOperazione )
-				AND m.Quantita - ISNULL(a.Quantita, 0) > 0 -- QuantitaResidua > 0
+				AND v.Quantita - ISNULL(a.Quantita, 0) > 0 -- QuantitaResidua > 0
 				-- Una registrazione di produzione Materiale è l'ultima fase del ciclo: non può mai
 				-- diventare figlia (Id) di un'altra registrazione tramite questo inserimento massivo
 				AND r.IdMateriale IS NULL
 				AND NOT EXISTS ( SELECT 1 FROM dbo.tblRifiutiRegistrazioniRelazioni x WHERE x.Id = r.Id AND x.IdParent = @IdParent )
 				-- Una registrazione di rettifica o annullamento non ha mai relazioni carico/scarico
 				-- proprie: non deve mai comparire come candidata da associare
-				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
+				AND v.IsRettifica = 0
 			ORDER BY YEAR(r.[Data]), r.Numero;
 
 			SET @returnValue = @@ROWCOUNT;

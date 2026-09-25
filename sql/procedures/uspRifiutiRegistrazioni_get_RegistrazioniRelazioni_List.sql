@@ -1,3 +1,8 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_RegistrazioniRelazioni_List]
 	@IdParent CHAR(16) = NULL,
 	@Verso INT,
@@ -66,17 +71,19 @@ BEGIN
 
 		-- Inserisce la registrazione padre come punto di partenza
 		-- FIX: Quantita spostata da tblRifiutiRegistrazioni (r) a tblRifiutiMovimenti (m)
+		-- Quantita effettiva (viewRifiutiRegistrazioniEffettive): ultima correzione confermata, 0 se annullata
 		INSERT INTO @tbl (Id, IdOperazione, Numero, [Data], Quantita, Relazione, QuantitaAssociata)
 		SELECT
 			r.Id,
 			m.IdOperazione,
 			r.Numero,
 			r.[Data],
-			m.Quantita,
+			v.Quantita,
 			NULL,
 			NULL
 		FROM dbo.tblRifiutiRegistrazioni r
 		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+		INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 		WHERE r.Id = @IdParent;
 
 		-- Verso = 0: scende verso le figlie (registrazioni associate come IdParent)
@@ -91,7 +98,7 @@ BEGIN
 					m.IdOperazione,
 					r.Numero,
 					r.[Data],
-					m.Quantita,
+					v.Quantita,
 					Relazione = t.Numero,
 					QuantitaAssociata = l.Quantita
 				FROM
@@ -99,6 +106,7 @@ BEGIN
 					INNER JOIN dbo.tblRifiutiRegistrazioniRelazioni l ON t.Id = l.IdParent
 					INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
 					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 				WHERE r.Lock = 0) x
 			WHERE
 				x.Id NOT IN (SELECT Id FROM @tbl)
@@ -119,7 +127,7 @@ BEGIN
 					m.IdOperazione,
 					r.Numero,
 					r.[Data],
-					m.Quantita,
+					v.Quantita,
 					Relazione = t.Numero,
 					QuantitaAssociata = l.Quantita
 				FROM
@@ -127,6 +135,7 @@ BEGIN
 					INNER JOIN dbo.tblRifiutiRegistrazioniRelazioni l ON t.Id = l.Id
 					INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.IdParent = r.Id
 					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 				WHERE r.Lock = 0) x
 			WHERE
 				x.Id NOT IN (SELECT Id FROM @tbl)

@@ -93,6 +93,16 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Una registrazione annullata (annullamento confermato) non esiste piu' ai fini di giacenze e
+		-- relazioni: non puo' essere associata a nuove registrazioni (le relazioni gia' esistenti
+		-- restano per la stampa del registro)
+		IF EXISTS (SELECT 1 FROM dbo.viewRifiutiRegistrazioniEffettive WHERE Id IN (@Id, @IdParent) AND IsAnnullata = 1)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Una registrazione annullata non può essere associata ad altre registrazioni';
+			GOTO BRANCH_END;
+		END
+
 		IF (
 			SELECT COUNT(DISTINCT r.Id)
 			FROM

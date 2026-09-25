@@ -359,7 +359,9 @@ BEGIN
 				FROM
 					dbo.tblRifiutiRegistrazioniRelazioni l
 					INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
-					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					-- Valori effettivi della registrazione associata (ultima rettifica di correzione
+					-- confermata, l'originale non viene mai modificato - viewRifiutiRegistrazioniEffettive)
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
 					INNER JOIN dbo.tblRifiutiMovimenti mp ON rp.IdMovimento = mp.Id
 				WHERE
@@ -370,9 +372,9 @@ BEGIN
 					AND mp.IdOperazione <> 'M'
 					AND
 						(
-						m.IdEer <> @IdEer
-						OR m.IdStatoFisico <> @IdStatoFisico
-						OR m.IdUnitaMisura <> @IdUnitaMisura
+						v.IdEer <> @IdEer
+						OR v.IdStatoFisico <> @IdStatoFisico
+						OR v.IdUnitaMisura <> @IdUnitaMisura
 						)
 					AND l.Quantita > 0
 					AND r.Lock < 2
@@ -393,10 +395,13 @@ BEGIN
 				FROM
 					dbo.tblRifiutiRegistrazioniRelazioni l
 					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON rp.Id = vp.Id
 				WHERE
 					l.Id = @idRegistrazione
 					AND l.Quantita > 0
 					AND rp.Lock < 2
+					-- Uno scarico annullato non consuma piu' la registrazione (relazione mantenuta per la stampa)
+					AND vp.IsAnnullata = 0
 			), 0)
 			BEGIN
 				SET @returnValue = -1;
@@ -640,20 +645,22 @@ BEGIN
 				DECLARE c CURSOR FAST_FORWARD FOR
 					SELECT
 						l.Id,
-						QuantitaResidua = m2.Quantita - ISNULL(a.Quantita, 0)
+						-- Valori effettivi (viewRifiutiRegistrazioniEffettive): quantita' dell'ultima correzione
+						-- confermata, 0 se annullata; uno scarico annullato non consuma piu' i suoi carichi
+						QuantitaResidua = v2.Quantita - ISNULL(a.Quantita, 0)
 					FROM
 						dbo.tblRifiutiRegistrazioniRelazioni l
 						INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
-						INNER JOIN dbo.tblRifiutiMovimenti m2 ON r.IdMovimento = m2.Id
+						INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v2 ON r.Id = v2.Id
 						LEFT JOIN (
 							SELECT lq.Id, Quantita = SUM(lq.Quantita)
 							FROM
 								dbo.tblRifiutiRegistrazioniRelazioni lq
 								INNER JOIN dbo.tblRifiutiRegistrazioni pq ON lq.IdParent = pq.Id
-								INNER JOIN dbo.tblRifiutiMovimenti mpq ON pq.IdMovimento = mpq.Id
+								INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vpq ON pq.Id = vpq.Id
 							WHERE
 								pq.Lock < 2
-								AND mpq.Quantita > 0
+								AND vpq.Quantita > 0
 							GROUP BY lq.Id
 						) a ON l.Id = a.Id
 					WHERE l.IdParent = @idRegistrazione

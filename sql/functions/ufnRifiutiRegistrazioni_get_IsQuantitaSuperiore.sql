@@ -1,3 +1,8 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
 CREATE OR ALTER FUNCTION [dbo].[ufnRifiutiRegistrazioni_get_IsQuantitaSuperiore]
 (
 	@Id CHAR(16),
@@ -10,15 +15,16 @@ CREATE OR ALTER FUNCTION [dbo].[ufnRifiutiRegistrazioni_get_IsQuantitaSuperiore]
 	@NoParametri BIT = 0
 )
 RETURNS INT
-WITH SCHEMABINDING
 AS
 BEGIN
 	-- FIX: Quantita e IdUnitaMisura spostate da tblRifiutiRegistrazioni (r/p2) a tblRifiutiMovimenti (m/mp2)
+	-- Valori effettivi da viewRifiutiRegistrazioniEffettive (ultima correzione confermata, 0 se annullata):
+	-- la vista non e' schema-bound, quindi la funzione non puo' piu' essere WITH SCHEMABINDING
 	DECLARE @TotaleDisponibile DECIMAL(38, 2);
 	SELECT
 		@TotaleDisponibile =
 			ISNULL(SUM(
-				CONVERT(DECIMAL(38, 2), m.Quantita)
+				CONVERT(DECIMAL(38, 2), v.Quantita)
 				+ lp.QuantitaAssegnataCorrente
 				- ISNULL(qa.QuantitaAssociataTotale, 0)
 			), 0)
@@ -32,7 +38,7 @@ BEGIN
 		GROUP BY l.Id
 	) lp
 		INNER JOIN dbo.tblRifiutiRegistrazioni r ON r.Id = lp.Id
-		INNER JOIN dbo.tblRifiutiMovimenti m ON m.Id = r.IdMovimento
+		INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON v.Id = r.Id
 		INNER JOIN dbo.tblRifiutiRegistrazioni rp ON rp.Id = @Id
 		INNER JOIN dbo.tblRifiutiMovimenti mp ON mp.Id = rp.IdMovimento
 		OUTER APPLY (
@@ -40,11 +46,11 @@ BEGIN
 				SUM(CONVERT(DECIMAL(38, 2), l2.Quantita)) AS QuantitaAssociataTotale
 			FROM dbo.tblRifiutiRegistrazioniRelazioni l2
 			INNER JOIN dbo.tblRifiutiRegistrazioni p2 ON p2.Id = l2.IdParent
-			INNER JOIN dbo.tblRifiutiMovimenti mp2 ON mp2.Id = p2.IdMovimento
+			INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp2 ON vp2.Id = p2.Id
 			WHERE
 				l2.Id = lp.Id
 				AND p2.Lock < 2
-				AND mp2.Quantita > 0
+				AND vp2.Quantita > 0
 		) qa
 	WHERE
 		r.Lock = 0
@@ -64,17 +70,17 @@ BEGIN
 				AND
 					(
 					mp.IdOperazione IN ('K', 'M')
-					OR m.IdEer = @IdEer
+					OR v.IdEer = @IdEer
 					)
 				AND
 					(
 					mp.IdOperazione IN ('K', 'M')
-					OR m.IdStatoFisico = @IdStatoFisico
+					OR v.IdStatoFisico = @IdStatoFisico
 					)
 				AND
 					(
 					mp.IdOperazione IN ('K', 'M')
-					OR m.IdUnitaMisura = @IdUnitaMisura
+					OR v.IdUnitaMisura = @IdUnitaMisura
 					)
 				)
 			);

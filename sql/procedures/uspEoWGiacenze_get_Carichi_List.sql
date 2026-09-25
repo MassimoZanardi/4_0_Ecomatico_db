@@ -8,7 +8,8 @@ CREATE OR ALTER PROCEDURE dbo.uspEoWGiacenze_get_Carichi_List
 	@IdSessione CHAR(16) = NULL,
 	@Vista CHAR(1) = NULL,
 	@Id CHAR(16) = NULL,
-	@Search VARCHAR(50) = NULL
+	@Search VARCHAR(50) = NULL,
+	@IdSede CHAR(16) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -20,6 +21,7 @@ BEGIN
 		SET @Vista = NULLIF(LTRIM(RTRIM(@Vista)), '');
 		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -27,16 +29,13 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		IF @Vista NOT IN ('L', 'M')
+		-- Senza @Id: tutti i carichi EoW delle sedi interne della sessione (filtrati per
+		-- @IdSede, la sede del contesto, se indicata); con @Id: i carichi del lotto (@Vista = L)
+		-- o del magazzino EoW (@Vista = M) indicato
+		IF @Id IS NOT NULL AND ISNULL(@Vista, '') NOT IN ('L', 'M')
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Il parametro @Vista deve essere L (Lotto) o M (Magazzino)';
-			GOTO BRANCH_END;
-		END
-		IF @Id IS NULL
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
 			GOTO BRANCH_END;
 		END
 
@@ -90,6 +89,7 @@ BEGIN
 		FROM
 			dbo.tblEoWLottiRifiutiRegistrazioni lr
 			INNER JOIN dbo.tblEoWLotti l ON lr.IdLotto = l.Id
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON l.IdSede = i.Id
 			INNER JOIN dbo.tblRifiutiRegistrazioni r ON lr.IdRegistrazione = r.Id
 			INNER JOIN dbo.tblRifiutiMovimenti mo ON r.IdMovimento = mo.Id
 			LEFT JOIN dbo.tblRifiutiMateriali mat ON r.IdMateriale = mat.Id
@@ -97,7 +97,11 @@ BEGIN
 		-- mantiene le sue quote per un eventuale ripristino, ma non conta più
 		WHERE
 			r.Lock < 2
-			AND ((@Vista = 'L' AND l.Id = @Id) OR (@Vista = 'M' AND l.IdMagazzino = @Id))
+			AND (
+				(@Id IS NULL AND (@IdSede IS NULL OR l.IdSede = @IdSede))
+				OR (@Vista = 'L' AND l.Id = @Id)
+				OR (@Vista = 'M' AND l.IdMagazzino = @Id)
+			)
 			AND (@Search IS NULL OR r.Numero = TRY_CAST(@Search AS INT) OR l.Nome LIKE '%' + @Search + '%')
 		ORDER BY r.Data DESC, r.Numero DESC
 		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS

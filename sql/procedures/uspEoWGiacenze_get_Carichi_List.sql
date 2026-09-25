@@ -58,7 +58,7 @@ BEGIN
 		END
 
 		-- Titolarità sul Lotto/Magazzino indicato
-		IF @Vista = 'L' AND NOT EXISTS (
+		IF @Id IS NOT NULL AND @Vista = 'L' AND NOT EXISTS (
 			SELECT 1
 			FROM dbo.tblEoWLotti l INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON l.IdSede = i.Id
 			WHERE l.Id = @Id)
@@ -67,7 +67,7 @@ BEGIN
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
 			GOTO BRANCH_END;
 		END
-		IF @Vista = 'M' AND NOT EXISTS (
+		IF @Id IS NOT NULL AND @Vista = 'M' AND NOT EXISTS (
 			SELECT 1
 			FROM dbo.tblEoWMagazzini g INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 			WHERE g.Id = @Id)

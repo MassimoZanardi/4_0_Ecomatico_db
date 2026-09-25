@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -77,9 +77,10 @@ BEGIN
 		-- appartenere all'azienda interna corrente della sessione. IdMovimento non
 		-- ha FK verso tblMagazziniMovimenti sullo schema reale: la relazione va
 		-- validata qui. La riga eredita il Lock del movimento (vedi Righe_ins).
-		DECLARE @idAzienda CHAR(16), @lockMovimento INT;
+		DECLARE @idAzienda CHAR(16), @idOperazione CHAR(1), @lockMovimento INT;
 		SELECT
 			@idAzienda = c.IdSede,
+			@idOperazione = c.IdOperazione,
 			@lockMovimento = c.Lock
 		FROM
 			dbo.tblMagazziniMovimenti c
@@ -93,6 +94,15 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari, o il movimento non esiste';
+			GOTO BRANCH_END;
+		END
+
+		-- Il magazzino EoW si carica solo dal registro rifiuti (operazione M delle
+		-- Registrazioni): un movimento di carico di magazzino non può avere righe EoW
+		IF @idOperazione = 'C'
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il magazzino EoW si carica solo dal registro rifiuti (operazione M)';
 			GOTO BRANCH_END;
 		END
 

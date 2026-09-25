@@ -114,10 +114,12 @@ BEGIN
 			FROM
 				dbo.tblRifiutiRegistrazioniRelazioni l
 				INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
-				INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON p.Id = vp.Id
 			WHERE
 				p.Lock = 0
-				AND mp.Quantita > 0
+				-- Valori effettivi (viewRifiutiRegistrazioniEffettive): uno scarico annullato ha Quantita = 0,
+				-- le sue relazioni restano per la stampa ma non consumano piu' il carico
+				AND vp.Quantita > 0
 				AND p.[Data] <= @Data
 			GROUP BY l.Id
 		),
@@ -138,36 +140,37 @@ BEGIN
 				r.[Data],
 				IdEer = e.Id,
 				EerNome = e.Nome,
-				IdStatoFisico = m.IdStatoFisico,
+				IdStatoFisico = v.IdStatoFisico,
 				StatoFisico = s.Nome,
 				r.Etichette,
-				m.IdUnitaMisura,
-				Quantita = m.Quantita,
+				v.IdUnitaMisura,
+				Quantita = v.Quantita,
 				QuantitaAssegnata = ISNULL(a.Quantita, 0),
-				QuantitaResidua = m.Quantita - ISNULL(a.Quantita, 0),
+				QuantitaResidua = v.Quantita - ISNULL(a.Quantita, 0),
 				GiacenzaGiorni = DATEDIFF(DAY, r.[Data], @Data)
 			FROM
 				dbo.tblRifiutiRegistrazioni r
 				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 				LEFT JOIN QuantitaAssegnata a ON r.Id = a.Id
-				INNER JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
-				INNER JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
+				INNER JOIN dbo.tblRifiutiEer e ON v.IdEer = e.Id
+				INNER JOIN dbo.tblRifiutiStatiFisici s ON v.IdStatoFisico = s.Id
 			WHERE
 				(@Tipo IS NULL OR @Tipo = 'P')
 				AND r.Lock = 0
 				AND r.[Data] <= @Data
 				AND m.IdRegistro = @IdRegistro
 				AND ISNULL(m.IdOperazione, '') <> 'R'
-				AND m.Quantita > 0
+				AND v.Quantita > 0
 				AND o.Operazione = 'C'
-				AND (m.Quantita - ISNULL(a.Quantita, 0)) > 0
-				AND (@Tipo IS NULL OR @Vista = 'T' OR (e.Id = @Id AND m.IdStatoFisico = @IdStatoFisico))
+				AND (v.Quantita - ISNULL(a.Quantita, 0)) > 0
+				AND (@Tipo IS NULL OR @Vista = 'T' OR (e.Id = @Id AND v.IdStatoFisico = @IdStatoFisico))
 				AND (@Tipo IS NULL OR @Vista = 'E' OR ((@Etichette IS NULL AND r.Etichette IS NULL) OR r.Etichette = @Etichette))
 				AND (@Search IS NULL OR e.Id LIKE '%' + REPLACE(@Search, '.', '') + '%')
 				-- Una registrazione di rettifica o annullamento non è un movimento reale di
 				-- carico/scarico: non deve mai contribuire alla giacenza
-				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
+				AND v.IsRettifica = 0
 
 			UNION ALL
 
@@ -177,34 +180,35 @@ BEGIN
 				r.[Data],
 				IdEer = e.Id,
 				EerNome = e.Nome,
-				IdStatoFisico = m.IdStatoFisico,
+				IdStatoFisico = v.IdStatoFisico,
 				StatoFisico = s.Nome,
 				r.Etichette,
-				m.IdUnitaMisura,
-				Quantita = m.Quantita,
+				v.IdUnitaMisura,
+				Quantita = v.Quantita,
 				QuantitaAssegnata = ISNULL(a.Quantita, 0),
-				QuantitaResidua = m.Quantita - ISNULL(a.Quantita, 0),
+				QuantitaResidua = v.Quantita - ISNULL(a.Quantita, 0),
 				GiacenzaGiorni = DATEDIFF(DAY, r.[Data], @Data)
 			FROM
 				dbo.tblRifiutiRegistrazioni r
 				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 				LEFT JOIN QuantitaAssegnata a ON r.Id = a.Id
-				LEFT JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
-				LEFT JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
+				LEFT JOIN dbo.tblRifiutiEer e ON v.IdEer = e.Id
+				LEFT JOIN dbo.tblRifiutiStatiFisici s ON v.IdStatoFisico = s.Id
 			WHERE
 				(@Tipo IS NULL OR @Tipo = 'T')
 				AND r.Lock = 0
 				AND r.[Data] <= @Data
 				AND m.IdRegistro = @IdRegistro
 				AND m.IdOperazione = 'R'
-				AND m.Quantita > 0
+				AND v.Quantita > 0
 				AND o.Operazione = 'S'
-				AND (m.Quantita - ISNULL(a.Quantita, 0)) > 0
-				AND (@Tipo IS NULL OR @Vista = 'T' OR (ISNULL(e.Id, '') = ISNULL(@Id, '') AND ISNULL(m.IdStatoFisico, '') = ISNULL(@IdStatoFisico, '')))
+				AND (v.Quantita - ISNULL(a.Quantita, 0)) > 0
+				AND (@Tipo IS NULL OR @Vista = 'T' OR (ISNULL(e.Id, '') = ISNULL(@Id, '') AND ISNULL(v.IdStatoFisico, '') = ISNULL(@IdStatoFisico, '')))
 				AND (@Tipo IS NULL OR @Vista = 'E' OR ((@Etichette IS NULL AND r.Etichette IS NULL) OR r.Etichette = @Etichette))
 				AND (@Search IS NULL OR ISNULL(e.Id, '') LIKE '%' + REPLACE(@Search, '.', '') + '%')
-				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
+				AND v.IsRettifica = 0
 
 			UNION ALL
 
@@ -217,14 +221,15 @@ BEGIN
 				IdStatoFisico = NULL,
 				StatoFisico = NULL,
 				r.Etichette,
-				m.IdUnitaMisura,
-				Quantita = m.Quantita,
+				v.IdUnitaMisura,
+				Quantita = v.Quantita,
 				QuantitaAssegnata = ISNULL(a.Quantita, 0),
-				QuantitaResidua = m.Quantita - ISNULL(a.Quantita, 0),
+				QuantitaResidua = v.Quantita - ISNULL(a.Quantita, 0),
 				GiacenzaGiorni = DATEDIFF(DAY, r.[Data], @Data)
 			FROM
 				dbo.tblRifiutiRegistrazioni r
 				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 				LEFT JOIN QuantitaAllocataEoW a ON r.Id = a.Id
 				INNER JOIN dbo.tblRifiutiMateriali e ON r.IdMateriale = e.Id
@@ -234,13 +239,13 @@ BEGIN
 				AND r.[Data] <= @Data
 				AND m.IdRegistro = @IdRegistro
 				AND ISNULL(m.IdOperazione, '') <> 'R'
-				AND m.Quantita > 0
+				AND v.Quantita > 0
 				AND o.Operazione = 'C'
-				AND (m.Quantita - ISNULL(a.Quantita, 0)) > 0
+				AND (v.Quantita - ISNULL(a.Quantita, 0)) > 0
 				AND (@Tipo IS NULL OR @Vista = 'T' OR e.Id = @Id)
 				AND (@Tipo IS NULL OR @Vista = 'E' OR ((@Etichette IS NULL AND r.Etichette IS NULL) OR r.Etichette = @Etichette))
 				AND (@Search IS NULL OR e.Id LIKE '%' + @Search + '%' OR e.Nome LIKE '%' + @Search + '%')
-				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
+				AND v.IsRettifica = 0
 		)
 		SELECT
 			Id, Numero, [Data], IdEer, EerNome, IdStatoFisico, StatoFisico, Etichette,

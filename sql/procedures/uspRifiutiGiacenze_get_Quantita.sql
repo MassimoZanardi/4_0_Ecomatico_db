@@ -1,4 +1,9 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiGiacenze_get_Quantita]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiGiacenze_get_Quantita]
 	@IdRegistro CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@IdEer CHAR(6) = NULL,
@@ -84,35 +89,38 @@ BEGIN
 			FROM
 				dbo.tblRifiutiRegistrazioniRelazioni l
 				INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
-				INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON p.Id = vp.Id
 			WHERE
 				p.Lock = 0
-				AND mp.Quantita > 0
+				-- Valori effettivi (viewRifiutiRegistrazioniEffettive): uno scarico annullato ha Quantita = 0,
+				-- le sue relazioni restano per la stampa ma non consumano piu' il carico
+				AND vp.Quantita > 0
 				AND p.[Data] <= @Data
 			GROUP BY l.Id
 		)
 		SELECT
-			@Giacenza = SUM(m.Quantita - ISNULL(a.Quantita, 0))
+			@Giacenza = SUM(v.Quantita - ISNULL(a.Quantita, 0))
 		FROM
 			dbo.tblRifiutiRegistrazioni r
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 			INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 			LEFT JOIN QuantitaAssegnata a ON r.Id = a.Id
 		WHERE
 			r.Lock = 0
 			AND r.[Data] <= @Data
 			AND m.IdRegistro = @IdRegistro
-			AND m.IdEer = @IdEer
-			AND m.IdStatoFisico = @IdStatoFisico
-			AND m.Quantita > 0
+			AND v.IdEer = @IdEer
+			AND v.IdStatoFisico = @IdStatoFisico
+			AND v.Quantita > 0
 			AND (
 				(ISNULL(m.IdOperazione, '') <> 'R' AND o.Operazione = 'C')
 				OR (m.IdOperazione = 'R' AND o.Operazione = 'S')
 			)
-			AND (m.Quantita - ISNULL(a.Quantita, 0)) > 0
+			AND (v.Quantita - ISNULL(a.Quantita, 0)) > 0
 			-- Una registrazione di rettifica o annullamento non è un movimento reale di
 			-- carico/scarico: non deve mai contribuire alla giacenza
-			AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id);
+			AND v.IsRettifica = 0;
 
 		SELECT rtn = ISNULL(@Giacenza, 0);
 

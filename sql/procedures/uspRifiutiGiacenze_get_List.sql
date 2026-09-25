@@ -95,10 +95,12 @@ BEGIN
 			FROM
 				dbo.tblRifiutiRegistrazioniRelazioni l
 				INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
-				INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON p.Id = vp.Id
 			WHERE
 				p.Lock = 0
-				AND mp.Quantita > 0
+				-- Valori effettivi (viewRifiutiRegistrazioniEffettive): uno scarico annullato ha Quantita = 0,
+				-- le sue relazioni restano per la stampa ma non consumano piu' il carico
+				AND vp.Quantita > 0
 				AND p.[Data] <= @Data
 			GROUP BY l.Id
 		),
@@ -119,36 +121,37 @@ BEGIN
 				Id = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Id END),
 				Nome = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Nome END),
 				Descrizione = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Descrizione END),
-				IdStatoFisico = MIN(CASE WHEN @Vista IN ('E', 'M') THEN m.IdStatoFisico END),
+				IdStatoFisico = MIN(CASE WHEN @Vista IN ('E', 'M') THEN v.IdStatoFisico END),
 				StatoFisico = MIN(CASE WHEN @Vista IN ('E', 'M') THEN s.Nome END),
 				Etichette = MIN(CASE WHEN @Vista = 'T' THEN r.Etichette END),
-				Quantita = SUM(m.Quantita - ISNULL(a.Quantita, 0)),
-				GiacenzaGiorni = DATEDIFF(DAY, MIN(CASE WHEN m.Quantita - ISNULL(a.Quantita, 0) > 0 THEN r.[Data] END), @Data),
-				MovimentiNumero = COUNT(DISTINCT IIF(m.Quantita - ISNULL(a.Quantita, 0) > 0, r.Id, NULL))
+				Quantita = SUM(v.Quantita - ISNULL(a.Quantita, 0)),
+				GiacenzaGiorni = DATEDIFF(DAY, MIN(CASE WHEN v.Quantita - ISNULL(a.Quantita, 0) > 0 THEN r.[Data] END), @Data),
+				MovimentiNumero = COUNT(DISTINCT IIF(v.Quantita - ISNULL(a.Quantita, 0) > 0, r.Id, NULL))
 			FROM
 				dbo.tblRifiutiRegistrazioni r
 				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 				LEFT JOIN QuantitaAssegnata a ON r.Id = a.Id
-				INNER JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
-				INNER JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
+				INNER JOIN dbo.tblRifiutiEer e ON v.IdEer = e.Id
+				INNER JOIN dbo.tblRifiutiStatiFisici s ON v.IdStatoFisico = s.Id
 			WHERE
 				r.Lock = 0
 				AND r.[Data] <= @Data
 				AND m.IdRegistro = @IdRegistro
 				AND ISNULL(m.IdOperazione, '') <> 'R'
-				AND m.Quantita > 0
+				AND v.Quantita > 0
 				AND o.Operazione = 'C'
 				AND @Vista IN ('E', 'T')
-				AND (@Search IS NULL OR m.IdEer LIKE '%' + REPLACE(@Search, '.', '') + '%')
+				AND (@Search IS NULL OR v.IdEer LIKE '%' + REPLACE(@Search, '.', '') + '%')
 				-- Una registrazione di rettifica o annullamento non è un movimento reale di
 				-- carico/scarico: non deve mai contribuire alla giacenza
-				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
+				AND v.IsRettifica = 0
 			GROUP BY
 				CASE WHEN @Vista IN ('E', 'M') THEN e.Id END,
 				CASE WHEN @Vista IN ('E', 'M') THEN s.Nome END,
 				CASE WHEN @Vista = 'T' THEN r.Etichette END
-			HAVING SUM(m.Quantita - ISNULL(a.Quantita, 0)) > 0
+			HAVING SUM(v.Quantita - ISNULL(a.Quantita, 0)) > 0
 
 			UNION ALL
 
@@ -158,34 +161,35 @@ BEGIN
 				Id = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Id END),
 				Nome = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Nome END),
 				Descrizione = MIN(CASE WHEN @Vista IN ('E', 'M') THEN e.Descrizione END),
-				IdStatoFisico = MIN(CASE WHEN @Vista IN ('E', 'M') THEN m.IdStatoFisico END),
+				IdStatoFisico = MIN(CASE WHEN @Vista IN ('E', 'M') THEN v.IdStatoFisico END),
 				StatoFisico = MIN(CASE WHEN @Vista IN ('E', 'M') THEN s.Nome END),
 				Etichette = MIN(CASE WHEN @Vista = 'T' THEN r.Etichette END),
-				Quantita = SUM(m.Quantita - ISNULL(a.Quantita, 0)),
-				GiacenzaGiorni = DATEDIFF(DAY, MIN(CASE WHEN m.Quantita - ISNULL(a.Quantita, 0) > 0 THEN r.[Data] END), @Data),
-				MovimentiNumero = COUNT(DISTINCT IIF(m.Quantita - ISNULL(a.Quantita, 0) > 0, r.Id, NULL))
+				Quantita = SUM(v.Quantita - ISNULL(a.Quantita, 0)),
+				GiacenzaGiorni = DATEDIFF(DAY, MIN(CASE WHEN v.Quantita - ISNULL(a.Quantita, 0) > 0 THEN r.[Data] END), @Data),
+				MovimentiNumero = COUNT(DISTINCT IIF(v.Quantita - ISNULL(a.Quantita, 0) > 0, r.Id, NULL))
 			FROM
 				dbo.tblRifiutiRegistrazioni r
 				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 				LEFT JOIN QuantitaAssegnata a ON r.Id = a.Id
-				LEFT JOIN dbo.tblRifiutiEer e ON m.IdEer = e.Id
-				LEFT JOIN dbo.tblRifiutiStatiFisici s ON m.IdStatoFisico = s.Id
+				LEFT JOIN dbo.tblRifiutiEer e ON v.IdEer = e.Id
+				LEFT JOIN dbo.tblRifiutiStatiFisici s ON v.IdStatoFisico = s.Id
 			WHERE
 				r.Lock = 0
 				AND r.[Data] <= @Data
 				AND m.IdRegistro = @IdRegistro
 				AND m.IdOperazione = 'R'
-				AND m.Quantita > 0
+				AND v.Quantita > 0
 				AND o.Operazione = 'S'
 				AND @Vista IN ('E', 'T')
-				AND (@Search IS NULL OR m.IdEer LIKE '%' + REPLACE(@Search, '.', '') + '%')
-				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
+				AND (@Search IS NULL OR v.IdEer LIKE '%' + REPLACE(@Search, '.', '') + '%')
+				AND v.IsRettifica = 0
 			GROUP BY
 				CASE WHEN @Vista IN ('E', 'M') THEN e.Id END,
 				CASE WHEN @Vista IN ('E', 'M') THEN s.Nome END,
 				CASE WHEN @Vista = 'T' THEN r.Etichette END
-			HAVING SUM(m.Quantita - ISNULL(a.Quantita, 0)) > 0
+			HAVING SUM(v.Quantita - ISNULL(a.Quantita, 0)) > 0
 
 			UNION ALL
 
@@ -198,12 +202,13 @@ BEGIN
 				IdStatoFisico = NULL,
 				StatoFisico = CASE WHEN @Vista IN ('E', 'M') THEN 'nd' END,
 				Etichette = MIN(CASE WHEN @Vista = 'T' THEN r.Etichette END),
-				Quantita = SUM(m.Quantita - ISNULL(a.Quantita, 0)),
-				GiacenzaGiorni = DATEDIFF(DAY, MIN(CASE WHEN m.Quantita - ISNULL(a.Quantita, 0) > 0 THEN r.[Data] END), @Data),
-				MovimentiNumero = COUNT(DISTINCT IIF(m.Quantita - ISNULL(a.Quantita, 0) > 0, r.Id, NULL))
+				Quantita = SUM(v.Quantita - ISNULL(a.Quantita, 0)),
+				GiacenzaGiorni = DATEDIFF(DAY, MIN(CASE WHEN v.Quantita - ISNULL(a.Quantita, 0) > 0 THEN r.[Data] END), @Data),
+				MovimentiNumero = COUNT(DISTINCT IIF(v.Quantita - ISNULL(a.Quantita, 0) > 0, r.Id, NULL))
 			FROM
 				dbo.tblRifiutiRegistrazioni r
 				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 				LEFT JOIN QuantitaAllocataEoW a ON r.Id = a.Id
 				INNER JOIN dbo.tblRifiutiMateriali e ON r.IdMateriale = e.Id
@@ -212,15 +217,15 @@ BEGIN
 				AND r.[Data] <= @Data
 				AND m.IdRegistro = @IdRegistro
 				AND ISNULL(m.IdOperazione, '') <> 'R'
-				AND m.Quantita > 0
+				AND v.Quantita > 0
 				AND o.Operazione = 'C'
 				AND @Vista IN ('M', 'T')
 				AND (@Search IS NULL OR e.Id LIKE '%' + @Search + '%' OR e.Nome LIKE '%' + @Search + '%')
-				AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = r.Id)
+				AND v.IsRettifica = 0
 			GROUP BY
 				CASE WHEN @Vista IN ('E', 'M') THEN e.Id END,
 				CASE WHEN @Vista = 'T' THEN r.Etichette END
-			HAVING SUM(m.Quantita - ISNULL(a.Quantita, 0)) > 0
+			HAVING SUM(v.Quantita - ISNULL(a.Quantita, 0)) > 0
 		)
 		SELECT
 			TipoCodice, Tipo, Id, Nome, Descrizione, IdStatoFisico, StatoFisico, Etichette,

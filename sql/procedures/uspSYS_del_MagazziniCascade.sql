@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -29,9 +29,9 @@ BEGIN
         SELECT Id INTO #td FROM dbo.tblMagazziniDdt;
 
         BEGIN TRANSACTION;
-            -- Ripartizioni riga->lotto (FK NO_ACTION su Righe/RigheEoW e su Lotti: entrambe
-            -- le direzioni vanno svuotate prima di cancellare Righe/RigheEoW/Lotti sottostanti)
-            DELETE dbo.tblMagazziniMovimentiRigheLotti;
+            -- Relazioni carico/scarico (FK NO_ACTION su Id/IdParent verso Righe) e ripartizioni
+            -- riga EoW->lotto EoW: vanno svuotate prima di cancellare Righe/RigheEoW sottostanti
+            DELETE dbo.tblMagazziniMovimentiRigheRelazioni;
             DELETE dbo.tblMagazziniMovimentiRigheEoWLotti;
 
             -- DDT: FK NO_ACTION su IdMovimento (oltre a IdSede/IdMittente/IdDestinatario/

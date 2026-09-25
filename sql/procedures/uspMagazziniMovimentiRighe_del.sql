@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -74,29 +74,19 @@ BEGIN
 
 		BEGIN TRANSACTION;
 
-			-- Vincolo reale: un carico già confermato non è rimovibile se la sua
-			-- quantità è già stata consumata da uno scarico successivo su uno dei
-			-- lotti allocati (la disponibilità del lotto scenderebbe sotto zero).
-			-- Uno scarico confermato, invece, si può sempre rimuovere: libera solo
-			-- disponibilità, non ne consuma.
-			IF @lockMovimento = 0 AND @idOperazioneMovimento = 'C' AND EXISTS (
+			-- Vincolo reale (come le Registrazioni Rifiuti): una riga di carico non è
+			-- rimovibile se è già relazionata a uno scarico non eliminato (la giacenza
+			-- consumata resterebbe senza origine). Una riga di scarico si può sempre
+			-- rimuovere: libera solo disponibilità, non ne consuma.
+			IF @idOperazioneMovimento = 'C' AND EXISTS (
 				SELECT 1
 				FROM
-					dbo.tblMagazziniMovimentiRigheLotti rl WITH (UPDLOCK, HOLDLOCK)
-					CROSS APPLY (
-						SELECT Disponibilita = ISNULL(SUM(CASE WHEN mv.IdOperazione = 'C' THEN rl2.Quantita ELSE -rl2.Quantita END), 0)
-						FROM
-							dbo.tblMagazziniMovimentiRigheLotti rl2
-							INNER JOIN dbo.tblMagazziniMovimentiRighe r2 ON rl2.Id = r2.Id
-							INNER JOIN dbo.tblMagazziniMovimenti mv ON r2.IdMovimento = mv.Id
-						WHERE
-							rl2.IdLotto = rl.IdLotto
-							AND r2.Lock = 0
-							AND mv.Lock = 0
-					) d
+					dbo.tblMagazziniMovimentiRigheRelazioni rel WITH (UPDLOCK, HOLDLOCK)
+					INNER JOIN dbo.tblMagazziniMovimentiRighe rp ON rel.IdParent = rp.Id
+					INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
 				WHERE
-					rl.Id = @Id
-					AND (d.Disponibilita - rl.Quantita) < 0
+					rel.Id = @Id
+					AND mp.Lock IN (0, 2)
 			)
 			BEGIN
 				ROLLBACK TRANSACTION;
@@ -105,8 +95,12 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			DELETE dbo.tblMagazziniMovimentiRigheLotti
-			WHERE Id = @Id;
+			-- Relazioni della riga, in entrambi i versi: come scarico (IdParent) e, per un
+			-- carico, quelle residue di scarichi eliminati (Lock = 4, non più attive)
+			DELETE dbo.tblMagazziniMovimentiRigheRelazioni
+			WHERE
+				IdParent = @Id
+				OR Id = @Id;
 
 			DELETE dbo.tblMagazziniMovimentiRighe
 			WHERE Id = @Id;

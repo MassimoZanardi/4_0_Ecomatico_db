@@ -450,11 +450,10 @@ BEGIN
 				-- CASCADE). Ramo di fatto irraggiungibile in pratica (i blocchi sopra su Lock=0
 				-- impediscono di arrivare in bozza con dati di magazzino già associati),
 				-- mantenuto per difesa dalla FK.
-				DELETE rl
-				FROM dbo.tblMagazziniMovimentiRigheLotti rl
-				INNER JOIN dbo.tblMagazziniMovimentiRighe r ON rl.Id = r.Id
-				LEFT JOIN dbo.tblMagazziniLotti l ON rl.IdLotto = l.Id
-				WHERE r.IdSede = @Id OR l.IdSede = @Id;
+				DELETE rel
+				FROM dbo.tblMagazziniMovimentiRigheRelazioni rel
+				INNER JOIN dbo.tblMagazziniMovimentiRighe r ON rel.Id = r.Id OR rel.IdParent = r.Id
+				WHERE r.IdSede = @Id OR r.IdMovimento IN (SELECT Id FROM dbo.tblMagazziniMovimenti WHERE IdSede = @Id);
 
 				DELETE rel
 				FROM dbo.tblMagazziniMovimentiRigheEoWLotti rel

@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -8,7 +8,8 @@ CREATE OR ALTER PROCEDURE dbo.uspMagazziniMovimentiRighe_ins
 	@IdSede CHAR(16) = NULL,
 	@IdArticolo CHAR(16) = NULL,
 	@IdCriterio CHAR(1) = NULL,
-	@Quantita DECIMAL(18, 2) = NULL
+	@Quantita DECIMAL(18, 2) = NULL,
+	@IdLotto CHAR(16) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -22,6 +23,7 @@ BEGIN
 		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
 		SET @IdArticolo = NULLIF(LTRIM(RTRIM(@IdArticolo)), '');
 		SET @IdCriterio = NULLIF(LTRIM(RTRIM(@IdCriterio)), '');
+		SET @IdLotto = NULLIF(LTRIM(RTRIM(@IdLotto)), '');
 
 		IF @IdMovimento IS NULL
 		BEGIN
@@ -145,6 +147,53 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Articolo gestito a numero (unità di misura NR): quantità intera, non frazionabile
+		IF @Quantita <> FLOOR(@Quantita) AND EXISTS (
+			SELECT 1
+			FROM dbo.tblMagazziniArticoli
+			WHERE
+				Id = @IdArticolo
+				AND IdUnitaMisura = 'NR'
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'L''articolo è gestito a numero: indicare una quantità intera';
+			GOTO BRANCH_END;
+		END
+
+		-- Lotto: la riga di carico indica il lotto in cui entra la merce (obbligatorio, stesso
+		-- Articolo+Sede della riga, attivo, non disabilitato, non chiuso) ed è essa stessa la
+		-- giacenza; la riga di scarico non ha lotto, si relaziona alle righe di carico che
+		-- consuma (tblMagazziniMovimentiRigheRelazioni, costruite in uspMagazziniMovimenti_upd)
+		IF @idOperazione = 'C' AND @IdLotto IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare il lotto di carico';
+			GOTO BRANCH_END;
+		END
+		IF @idOperazione = 'S' AND @IdLotto IS NOT NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il lotto si indica solo sulle righe di carico';
+			GOTO BRANCH_END;
+		END
+		IF @IdLotto IS NOT NULL AND NOT EXISTS (
+			SELECT 1
+			FROM dbo.tblMagazziniLotti
+			WHERE
+				Id = @IdLotto
+				AND IdArticolo = @IdArticolo
+				AND IdSede = @IdSede
+				AND Lock = 0
+				AND ISNULL(Disabilitato, 0) = 0
+				AND (DataChiusura IS NULL OR DataChiusura >= CAST(GETDATE() AS DATE))
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il lotto selezionato non è valido per questa riga';
+			GOTO BRANCH_END;
+		END
+
 		-- Il criterio di scarico non si applica ai carichi (vedi spec: "per il carico non
 		-- applicare FIFO/LIFO/FEFO"); per gli scarichi, solo i criteri per-lotto F/L/E sono
 		-- attivi in questa fase (V/R fuori scope)
@@ -165,8 +214,8 @@ BEGIN
 		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
 
 		BEGIN TRANSACTION;
-			INSERT dbo.tblMagazziniMovimentiRighe (Id, IdMovimento, IdSede, IdArticolo, IdCriterio, Quantita, Lock)
-			VALUES (@returnId, @IdMovimento, @IdSede, @IdArticolo, @IdCriterio, @Quantita, @lockMovimento);
+			INSERT dbo.tblMagazziniMovimentiRighe (Id, IdMovimento, IdSede, IdArticolo, IdCriterio, Quantita, Lock, IdLotto)
+			VALUES (@returnId, @IdMovimento, @IdSede, @IdArticolo, @IdCriterio, @Quantita, @lockMovimento, @IdLotto);
 		COMMIT TRANSACTION;
 
 		SELECT Id = @returnId;

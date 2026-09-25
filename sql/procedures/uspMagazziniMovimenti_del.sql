@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -74,6 +74,28 @@ BEGIN
 		IF @lock = 0
 		BEGIN
 			BEGIN TRANSACTION;
+				-- Un carico le cui righe sono già relazionate a scarichi non eliminati non è
+				-- eliminabile: la giacenza consumata resterebbe senza origine (come
+				-- uspMagazziniMovimentiRighe_del). Le relazioni di uno scarico eliminato restano
+				-- in tabella ma non contano più (filtro sul Lock del movimento di scarico).
+				IF EXISTS (
+					SELECT 1
+					FROM
+						dbo.tblMagazziniMovimentiRighe rc
+						INNER JOIN dbo.tblMagazziniMovimentiRigheRelazioni rel WITH (UPDLOCK, HOLDLOCK) ON rel.Id = rc.Id
+						INNER JOIN dbo.tblMagazziniMovimentiRighe rp ON rel.IdParent = rp.Id
+						INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+					WHERE
+						rc.IdMovimento = @Id
+						AND mp.Lock IN (0, 2)
+				)
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Il movimento non è eliminabile: le quantità caricate sono già state utilizzate da scarichi successivi';
+					GOTO BRANCH_END;
+				END
+
 				UPDATE dbo.tblMagazziniMovimenti
 				SET Lock = 4
 				WHERE
@@ -106,10 +128,11 @@ BEGIN
 		ELSE IF @lock = 2
 		BEGIN
 			BEGIN TRANSACTION;
-				-- Righe tradizionali + relative ripartizioni sui lotti
-				DELETE rl
-				FROM dbo.tblMagazziniMovimentiRigheLotti rl
-				INNER JOIN dbo.tblMagazziniMovimentiRighe r ON rl.Id = r.Id
+				-- Righe tradizionali + relative relazioni carico/scarico (una bozza di carico
+				-- non è mai candidata agli scarichi, ma si puliscono entrambi i versi per le FK)
+				DELETE rel
+				FROM dbo.tblMagazziniMovimentiRigheRelazioni rel
+				INNER JOIN dbo.tblMagazziniMovimentiRighe r ON rel.IdParent = r.Id OR rel.Id = r.Id
 				WHERE r.IdMovimento = @Id;
 
 				DELETE dbo.tblMagazziniMovimentiRighe

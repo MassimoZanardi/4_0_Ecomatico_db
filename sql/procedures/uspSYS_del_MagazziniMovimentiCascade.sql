@@ -31,9 +31,10 @@ BEGIN
         SELECT Id INTO #te FROM dbo.tblMagazziniMovimentiRigheEoW;
 
         BEGIN TRANSACTION;
-            -- Ripartizioni riga->lotto (FK NO_ACTION su Righe/RigheEoW): vanno svuotate prima
-            -- delle Righe/RigheEoW; condividono l'Id della riga, nessun Id proprio in tblId.
-            DELETE dbo.tblMagazziniMovimentiRigheLotti;
+            -- Relazioni carico/scarico e ripartizioni riga EoW->lotto EoW (FK NO_ACTION su
+            -- Righe/RigheEoW): vanno svuotate prima delle Righe/RigheEoW; usano gli Id delle
+            -- righe, nessun Id proprio in tblId.
+            DELETE dbo.tblMagazziniMovimentiRigheRelazioni;
             DELETE dbo.tblMagazziniMovimentiRigheEoWLotti;
 
             -- DDT: FK NO_ACTION su IdMovimento - va rimosso prima del Movimento.

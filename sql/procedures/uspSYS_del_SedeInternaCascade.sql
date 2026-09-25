@@ -283,14 +283,12 @@ BEGIN
             DELETE FROM dbo.tblOggetti      WHERE Id IN (SELECT Id FROM #Oggetti);
 
             -- Modulo Magazzino: cascata figlio->genitore (FK NO_ACTION, nessun ON DELETE CASCADE).
-            DELETE rl
-            FROM dbo.tblMagazziniMovimentiRigheLotti rl
-            INNER JOIN dbo.tblMagazziniMovimentiRighe r ON rl.Id = r.Id
-            WHERE r.IdSede IN (SELECT Id FROM #Sedi) OR r.IdMovimento IN (SELECT Id FROM #MagMovimenti);
-            DELETE rl
-            FROM dbo.tblMagazziniMovimentiRigheLotti rl
-            INNER JOIN dbo.tblMagazziniLotti l ON rl.IdLotto = l.Id
-            WHERE l.Id IN (SELECT Id FROM #MagLotti);
+            -- Relazioni carico/scarico in entrambi i versi (righe della sede, dei suoi movimenti o
+            -- dei suoi lotti): FK NO_ACTION su Id e IdParent verso tblMagazziniMovimentiRighe.
+            DELETE rel
+            FROM dbo.tblMagazziniMovimentiRigheRelazioni rel
+            INNER JOIN dbo.tblMagazziniMovimentiRighe r ON rel.Id = r.Id OR rel.IdParent = r.Id
+            WHERE r.IdSede IN (SELECT Id FROM #Sedi) OR r.IdMovimento IN (SELECT Id FROM #MagMovimenti) OR r.IdLotto IN (SELECT Id FROM #MagLotti);
 
             DELETE rel
             FROM dbo.tblMagazziniMovimentiRigheEoWLotti rel

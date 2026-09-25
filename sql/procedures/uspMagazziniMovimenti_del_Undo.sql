@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -29,6 +29,41 @@ BEGIN
 			WHERE
 				c.IdSessione = @IdSessione
 				AND i.Lock = 4;
+
+			-- Ripristinare uno scarico riattiva le sue relazioni carico/scarico: nel frattempo
+			-- i carichi potrebbero essere stati consumati da altri scarichi, e nessun carico
+			-- può risultare consumato oltre la propria quantità
+			IF EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblMagazziniMovimentiRighe rc
+					CROSS APPLY (
+						SELECT Consumata = SUM(rel.Quantita)
+						FROM
+							dbo.tblMagazziniMovimentiRigheRelazioni rel WITH (UPDLOCK, HOLDLOCK)
+							INNER JOIN dbo.tblMagazziniMovimentiRighe rp ON rel.IdParent = rp.Id
+							INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+						WHERE
+							rel.Id = rc.Id
+							AND mp.Lock IN (0, 2)
+					) q
+				WHERE
+					rc.Id IN (
+						SELECT rel2.Id
+						FROM
+							dbo.tblMagazziniMovimentiRigheRelazioni rel2
+							INNER JOIN dbo.tblMagazziniMovimentiRighe rp2 ON rel2.IdParent = rp2.Id
+							INNER JOIN dbo.tblIdCancellati k ON rp2.IdMovimento = k.Id
+						WHERE k.IdSessione = @IdSessione
+					)
+					AND q.Consumata > rc.Quantita
+			)
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Impossibile ripristinare: i carichi utilizzati dallo scarico sono stati nel frattempo consumati da altri scarichi';
+				GOTO BRANCH_END;
+			END
 
 			DELETE i
 			FROM dbo.tblIdLog i

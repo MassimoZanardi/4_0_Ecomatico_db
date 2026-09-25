@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -97,6 +97,21 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Un altro articolo con lo stesso nome è già presente';
+			GOTO BRANCH_END;
+		END
+
+		-- Unità di misura NR (a numero): quantità intere, non frazionabili. Un articolo già
+		-- movimentato con quantità decimali non può passare a NR
+		IF @IdUnitaMisura = 'NR' AND EXISTS (
+			SELECT 1
+			FROM dbo.tblMagazziniMovimentiRighe
+			WHERE
+				IdArticolo = @Id
+				AND Quantita <> FLOOR(Quantita)
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'L''articolo ha movimenti con quantità decimali: non può essere gestito a numero';
 			GOTO BRANCH_END;
 		END
 

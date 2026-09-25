@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -37,29 +37,54 @@ BEGIN
 		END
 
 		-- Giacenza per Articolo + Sede, aggregata su tutti i lotti: mai memorizzata,
-		-- sempre calcolata da carichi - scarichi confermati (Movimento.Lock = 0)
+		-- sempre calcolata dalle righe di carico confermate meno le relazioni degli scarichi
+		-- confermati su quelle righe (Movimento.Lock = 0)
 		SELECT
 			art.Id AS IdArticolo,
 			ArticoloNome = art.Nome,
-			r.IdSede,
+			g.IdSede,
 			SedeNome = s.Nome,
 			UnitaMisuraNome = u.Nome,
-			Disponibilita = ISNULL(SUM(CASE WHEN mv.IdOperazione = 'C' THEN rl.Quantita ELSE -rl.Quantita END), 0)
+			IsNumero = CAST(IIF(art.IdUnitaMisura = 'NR', 1, 0) AS BIT),
+			Disponibilita = ISNULL(SUM(g.Quantita), 0)
 		FROM
-			dbo.tblMagazziniMovimentiRigheLotti rl
-			INNER JOIN dbo.tblMagazziniMovimentiRighe r ON rl.Id = r.Id
-			INNER JOIN dbo.tblMagazziniMovimenti mv ON r.IdMovimento = mv.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON r.IdSede = i.Id
-			INNER JOIN dbo.tblSedi s ON r.IdSede = s.Id
-			INNER JOIN dbo.tblMagazziniArticoli art ON r.IdArticolo = art.Id
+			(
+				SELECT
+					rc.IdArticolo,
+					rc.IdSede,
+					rc.Quantita
+				FROM
+					dbo.tblMagazziniMovimentiRighe rc
+					INNER JOIN dbo.tblMagazziniMovimenti mc ON rc.IdMovimento = mc.Id
+				WHERE
+					mc.IdOperazione = 'C'
+					AND rc.Lock = 0
+					AND mc.Lock = 0
+
+				UNION ALL
+
+				SELECT
+					rc.IdArticolo,
+					rc.IdSede,
+					-rel.Quantita
+				FROM
+					dbo.tblMagazziniMovimentiRigheRelazioni rel
+					INNER JOIN dbo.tblMagazziniMovimentiRighe rc ON rel.Id = rc.Id
+					INNER JOIN dbo.tblMagazziniMovimentiRighe rp ON rel.IdParent = rp.Id
+					INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+				WHERE
+					rp.Lock = 0
+					AND mp.Lock = 0
+			) g
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
+			INNER JOIN dbo.tblMagazziniArticoli art ON g.IdArticolo = art.Id
 			LEFT JOIN dbo.tblUnitaMisura u ON art.IdUnitaMisura = u.Id
 		WHERE
-			r.Lock = 0
-			AND mv.Lock = 0
-			AND (@IdSede IS NULL OR r.IdSede = @IdSede)
-			AND (@IdArticolo IS NULL OR r.IdArticolo = @IdArticolo)
-		GROUP BY art.Id, art.Nome, r.IdSede, s.Nome, u.Nome
-		HAVING ISNULL(SUM(CASE WHEN mv.IdOperazione = 'C' THEN rl.Quantita ELSE -rl.Quantita END), 0) <> 0
+			(@IdSede IS NULL OR g.IdSede = @IdSede)
+			AND (@IdArticolo IS NULL OR g.IdArticolo = @IdArticolo)
+		GROUP BY art.Id, art.Nome, art.IdUnitaMisura, g.IdSede, s.Nome, u.Nome
+		HAVING ISNULL(SUM(g.Quantita), 0) <> 0
 		ORDER BY art.Nome, s.Nome
 		OPTION (RECOMPILE);
 

@@ -1,9 +1,9 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE OR ALTER PROCEDURE dbo.uspMagazziniMovimentiRigheLotti_get_List
-	@Id CHAR(16) = NULL,
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniMovimentiRigheRelazioni_get_List
+	@IdParent CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS
 BEGIN
@@ -12,13 +12,13 @@ BEGIN
 		DECLARE @returnValue INT = 0;
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
-		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdParent = NULLIF(LTRIM(RTRIM(@IdParent)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 
-		IF @Id IS NULL
+		IF @IdParent IS NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			SET @returnMessage = 'Il parametro @IdParent non può essere vuoto';
 			GOTO BRANCH_END;
 		END
 		IF @IdSessione IS NULL
@@ -47,7 +47,7 @@ BEGIN
 				INNER JOIN dbo.tblMagazziniMovimenti m ON r.IdMovimento = m.Id
 				INNER JOIN dbo.tblSessioni e ON m.IdSede = e.IdAzienda
 			WHERE
-				r.Id = @Id
+				r.Id = @IdParent
 				AND e.Id = @IdSessione)
 		BEGIN
 			SET @returnValue = -1;
@@ -55,15 +55,21 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Righe di carico relazionate alla riga di scarico @IdParent, nell'ordine di consumo
 		SELECT
-			rl.IdLotto,
+			rel.Id,
+			MovimentoNumero = mc.Numero,
+			MovimentoData = mc.[Data],
 			LottoNome = l.Nome,
-			rl.Quantita
+			rel.Quantita,
+			rel.Pos
 		FROM
-			dbo.tblMagazziniMovimentiRigheLotti rl
-			INNER JOIN dbo.tblMagazziniLotti l ON rl.IdLotto = l.Id
-		WHERE rl.Id = @Id
-		ORDER BY l.Nome
+			dbo.tblMagazziniMovimentiRigheRelazioni rel
+			INNER JOIN dbo.tblMagazziniMovimentiRighe rc ON rel.Id = rc.Id
+			INNER JOIN dbo.tblMagazziniMovimenti mc ON rc.IdMovimento = mc.Id
+			LEFT JOIN dbo.tblMagazziniLotti l ON rc.IdLotto = l.Id
+		WHERE rel.IdParent = @IdParent
+		ORDER BY rel.Pos
 		OPTION (RECOMPILE);
 
 	END TRY

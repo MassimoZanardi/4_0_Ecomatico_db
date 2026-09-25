@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -121,7 +121,7 @@ BEGIN
 				Id = @Id
 				AND Lock = 0
 				AND IdArticolo <> @IdArticolo
-				AND EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRigheLotti WHERE IdLotto = @Id)
+				AND EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRighe WHERE IdLotto = @Id)
 		)
 		BEGIN
 			SET @returnValue = -1;

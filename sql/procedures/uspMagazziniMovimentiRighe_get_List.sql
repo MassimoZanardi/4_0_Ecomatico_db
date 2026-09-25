@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -64,7 +64,12 @@ BEGIN
 			r.IdCriterio,
 			CriterioNome = cr.Nome,
 			r.Quantita,
-			Allocata = ISNULL(q.Allocata, 0),
+			-- Riga di scarico: quantità già relazionata alle righe di carico consumate
+			-- (le righe di carico non hanno relazioni proprie, sono esse stesse la giacenza)
+			Relazionata = ISNULL(q.Relazionata, 0),
+			r.IdLotto,
+			LottoNome = l.Nome,
+			IsNumero = CAST(IIF(a.IdUnitaMisura = 'NR', 1, 0) AS BIT),
 			r.Lock
 		FROM
 			dbo.tblMagazziniMovimentiRighe r
@@ -72,7 +77,8 @@ BEGIN
 			LEFT JOIN dbo.tblMagazziniArticoli a ON r.IdArticolo = a.Id
 			LEFT JOIN dbo.tblUnitaMisura u ON a.IdUnitaMisura = u.Id
 			LEFT JOIN dbo.tblMagazziniCriteriScarichiLotti cr ON r.IdCriterio = cr.Id
-			OUTER APPLY (SELECT Allocata = SUM(rl.Quantita) FROM dbo.tblMagazziniMovimentiRigheLotti rl WHERE rl.Id = r.Id) q
+			LEFT JOIN dbo.tblMagazziniLotti l ON r.IdLotto = l.Id
+			OUTER APPLY (SELECT Relazionata = SUM(rel.Quantita) FROM dbo.tblMagazziniMovimentiRigheRelazioni rel WHERE rel.IdParent = r.Id) q
 		WHERE r.IdMovimento = @IdMovimento
 		ORDER BY r.Id
 		OPTION (RECOMPILE);

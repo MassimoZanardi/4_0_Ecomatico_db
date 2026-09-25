@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -63,18 +63,32 @@ BEGIN
 			dbo.tblMagazziniLotti l
 			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON l.IdSede = i.Id
 			LEFT JOIN dbo.tblMagazziniArticoli art ON l.IdArticolo = art.Id
+			-- Caricato: righe di carico confermate del lotto; Scaricato: relazioni di scarichi
+			-- confermati su quelle righe di carico (tblMagazziniMovimentiRigheRelazioni)
 			OUTER APPLY (
 				SELECT
-					Caricato = SUM(CASE WHEN mv.IdOperazione = 'C' THEN rl.Quantita ELSE 0 END),
-					Scaricato = SUM(CASE WHEN mv.IdOperazione = 'S' THEN rl.Quantita ELSE 0 END)
-				FROM
-					dbo.tblMagazziniMovimentiRigheLotti rl
-					INNER JOIN dbo.tblMagazziniMovimentiRighe r ON rl.Id = r.Id
-					INNER JOIN dbo.tblMagazziniMovimenti mv ON r.IdMovimento = mv.Id
-				WHERE
-					rl.IdLotto = l.Id
-					AND r.Lock = 0
-					AND mv.Lock = 0
+					Caricato = (
+						SELECT SUM(rc.Quantita)
+						FROM
+							dbo.tblMagazziniMovimentiRighe rc
+							INNER JOIN dbo.tblMagazziniMovimenti mc ON rc.IdMovimento = mc.Id
+						WHERE
+							rc.IdLotto = l.Id
+							AND rc.Lock = 0
+							AND mc.Lock = 0
+					),
+					Scaricato = (
+						SELECT SUM(rel.Quantita)
+						FROM
+							dbo.tblMagazziniMovimentiRigheRelazioni rel
+							INNER JOIN dbo.tblMagazziniMovimentiRighe rc ON rel.Id = rc.Id
+							INNER JOIN dbo.tblMagazziniMovimentiRighe rp ON rel.IdParent = rp.Id
+							INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+						WHERE
+							rc.IdLotto = l.Id
+							AND rp.Lock = 0
+							AND mp.Lock = 0
+					)
 			) q
 		WHERE
 			l.Lock = 0

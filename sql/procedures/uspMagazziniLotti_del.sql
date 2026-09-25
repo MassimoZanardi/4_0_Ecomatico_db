@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -66,7 +66,7 @@ BEGIN
 
 		IF @lock = 0
 		BEGIN
-			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRigheLotti WHERE IdLotto = @Id)
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRighe WHERE IdLotto = @Id)
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Un lotto con movimenti associati non può essere cancellato';

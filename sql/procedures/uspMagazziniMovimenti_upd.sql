@@ -39,12 +39,6 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		IF @Data IS NULL
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Indicare la data del movimento';
-			GOTO BRANCH_END;
-		END
 		IF @Numero IS NOT NULL AND @Numero <= 0
 		BEGIN
 			SET @returnValue = -1;
@@ -65,9 +59,17 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Controlla il permesso sul record: scope azienda interna corrente della sessione
-		DECLARE @idAzienda CHAR(16);
-		SELECT @idAzienda = c.IdSede
+		-- Controlla il permesso sul record: scope azienda interna corrente della sessione.
+		-- Il salvataggio vale sia per la bozza (Lock = 2) sia per il movimento già confermato
+		-- (Lock = 0, come le Registrazioni Rifiuti): su quest'ultimo operazione, data e numero
+		-- sono fissati e si ricostruiscono solo le relazioni carico/scarico delle righe.
+		DECLARE @idAzienda CHAR(16), @idOperazione CHAR(1), @lockMovimento INT;
+		SELECT
+			@idAzienda = c.IdSede,
+			@idOperazione = c.IdOperazione,
+			@lockMovimento = c.Lock,
+			@Data = IIF(c.Lock = 0, c.[Data], @Data),
+			@Numero = IIF(c.Lock = 0, c.Numero, @Numero)
 		FROM
 			dbo.tblMagazziniMovimenti c
 			INNER JOIN dbo.tblSessioni e ON c.IdSede = e.IdAzienda
@@ -81,28 +83,43 @@ BEGIN
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
 			GOTO BRANCH_END;
 		END
+		IF @lockMovimento NOT IN (0, 2)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Movimento non trovato o già eliminato';
+			GOTO BRANCH_END;
+		END
+		IF @Data IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare la data del movimento';
+			GOTO BRANCH_END;
+		END
 
 		BEGIN TRANSACTION;
 
-			-- Salva sempre Data/Numero (anche se il movimento resta in bozza): il numero
-			-- digitato dall'utente non viene ancora validato qui, solo persistito - la
+			-- Bozza: salva sempre Data/Numero (anche se il movimento resta in bozza): il
+			-- numero digitato dall'utente non viene ancora validato qui, solo persistito - la
 			-- validazione/rinumerazione definitiva avviene più sotto, solo se si confermano
 			-- anche le righe nello stesso salvataggio (vedi @pronto). IdOperazione è fissato
 			-- alla creazione (uspMagazziniMovimenti_ins) e non è più modificabile.
-			UPDATE dbo.tblMagazziniMovimenti
-			SET
-				Data = @Data,
-				Numero = @Numero
-			WHERE
-				Id = @Id
-				AND Lock = 2;
-
-			IF @@ROWCOUNT = 0
+			IF @lockMovimento = 2
 			BEGIN
-				ROLLBACK TRANSACTION;
-				SET @returnValue = -1;
-				SET @returnMessage = 'Movimento non trovato, già confermato o già eliminato';
-				GOTO BRANCH_END;
+				UPDATE dbo.tblMagazziniMovimenti
+				SET
+					Data = @Data,
+					Numero = @Numero
+				WHERE
+					Id = @Id
+					AND Lock = 2;
+
+				IF @@ROWCOUNT = 0
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Movimento non trovato, già confermato o già eliminato';
+					GOTO BRANCH_END;
+				END
 			END
 
 			-- DDT: se presente e ancora in bozza, valida e persiste sempre i campi (salvataggio
@@ -237,24 +254,243 @@ BEGIN
 				END
 			END
 
-			-- Il movimento è pronto per la conferma se esiste almeno una riga (tradizionale o
-			-- EoW), tutte le righe sono completamente allocate sui lotti, e non c'è un DDT
-			-- ancora in bozza. "Salva" fa da "Salva" e da "Conferma" nello stesso click: se
-			-- non è pronto, resta semplicemente in bozza, senza errore.
-			DECLARE @pronto BIT = 1;
+			-- Relazioni carico/scarico delle righe tradizionali (stessa logica di
+			-- uspRifiutiRegistrazioni_upd): la riga di carico è essa stessa la giacenza, la
+			-- riga di scarico si relaziona alle righe di carico che consuma. L'unica variante
+			-- è l'ordine di consumo, dato dal criterio di scarico:
+			--   F (FIFO) data/numero del carico crescenti, L (LIFO) decrescenti,
+			--   E (FEFO) scadenza del lotto del carico (DataChiusura), poi FIFO;
+			--   Manuale (NULL) carichi associati dall'utente, in ordine di Pos.
+			-- Carichi candidati: stessa Sede+Articolo, movimento di carico confermato,
+			-- cronologicamente precedente allo scarico (a parità di data, numero inferiore;
+			-- scarico non ancora numerato = dopo tutti i confermati), residuo > 0. Il residuo
+			-- di un carico è la sua quantità meno le relazioni di scarichi non eliminati.
+			-- Si ricostruiscono tutte le righe in bozza, e sul movimento già confermato solo
+			-- le righe non ancora completamente relazionate (le altre sono storia consolidata).
+			IF @idOperazione = 'S'
+			BEGIN
+				DECLARE
+					@idRiga CHAR(16),
+					@idSedeRiga CHAR(16),
+					@idArticoloRiga CHAR(16),
+					@idCriterioRiga CHAR(1),
+					@quantitaRiga DECIMAL(18, 2),
+					@articoloNome VARCHAR(50),
+					@isNumero BIT,
+					@daRelazionare DECIMAL(18, 2),
+					@idCarico CHAR(16),
+					@residuoCarico DECIMAL(18, 2),
+					@quotaCarico DECIMAL(18, 2),
+					@rowNum INT,
+					@maxRow INT;
 
-			IF NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRighe WHERE IdMovimento = @Id)
+				CREATE TABLE #Candidati (
+					RowNum INT IDENTITY(1, 1) PRIMARY KEY,
+					IdCarico CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL,
+					Residuo DECIMAL(18, 2) NOT NULL
+				);
+
+				DECLARE cRighe CURSOR LOCAL FAST_FORWARD FOR
+					SELECT
+						r.Id,
+						r.IdSede,
+						r.IdArticolo,
+						r.IdCriterio,
+						r.Quantita,
+						a.Nome,
+						CAST(IIF(a.IdUnitaMisura = 'NR', 1, 0) AS BIT)
+					FROM
+						dbo.tblMagazziniMovimentiRighe r
+						LEFT JOIN dbo.tblMagazziniArticoli a ON r.IdArticolo = a.Id
+						OUTER APPLY (SELECT Relazionata = SUM(rel.Quantita) FROM dbo.tblMagazziniMovimentiRigheRelazioni rel WHERE rel.IdParent = r.Id) q
+					WHERE
+						r.IdMovimento = @Id
+						AND (@lockMovimento = 2 OR ISNULL(q.Relazionata, 0) <> r.Quantita)
+					ORDER BY r.Id;
+
+				OPEN cRighe;
+				FETCH cRighe INTO @idRiga, @idSedeRiga, @idArticoloRiga, @idCriterioRiga, @quantitaRiga, @articoloNome, @isNumero;
+
+				WHILE @@FETCH_STATUS = 0
+				BEGIN
+					TRUNCATE TABLE #Candidati;
+
+					IF @idCriterioRiga IS NOT NULL
+					BEGIN
+						-- Criterio automatico: relazioni ricostruite da zero nell'ordine del criterio.
+						-- Lock di riga (UPDLOCK/HOLDLOCK) sulle relazioni dei carichi candidati, per
+						-- serializzare scarichi concorrenti sugli stessi carichi.
+						DELETE dbo.tblMagazziniMovimentiRigheRelazioni
+						WHERE IdParent = @idRiga;
+
+						INSERT INTO #Candidati (IdCarico, Residuo)
+						SELECT
+							rc.Id,
+							rc.Quantita - ISNULL(c.Consumata, 0)
+						FROM
+							dbo.tblMagazziniMovimentiRighe rc
+							INNER JOIN dbo.tblMagazziniMovimenti mc ON rc.IdMovimento = mc.Id
+							LEFT JOIN dbo.tblMagazziniLotti l ON rc.IdLotto = l.Id
+							OUTER APPLY (
+								SELECT Consumata = SUM(rel.Quantita)
+								FROM
+									dbo.tblMagazziniMovimentiRigheRelazioni rel WITH (UPDLOCK, HOLDLOCK)
+									INNER JOIN dbo.tblMagazziniMovimentiRighe rp ON rel.IdParent = rp.Id
+									INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+								WHERE
+									rel.Id = rc.Id
+									AND mp.Lock IN (0, 2)
+							) c
+						WHERE
+							mc.IdOperazione = 'C'
+							AND mc.Lock = 0
+							AND rc.Lock = 0
+							AND rc.IdSede = @idSedeRiga
+							AND rc.IdArticolo = @idArticoloRiga
+							AND (
+								mc.[Data] < @Data
+								OR (mc.[Data] = @Data AND (@Numero IS NULL OR mc.Numero < @Numero))
+							)
+							AND rc.Quantita - ISNULL(c.Consumata, 0) > 0
+						ORDER BY
+							CASE WHEN @idCriterioRiga = 'E' THEN ISNULL(l.DataChiusura, '9999-12-31') END ASC,
+							CASE WHEN @idCriterioRiga IN ('F', 'E') THEN mc.[Data] END ASC,
+							CASE WHEN @idCriterioRiga IN ('F', 'E') THEN mc.Numero END ASC,
+							CASE WHEN @idCriterioRiga = 'L' THEN mc.[Data] END DESC,
+							CASE WHEN @idCriterioRiga = 'L' THEN mc.Numero END DESC,
+							rc.Id;
+					END
+					ELSE
+					BEGIN
+						-- Criterio Manuale: carichi associati dall'utente, redistribuiti in ordine
+						-- di Pos (come le Registrazioni Rifiuti). Le associazioni devono restare
+						-- valide rispetto alla data dello scarico (che in bozza può cambiare).
+						IF EXISTS (
+							SELECT 1
+							FROM
+								dbo.tblMagazziniMovimentiRigheRelazioni rel
+								INNER JOIN dbo.tblMagazziniMovimentiRighe rc ON rel.Id = rc.Id
+								INNER JOIN dbo.tblMagazziniMovimenti mc ON rc.IdMovimento = mc.Id
+							WHERE
+								rel.IdParent = @idRiga
+								AND (
+									mc.Lock <> 0
+									OR mc.[Data] > @Data
+									OR (mc.[Data] = @Data AND @Numero IS NOT NULL AND mc.Numero >= @Numero)
+								)
+						)
+						BEGIN
+							CLOSE cRighe;
+							DEALLOCATE cRighe;
+							ROLLBACK TRANSACTION;
+							SET @returnValue = -1;
+							SET @returnMessage = 'La riga dell''articolo ' + ISNULL(@articoloNome, '') + ' è associata a carichi non precedenti alla data del movimento';
+							GOTO BRANCH_END;
+						END
+
+						UPDATE dbo.tblMagazziniMovimentiRigheRelazioni
+						SET Quantita = 0
+						WHERE IdParent = @idRiga;
+
+						INSERT INTO #Candidati (IdCarico, Residuo)
+						SELECT
+							rc.Id,
+							rc.Quantita - ISNULL(c.Consumata, 0)
+						FROM
+							dbo.tblMagazziniMovimentiRigheRelazioni s
+							INNER JOIN dbo.tblMagazziniMovimentiRighe rc ON s.Id = rc.Id
+							OUTER APPLY (
+								SELECT Consumata = SUM(rel.Quantita)
+								FROM
+									dbo.tblMagazziniMovimentiRigheRelazioni rel WITH (UPDLOCK, HOLDLOCK)
+									INNER JOIN dbo.tblMagazziniMovimentiRighe rp ON rel.IdParent = rp.Id
+									INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+								WHERE
+									rel.Id = rc.Id
+									AND mp.Lock IN (0, 2)
+							) c
+						WHERE s.IdParent = @idRiga
+						ORDER BY s.Pos;
+					END
+
+					-- Distribuzione greedy, carico per carico, fino al residuo di ciascuno
+					SET @daRelazionare = @quantitaRiga;
+					SET @rowNum = 1;
+					SET @maxRow = ISNULL((SELECT MAX(RowNum) FROM #Candidati), 0);
+
+					WHILE @daRelazionare > 0 AND @rowNum <= @maxRow
+					BEGIN
+						SELECT @idCarico = IdCarico, @residuoCarico = Residuo FROM #Candidati WHERE RowNum = @rowNum;
+						SET @quotaCarico = IIF(@residuoCarico < @daRelazionare, @residuoCarico, @daRelazionare);
+
+						IF @quotaCarico > 0
+						BEGIN
+							IF @idCriterioRiga IS NOT NULL
+								INSERT dbo.tblMagazziniMovimentiRigheRelazioni (Id, IdParent, Quantita, Pos)
+								VALUES (@idCarico, @idRiga, @quotaCarico, @rowNum - 1);
+							ELSE
+								UPDATE dbo.tblMagazziniMovimentiRigheRelazioni
+								SET Quantita = @quotaCarico
+								WHERE
+									Id = @idCarico
+									AND IdParent = @idRiga;
+
+							SET @daRelazionare = @daRelazionare - @quotaCarico;
+						END
+
+						SET @rowNum = @rowNum + 1;
+					END
+
+					DELETE dbo.tblMagazziniMovimentiRigheRelazioni
+					WHERE
+						IdParent = @idRiga
+						AND Quantita = 0;
+
+					IF @daRelazionare > 0
+					BEGIN
+						CLOSE cRighe;
+						DEALLOCATE cRighe;
+						ROLLBACK TRANSACTION;
+						SET @returnValue = -1;
+						SET @returnMessage = CASE
+							WHEN @idCriterioRiga IS NULL AND @maxRow = 0 THEN
+								'Associare i carichi alla riga dell''articolo ' + ISNULL(@articoloNome, '') + ' (criterio Manuale)'
+							WHEN @idCriterioRiga IS NULL THEN
+								'I carichi associati alla riga dell''articolo ' + ISNULL(@articoloNome, '') + ' non coprono la quantità (mancano ' + FORMAT(@daRelazionare, IIF(@isNumero = 1, 'N0', 'N2'), 'it-IT') + ')'
+							ELSE
+								'Disponibilità insufficiente per l''articolo ' + ISNULL(@articoloNome, '') + ' (mancano ' + FORMAT(@daRelazionare, IIF(@isNumero = 1, 'N0', 'N2'), 'it-IT') + ')'
+						END;
+						GOTO BRANCH_END;
+					END
+
+					FETCH cRighe INTO @idRiga, @idSedeRiga, @idArticoloRiga, @idCriterioRiga, @quantitaRiga, @articoloNome, @isNumero;
+				END
+
+				CLOSE cRighe;
+				DEALLOCATE cRighe;
+			END
+
+			-- Il movimento in bozza è pronto per la conferma se esiste almeno una riga
+			-- (tradizionale o EoW), tutte le righe di scarico sono completamente relazionate ai
+			-- carichi (le righe di carico sono sempre complete: sono esse stesse la giacenza),
+			-- le righe EoW sono completamente allocate sui lotti EoW, e non c'è un DDT ancora in
+			-- bozza. "Salva" fa da "Salva" e da "Conferma" nello stesso click: se non è pronto,
+			-- resta semplicemente in bozza, senza errore. Un movimento già confermato resta tale.
+			DECLARE @pronto BIT = IIF(@lockMovimento = 2, 1, 0);
+
+			IF @pronto = 1
+				AND NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRighe WHERE IdMovimento = @Id)
 				AND NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRigheEoW WHERE IdMovimento = @Id)
 				SET @pronto = 0;
 
-			IF @pronto = 1 AND EXISTS (
+			IF @pronto = 1 AND @idOperazione = 'S' AND EXISTS (
 				SELECT 1
 				FROM
 					dbo.tblMagazziniMovimentiRighe r
-					OUTER APPLY (SELECT Allocata = SUM(rl.Quantita) FROM dbo.tblMagazziniMovimentiRigheLotti rl WHERE rl.Id = r.Id) q
+					OUTER APPLY (SELECT Relazionata = SUM(rel.Quantita) FROM dbo.tblMagazziniMovimentiRigheRelazioni rel WHERE rel.IdParent = r.Id) q
 				WHERE
 					r.IdMovimento = @Id
-					AND ISNULL(q.Allocata, 0) <> r.Quantita
+					AND ISNULL(q.Relazionata, 0) <> r.Quantita
 			)
 				SET @pronto = 0;
 

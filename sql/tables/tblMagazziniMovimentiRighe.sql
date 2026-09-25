@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
@@ -12,6 +12,7 @@ CREATE TABLE [dbo].[tblMagazziniMovimentiRighe](
 	[IdCriterio] [char](1) COLLATE Latin1_General_CI_AS NULL,
 	[Quantita] [decimal](18, 2) NULL,
 	[Lock] [tinyint] NULL,
+	[IdLotto] [char](16) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblMagazziniMovimentiRighe] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC
@@ -47,4 +48,13 @@ REFERENCES [dbo].[tblMagazziniCriteriScarichiLotti] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblMagazziniMovimentiRighe] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRighe_tblMagazziniCriteriScarichiLotti]
+GO
+
+-- IdLotto: lotto in cui entra la merce, valorizzato solo sulle righe di carico (obbligatorio
+-- per il carico, validato in uspMagazziniMovimentiRighe_ins); NULL sulle righe di scarico.
+ALTER TABLE [dbo].[tblMagazziniMovimentiRighe]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniMovimentiRighe_tblMagazziniLotti] FOREIGN KEY([IdLotto])
+REFERENCES [dbo].[tblMagazziniLotti] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblMagazziniMovimentiRighe] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRighe_tblMagazziniLotti]
 GO

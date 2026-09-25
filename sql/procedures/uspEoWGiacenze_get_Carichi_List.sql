@@ -93,8 +93,11 @@ BEGIN
 			INNER JOIN dbo.tblRifiutiRegistrazioni r ON lr.IdRegistrazione = r.Id
 			INNER JOIN dbo.tblRifiutiMovimenti mo ON r.IdMovimento = mo.Id
 			LEFT JOIN dbo.tblRifiutiMateriali mat ON r.IdMateriale = mat.Id
+		-- Solo quote di registrazioni attive (Lock < 2): una registrazione eliminata (Lock = 4)
+		-- mantiene le sue quote per un eventuale ripristino, ma non conta più
 		WHERE
-			((@Vista = 'L' AND l.Id = @Id) OR (@Vista = 'M' AND l.IdMagazzino = @Id))
+			r.Lock < 2
+			AND ((@Vista = 'L' AND l.Id = @Id) OR (@Vista = 'M' AND l.IdMagazzino = @Id))
 			AND (@Search IS NULL OR r.Numero = TRY_CAST(@Search AS INT) OR l.Nome LIKE '%' + @Search + '%')
 		ORDER BY r.Data DESC, r.Numero DESC
 		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS

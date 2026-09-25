@@ -131,7 +131,7 @@ BEGIN
 				la.IdLotto,
 				la.Valore,
 				l.QuantitaMax,
-				QuantitaAttribuita = ISNULL((SELECT SUM(r.Quantita) FROM dbo.tblEoWLottiRifiutiRegistrazioni r WHERE r.IdLotto = la.IdLotto), 0)
+				QuantitaAttribuita = ISNULL((SELECT SUM(r.Quantita) FROM dbo.tblEoWLottiRifiutiRegistrazioni r INNER JOIN dbo.tblRifiutiRegistrazioni rr ON r.IdRegistrazione = rr.Id WHERE r.IdLotto = la.IdLotto AND rr.Lock < 2), 0)
 			FROM
 				dbo.tblEoWLottiAllocazioni la
 				INNER JOIN dbo.tblEoWLotti l ON la.IdLotto = l.Id

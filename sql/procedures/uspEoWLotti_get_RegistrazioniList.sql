@@ -66,7 +66,11 @@ BEGIN
 			INNER JOIN dbo.tblRifiutiRegistrazioni r ON lr.IdRegistrazione = r.Id
 			INNER JOIN dbo.tblRifiutiMovimenti mo ON r.IdMovimento = mo.Id
 			LEFT JOIN dbo.tblRifiutiMateriali mat ON r.IdMateriale = mat.Id
-		WHERE lr.IdLotto = @Id
+		-- Solo quote di registrazioni attive (Lock < 2): una registrazione eliminata (Lock = 4)
+		-- mantiene le sue quote per un eventuale ripristino, ma non conta più
+		WHERE
+			lr.IdLotto = @Id
+			AND r.Lock < 2
 		ORDER BY r.Data DESC, r.Numero DESC;
 
 	END TRY

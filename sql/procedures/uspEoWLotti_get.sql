@@ -88,9 +88,15 @@ BEGIN
 			LEFT JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id
 			LEFT JOIN dbo.tblRifiutiMateriali m ON l.IdMateriale = m.Id
 			OUTER APPLY (
+				-- Solo quote di registrazioni attive (Lock < 2): una registrazione eliminata (Lock = 4)
+				-- mantiene le sue quote per un eventuale ripristino, ma non conta più
 				SELECT QuantitaAttribuita = SUM(r.Quantita)
-				FROM dbo.tblEoWLottiRifiutiRegistrazioni r
-				WHERE r.IdLotto = l.Id
+				FROM
+					dbo.tblEoWLottiRifiutiRegistrazioni r
+					INNER JOIN dbo.tblRifiutiRegistrazioni rr ON r.IdRegistrazione = rr.Id
+				WHERE
+					r.IdLotto = l.Id
+					AND rr.Lock < 2
 			) q
 		WHERE
 			l.Id = @Id

@@ -153,7 +153,8 @@ BEGIN
 			SELECT @lockRow = Id FROM dbo.tblEoWLotti WITH (UPDLOCK, HOLDLOCK) WHERE Id = @IdLotto;
 
 			DECLARE @quantitaAttribuitaLotto DECIMAL(18, 2) = (
-				SELECT SUM(Quantita) FROM dbo.tblEoWLottiRifiutiRegistrazioni WHERE IdLotto = @IdLotto
+				-- Capienza occupata solo dalle quote di registrazioni attive (Lock < 2)
+				SELECT SUM(q.Quantita) FROM dbo.tblEoWLottiRifiutiRegistrazioni q INNER JOIN dbo.tblRifiutiRegistrazioni rr ON q.IdRegistrazione = rr.Id WHERE q.IdLotto = @IdLotto AND rr.Lock < 2
 			);
 			IF @quantitaMaxLotto IS NOT NULL AND ISNULL(@quantitaAttribuitaLotto, 0) + @Quantita > @quantitaMaxLotto
 			BEGIN

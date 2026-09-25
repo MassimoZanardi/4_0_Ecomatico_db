@@ -65,6 +65,8 @@ BEGIN
 			LottoNome = l.Nome,
 			MagazzinoNome = g.Nome,
 			Carichi = cr.Carichi,
+			CaricoUltimo = cu.CaricoUltimo,
+			CarichiNumero = ISNULL(cr.CarichiNumero, 0),
 			rl.Quantita,
 			Residuo = ISNULL(p.Prodotta, 0) - ISNULL(sc.Scaricata, 0),
 			rl.Pos
@@ -75,7 +77,9 @@ BEGIN
 			INNER JOIN dbo.tblEoWLotti l ON rl.IdLotto = l.Id
 			LEFT JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id
 			OUTER APPLY (
-				SELECT Carichi = STRING_AGG(CAST(CONCAT('n. ', rc.Numero, ' del ', FORMAT(rc.[Data], 'dd/MM/yyyy')) AS NVARCHAR(MAX)), N', ') WITHIN GROUP (ORDER BY rc.[Data], rc.Numero)
+				SELECT
+					Carichi = STRING_AGG(CAST(CONCAT('n. ', rc.Numero, ' del ', FORMAT(rc.[Data], 'dd/MM/yyyy')) AS NVARCHAR(MAX)), N', ') WITHIN GROUP (ORDER BY rc.[Data], rc.Numero),
+					CarichiNumero = COUNT(*)
 				FROM
 					dbo.tblEoWLottiRifiutiRegistrazioni qc
 					INNER JOIN dbo.tblRifiutiRegistrazioni rc ON qc.IdRegistrazione = rc.Id
@@ -84,6 +88,19 @@ BEGIN
 					AND rc.Lock < 2
 					AND (mv.[Data] IS NULL OR rc.[Data] <= mv.[Data])
 			) cr
+			-- Registrazione più recente, mostrata in forma compatta con il numero delle altre
+			-- (l'elenco completo resta in Carichi, per il tooltip)
+			OUTER APPLY (
+				SELECT TOP 1 CaricoUltimo = CONCAT('n. ', rc.Numero, ' del ', FORMAT(rc.[Data], 'dd/MM/yyyy'))
+				FROM
+					dbo.tblEoWLottiRifiutiRegistrazioni qc
+					INNER JOIN dbo.tblRifiutiRegistrazioni rc ON qc.IdRegistrazione = rc.Id
+				WHERE
+					qc.IdLotto = l.Id
+					AND rc.Lock < 2
+					AND (mv.[Data] IS NULL OR rc.[Data] <= mv.[Data])
+				ORDER BY rc.[Data] DESC, rc.Numero DESC
+			) cu
 			OUTER APPLY (
 				SELECT Prodotta = SUM(q.Quantita)
 				FROM

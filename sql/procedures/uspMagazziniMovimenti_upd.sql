@@ -60,16 +60,17 @@ BEGIN
 		END
 
 		-- Controlla il permesso sul record: scope azienda interna corrente della sessione.
-		-- Il salvataggio vale sia per la bozza (Lock = 2) sia per il movimento già confermato
-		-- (Lock = 0, come le Registrazioni Rifiuti): su quest'ultimo operazione, data e numero
-		-- sono fissati e si ricostruiscono solo le relazioni carico/scarico delle righe.
-		DECLARE @idAzienda CHAR(16), @idOperazione CHAR(1), @lockMovimento INT;
+		-- Come le Registrazioni Rifiuti (uspRifiutiRegistrazioni_upd): "Salva" conferma sempre
+		-- il movimento (Lock 2->0) oppure si blocca con un errore, e un movimento già
+		-- confermato (Lock = 0) si può risalvare modificando anche data e numero (l'operazione
+		-- resta quella fissata alla creazione), con i controlli cronologici sulle relazioni.
+		DECLARE @idAzienda CHAR(16), @idOperazione CHAR(1), @lockMovimento INT, @dataPrecedente DATE, @numeroPrecedente INT;
 		SELECT
 			@idAzienda = c.IdSede,
 			@idOperazione = c.IdOperazione,
 			@lockMovimento = c.Lock,
-			@Data = IIF(c.Lock = 0, c.[Data], @Data),
-			@Numero = IIF(c.Lock = 0, c.Numero, @Numero)
+			@dataPrecedente = c.[Data],
+			@numeroPrecedente = c.Numero
 		FROM
 			dbo.tblMagazziniMovimenti c
 			INNER JOIN dbo.tblSessioni e ON c.IdSede = e.IdAzienda
@@ -95,39 +96,46 @@ BEGIN
 			SET @returnMessage = 'Indicare la data del movimento';
 			GOTO BRANCH_END;
 		END
+		IF NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRighe WHERE IdMovimento = @Id)
+			AND NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRigheEoW WHERE IdMovimento = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Aggiungere almeno una riga';
+			GOTO BRANCH_END;
+		END
+
+		-- Movimento già confermato con data o numero modificati: le relazioni carico/scarico
+		-- vanno ricontrollate/ricostruite rispetto alla nuova posizione cronologica
+		DECLARE @dataNumeroModificati BIT = IIF(
+			@lockMovimento = 0
+			AND (@Data <> @dataPrecedente OR ISNULL(@Numero, -1) <> ISNULL(@numeroPrecedente, -1)), 1, 0);
 
 		BEGIN TRANSACTION;
 
-			-- Bozza: salva sempre Data/Numero (anche se il movimento resta in bozza): il
-			-- numero digitato dall'utente non viene ancora validato qui, solo persistito - la
-			-- validazione/rinumerazione definitiva avviene più sotto, solo se si confermano
-			-- anche le righe nello stesso salvataggio (vedi @pronto). IdOperazione è fissato
-			-- alla creazione (uspMagazziniMovimenti_ins) e non è più modificabile.
-			IF @lockMovimento = 2
-			BEGIN
-				UPDATE dbo.tblMagazziniMovimenti
-				SET
-					Data = @Data,
-					Numero = @Numero
-				WHERE
-					Id = @Id
-					AND Lock = 2;
+			-- Data/Numero: il numero digitato dall'utente viene validato/rinumerato più sotto,
+			-- dopo le relazioni. IdOperazione è fissato alla creazione
+			-- (uspMagazziniMovimenti_ins) e non è più modificabile.
+			UPDATE dbo.tblMagazziniMovimenti
+			SET
+				Data = @Data,
+				Numero = @Numero
+			WHERE
+				Id = @Id
+				AND Lock IN (0, 2);
 
-				IF @@ROWCOUNT = 0
-				BEGIN
-					ROLLBACK TRANSACTION;
-					SET @returnValue = -1;
-					SET @returnMessage = 'Movimento non trovato, già confermato o già eliminato';
-					GOTO BRANCH_END;
-				END
+			IF @@ROWCOUNT = 0
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Movimento non trovato o già eliminato';
+				GOTO BRANCH_END;
 			END
 
-			-- DDT: se presente e ancora in bozza, valida e persiste sempre i campi (salvataggio
-			-- di bozza, come la testata del Movimento); lo conferma (Lock 2->0, Numero
-			-- assegnato) solo se i campi obbligatori (Causale, Data, Destinatario) sono tutti
-			-- presenti in questo salvataggio - "Salva" fa da Salva e Conferma anche per il DDT,
-			-- nello stesso click e nella stessa SP (non più un "Salva DDT" separato). Se il DDT
-			-- è già confermato (Lock = 0) resta immutabile, coerente con la testata Movimento.
+			-- DDT: se presente e ancora in bozza, viene confermato insieme al movimento (Lock
+			-- 2->0, Numero assegnato) nello stesso click e nella stessa SP; se i campi
+			-- obbligatori (Causale, Data, Destinatario) non sono completi il salvataggio si
+			-- blocca con un errore (come le Registrazioni Rifiuti). Se il DDT è già confermato
+			-- (Lock = 0) resta immutabile.
 			DECLARE @idDdt CHAR(16), @idSedeDdt CHAR(16), @lockDdt INT;
 			SELECT @idDdt = Id, @idSedeDdt = IdSede, @lockDdt = Lock
 			FROM dbo.tblMagazziniDdt
@@ -207,51 +215,39 @@ BEGIN
 					GOTO BRANCH_END;
 				END
 
-				DECLARE @ddtPronto BIT = IIF(@DdtIdCausale IS NOT NULL AND @DdtData IS NOT NULL AND @DdtIdDestinatario IS NOT NULL, 1, 0);
-
-				IF @ddtPronto = 1
+				IF @DdtIdCausale IS NULL OR @DdtData IS NULL OR @DdtIdDestinatario IS NULL
 				BEGIN
-					-- Numerazione indipendente per sede interna + sezionale, calcolata dentro
-					-- la transazione con lock di riga per evitare duplicati in caso di
-					-- richieste concorrenti sulla stessa sede/sezionale
-					DECLARE @numeroDdt INT;
-					SELECT @numeroDdt = ISNULL(MAX(Numero), 0) + 1
-					FROM dbo.tblMagazziniDdt WITH (UPDLOCK, HOLDLOCK)
-					WHERE
-						IdSede = @idSedeDdt
-						AND (Sezionale = @DdtSezionale OR (Sezionale IS NULL AND @DdtSezionale IS NULL))
-						AND Id <> @idDdt;
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Completare il DDT: causale, data e destinatario';
+					GOTO BRANCH_END;
+				END
 
-					UPDATE dbo.tblMagazziniDdt
-					SET
-						Lock = 0,
-						IdCausale = @DdtIdCausale,
-						Numero = @numeroDdt,
-						NumeroFornitore = @DdtNumeroFornitore,
-						Sezionale = @DdtSezionale,
-						Data = @DdtData,
-						IdMittente = @DdtIdMittente,
-						IdDestinatario = @DdtIdDestinatario,
-						IdTrasportatore = @DdtIdTrasportatore,
-						DataInizioTrasporto = @DdtDataInizioTrasporto,
-						Peso = @DdtPeso
-					WHERE Id = @idDdt;
-				END
-				ELSE
-				BEGIN
-					UPDATE dbo.tblMagazziniDdt
-					SET
-						IdCausale = @DdtIdCausale,
-						NumeroFornitore = @DdtNumeroFornitore,
-						Sezionale = @DdtSezionale,
-						Data = @DdtData,
-						IdMittente = @DdtIdMittente,
-						IdDestinatario = @DdtIdDestinatario,
-						IdTrasportatore = @DdtIdTrasportatore,
-						DataInizioTrasporto = @DdtDataInizioTrasporto,
-						Peso = @DdtPeso
-					WHERE Id = @idDdt;
-				END
+				-- Numerazione indipendente per sede interna + sezionale, calcolata dentro
+				-- la transazione con lock di riga per evitare duplicati in caso di
+				-- richieste concorrenti sulla stessa sede/sezionale
+				DECLARE @numeroDdt INT;
+				SELECT @numeroDdt = ISNULL(MAX(Numero), 0) + 1
+				FROM dbo.tblMagazziniDdt WITH (UPDLOCK, HOLDLOCK)
+				WHERE
+					IdSede = @idSedeDdt
+					AND (Sezionale = @DdtSezionale OR (Sezionale IS NULL AND @DdtSezionale IS NULL))
+					AND Id <> @idDdt;
+
+				UPDATE dbo.tblMagazziniDdt
+				SET
+					Lock = 0,
+					IdCausale = @DdtIdCausale,
+					Numero = @numeroDdt,
+					NumeroFornitore = @DdtNumeroFornitore,
+					Sezionale = @DdtSezionale,
+					Data = @DdtData,
+					IdMittente = @DdtIdMittente,
+					IdDestinatario = @DdtIdDestinatario,
+					IdTrasportatore = @DdtIdTrasportatore,
+					DataInizioTrasporto = @DdtDataInizioTrasporto,
+					Peso = @DdtPeso
+				WHERE Id = @idDdt;
 			END
 
 			-- Relazioni carico/scarico delle righe tradizionali (stessa logica di
@@ -265,8 +261,9 @@ BEGIN
 			-- cronologicamente precedente allo scarico (a parità di data, numero inferiore;
 			-- scarico non ancora numerato = dopo tutti i confermati), residuo > 0. Il residuo
 			-- di un carico è la sua quantità meno le relazioni di scarichi non eliminati.
-			-- Si ricostruiscono tutte le righe in bozza, e sul movimento già confermato solo
-			-- le righe non ancora completamente relazionate (le altre sono storia consolidata).
+			-- Si ricostruiscono tutte le righe in bozza o se sono cambiati data/numero di un
+			-- movimento confermato; altrimenti, sul confermato, solo le righe non ancora
+			-- completamente relazionate (le altre sono storia consolidata).
 			IF @idOperazione = 'S'
 			BEGIN
 				DECLARE
@@ -305,7 +302,7 @@ BEGIN
 						OUTER APPLY (SELECT Relazionata = SUM(rel.Quantita) FROM dbo.tblMagazziniMovimentiRigheRelazioni rel WHERE rel.IdParent = r.Id) q
 					WHERE
 						r.IdMovimento = @Id
-						AND (@lockMovimento = 2 OR ISNULL(q.Relazionata, 0) <> r.Quantita)
+						AND (@lockMovimento = 2 OR @dataNumeroModificati = 1 OR ISNULL(q.Relazionata, 0) <> r.Quantita)
 					ORDER BY r.Id;
 
 				OPEN cRighe;
@@ -470,31 +467,9 @@ BEGIN
 				DEALLOCATE cRighe;
 			END
 
-			-- Il movimento in bozza è pronto per la conferma se esiste almeno una riga
-			-- (tradizionale o EoW), tutte le righe di scarico sono completamente relazionate ai
-			-- carichi (le righe di carico sono sempre complete: sono esse stesse la giacenza),
-			-- le righe EoW sono completamente allocate sui lotti EoW, e non c'è un DDT ancora in
-			-- bozza. "Salva" fa da "Salva" e da "Conferma" nello stesso click: se non è pronto,
-			-- resta semplicemente in bozza, senza errore. Un movimento già confermato resta tale.
-			DECLARE @pronto BIT = IIF(@lockMovimento = 2, 1, 0);
-
-			IF @pronto = 1
-				AND NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRighe WHERE IdMovimento = @Id)
-				AND NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRigheEoW WHERE IdMovimento = @Id)
-				SET @pronto = 0;
-
-			IF @pronto = 1 AND @idOperazione = 'S' AND EXISTS (
-				SELECT 1
-				FROM
-					dbo.tblMagazziniMovimentiRighe r
-					OUTER APPLY (SELECT Relazionata = SUM(rel.Quantita) FROM dbo.tblMagazziniMovimentiRigheRelazioni rel WHERE rel.IdParent = r.Id) q
-				WHERE
-					r.IdMovimento = @Id
-					AND ISNULL(q.Relazionata, 0) <> r.Quantita
-			)
-				SET @pronto = 0;
-
-			IF @pronto = 1 AND EXISTS (
+			-- Righe EoW: ancora ad allocazione manuale sui lotti EoW (le relazioni EoW arrivano
+			-- nella tranche 2) - devono essere completamente allocate
+			IF EXISTS (
 				SELECT 1
 				FROM
 					dbo.tblMagazziniMovimentiRigheEoW r
@@ -503,12 +478,15 @@ BEGIN
 					r.IdMovimento = @Id
 					AND ISNULL(q.Allocata, 0) <> r.Quantita
 			)
-				SET @pronto = 0;
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Allocare completamente sui lotti EoW le righe di materiale';
+				GOTO BRANCH_END;
+			END
 
-			IF @pronto = 1 AND EXISTS (SELECT 1 FROM dbo.tblMagazziniDdt WHERE IdMovimento = @Id AND Lock = 2)
-				SET @pronto = 0;
-
-			IF @pronto = 1
+			-- Conferma (o riconferma) del movimento: "Salva" conferma sempre, come le
+			-- Registrazioni Rifiuti; ogni condizione non soddisfatta ha già bloccato sopra
 			BEGIN
 				-- Numerazione: progressivo annuale per Azienda + anno di Data, tra i soli
 				-- movimenti già confermati (Lock = 0). UPDLOCK/HOLDLOCK per serializzare
@@ -582,13 +560,38 @@ BEGIN
 					END
 				END
 
+				-- Carico già confermato spostato di data/numero: non può finire dopo gli scarichi
+				-- (non eliminati) che ne consumano le righe (come il "Controllo data relazioni"
+				-- delle Registrazioni Rifiuti)
+				IF @idOperazione = 'C' AND @dataNumeroModificati = 1 AND EXISTS (
+					SELECT 1
+					FROM
+						dbo.tblMagazziniMovimentiRighe rc
+						INNER JOIN dbo.tblMagazziniMovimentiRigheRelazioni rel ON rel.Id = rc.Id
+						INNER JOIN dbo.tblMagazziniMovimentiRighe rp ON rel.IdParent = rp.Id
+						INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+					WHERE
+						rc.IdMovimento = @Id
+						AND mp.Lock IN (0, 2)
+						AND (
+							mp.[Data] < @Data
+							OR (mp.[Data] = @Data AND mp.Numero IS NOT NULL AND mp.Numero <= @Numero)
+						)
+				)
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Il carico è già utilizzato da scarichi con data e/o numero precedenti';
+					GOTO BRANCH_END;
+				END
+
 				UPDATE dbo.tblMagazziniMovimenti
 				SET
 					Lock = 0,
 					Numero = @Numero
 				WHERE
 					Id = @Id
-					AND Lock = 2;
+					AND Lock IN (0, 2);
 
 				UPDATE dbo.tblMagazziniMovimentiRighe
 				SET Lock = 0
@@ -598,7 +601,7 @@ BEGIN
 				SET Lock = 0
 				WHERE IdMovimento = @Id;
 
-				SET @confermato = 1;
+				SET @confermato = IIF(@lockMovimento = 2, 1, 0);
 			END
 
 		COMMIT TRANSACTION;

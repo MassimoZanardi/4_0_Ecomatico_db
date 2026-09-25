@@ -2,7 +2,8 @@
 -- contano piu' nei lotti EoW (carichi duplicati in Giacenze EoW, quantita' attribuita e
 -- capienza gonfiate) + vista Giacenze EoW > Carichi senza lotto/magazzino di partenza
 -- (nuovo parametro facoltativo @IdSede di uspEoWGiacenze_get_Carichi_List) e residuo del
--- lotto EoW nell'elenco carichi. 8 stored procedure.
+-- lotto EoW nell'elenco carichi + Giacenze EoW per lotto/magazzino con la quantita' in
+-- giacenza (solo > 0) e i giorni. Richiede le tabelle del modulo Magazzino. 8 stored procedure.
 -- Eseguire con: sqlcmd -S <server> -d 4_0_ecomatico -E -f 65001 -i <questo file>
 
 -- ============================================================ uspEoWGiacenze_get_Carichi_List
@@ -210,6 +211,13 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Giacenza (coerente con Rifiuti/Giacenze): Quantita = quanto c'è oggi nel lotto, cioè le
+		-- quote di registrazioni M attive (Lock < 2: una registrazione eliminata mantiene le sue
+		-- quote per un eventuale ripristino, ma non conta più) meno gli scarichi dei movimenti di
+		-- magazzino confermati; solo le righe con giacenza > 0. GiacenzaGiorni = giorni dalla
+		-- prima registrazione M del lotto. La capacità residua resta riferita alla produzione
+		-- (QuantitaMax - quantità attribuita): il lotto EoW è una partita di produzione, gli
+		-- scarichi non liberano capienza.
 		IF @Vista = 'L'
 		BEGIN
 			SELECT
@@ -221,6 +229,8 @@ BEGIN
 				SedeNome = s.Nome,
 				l.QuantitaMax,
 				QuantitaAttribuita = ISNULL(q.QuantitaAttribuita, 0),
+				Quantita = ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0),
+				GiacenzaGiorni = DATEDIFF(DAY, q.PrimaData, CAST(GETDATE() AS DATE)),
 				CapacitaResidua = CASE WHEN l.QuantitaMax IS NULL THEN NULL ELSE l.QuantitaMax - ISNULL(q.QuantitaAttribuita, 0) END,
 				CarichiNumero = ISNULL(q.CarichiNumero, 0),
 				RowsCount = COUNT(*) OVER ()
@@ -230,9 +240,10 @@ BEGIN
 				INNER JOIN dbo.tblSedi s ON l.IdSede = s.Id
 				LEFT JOIN dbo.tblRifiutiMateriali m ON l.IdMateriale = m.Id
 				OUTER APPLY (
-					-- Solo quote di registrazioni attive (Lock < 2): una registrazione eliminata (Lock = 4)
-					-- mantiene le sue quote per un eventuale ripristino, ma non conta più
-					SELECT QuantitaAttribuita = SUM(r.Quantita), CarichiNumero = COUNT(*)
+					SELECT
+						QuantitaAttribuita = SUM(r.Quantita),
+						CarichiNumero = COUNT(*),
+						PrimaData = MIN(rr.[Data])
 					FROM
 						dbo.tblEoWLottiRifiutiRegistrazioni r
 						INNER JOIN dbo.tblRifiutiRegistrazioni rr ON r.IdRegistrazione = rr.Id
@@ -240,10 +251,22 @@ BEGIN
 						r.IdLotto = l.Id
 						AND rr.Lock < 2
 				) q
+				OUTER APPLY (
+					SELECT Scaricata = SUM(rs.Quantita)
+					FROM
+						dbo.tblMagazziniMovimentiRigheEoWLotti rs
+						INNER JOIN dbo.tblMagazziniMovimentiRigheEoW rg ON rs.Id = rg.Id
+						INNER JOIN dbo.tblMagazziniMovimenti ms ON rg.IdMovimento = ms.Id
+					WHERE
+						rs.IdLotto = l.Id
+						AND rg.Lock = 0
+						AND ms.Lock = 0
+				) sc
 			WHERE
 				l.Lock = 0
 				AND (@IdSede IS NULL OR l.IdSede = @IdSede)
 				AND (@Search IS NULL OR l.Nome LIKE '%' + @Search + '%')
+				AND ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0) > 0
 			ORDER BY l.Nome
 			OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
 			FETCH NEXT @RowsPerPage ROWS ONLY
@@ -260,6 +283,8 @@ BEGIN
 				SedeNome = s.Nome,
 				QuantitaMax = CAST(NULL AS DECIMAL(18, 2)),
 				QuantitaAttribuita = ISNULL(q.QuantitaAttribuita, 0),
+				Quantita = ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0),
+				GiacenzaGiorni = DATEDIFF(DAY, q.PrimaData, CAST(GETDATE() AS DATE)),
 				CapacitaResidua = CAST(NULL AS DECIMAL(18, 2)),
 				CarichiNumero = ISNULL(q.CarichiNumero, 0),
 				RowsCount = COUNT(*) OVER ()
@@ -268,7 +293,10 @@ BEGIN
 				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 				INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
 				OUTER APPLY (
-					SELECT QuantitaAttribuita = SUM(r.Quantita), CarichiNumero = COUNT(*)
+					SELECT
+						QuantitaAttribuita = SUM(r.Quantita),
+						CarichiNumero = COUNT(*),
+						PrimaData = MIN(rr.[Data])
 					FROM
 						dbo.tblEoWLotti l
 						INNER JOIN dbo.tblEoWLottiRifiutiRegistrazioni r ON r.IdLotto = l.Id
@@ -277,10 +305,23 @@ BEGIN
 						l.IdMagazzino = g.Id
 						AND rr.Lock < 2
 				) q
+				OUTER APPLY (
+					SELECT Scaricata = SUM(rs.Quantita)
+					FROM
+						dbo.tblEoWLotti l
+						INNER JOIN dbo.tblMagazziniMovimentiRigheEoWLotti rs ON rs.IdLotto = l.Id
+						INNER JOIN dbo.tblMagazziniMovimentiRigheEoW rg ON rs.Id = rg.Id
+						INNER JOIN dbo.tblMagazziniMovimenti ms ON rg.IdMovimento = ms.Id
+					WHERE
+						l.IdMagazzino = g.Id
+						AND rg.Lock = 0
+						AND ms.Lock = 0
+				) sc
 			WHERE
 				g.Lock = 0
 				AND (@IdSede IS NULL OR g.IdSede = @IdSede)
 				AND (@Search IS NULL OR g.Nome LIKE '%' + @Search + '%')
+				AND ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0) > 0
 			ORDER BY g.Nome
 			OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
 			FETCH NEXT @RowsPerPage ROWS ONLY

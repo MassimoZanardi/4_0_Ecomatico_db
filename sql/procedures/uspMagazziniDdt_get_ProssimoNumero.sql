@@ -1,10 +1,11 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE OR ALTER PROCEDURE dbo.uspMagazziniDdt_get_ProssimoNumero
 	@Id CHAR(16) = NULL,
-	@IdSessione CHAR(16) = NULL
+	@IdSessione CHAR(16) = NULL,
+	@Sezionale CHAR(1) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -15,6 +16,7 @@ BEGIN
 
 		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Sezionale = NULLIF(LTRIM(RTRIM(@Sezionale)), '');
 
 		IF @Id IS NULL
 		BEGIN
@@ -43,11 +45,10 @@ BEGIN
 
 		-- Solo un suggerimento in UI, mai scritto su DB qui - la determinazione definitiva
 		-- avviene alla conferma (uspMagazziniMovimenti_upd). Scoped su IdSede (immutabile dalla
-		-- creazione) + Sezionale attualmente salvato (per un DDT nuovo è NULL).
-		DECLARE @idSede CHAR(16), @sezionale CHAR(1);
-		SELECT
-			@idSede = d.IdSede,
-			@sezionale = d.Sezionale
+		-- creazione) + Sezionale passato dal chiamante (quello scelto in UI, anche se non
+		-- ancora salvato: il suggerimento si aggiorna al cambio di sezionale).
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = d.IdSede
 		FROM
 			dbo.tblMagazziniDdt d
 			INNER JOIN dbo.tblMagazziniMovimenti m ON d.IdMovimento = m.Id
@@ -68,7 +69,7 @@ BEGIN
 		FROM dbo.tblMagazziniDdt
 		WHERE
 			IdSede = @idSede
-			AND (Sezionale = @sezionale OR (Sezionale IS NULL AND @sezionale IS NULL))
+			AND (Sezionale = @Sezionale OR (Sezionale IS NULL AND @Sezionale IS NULL))
 			AND Id <> @Id;
 
 		SELECT Numero = @numero;

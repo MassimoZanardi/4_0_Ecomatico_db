@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -124,6 +124,33 @@ BEGIN
 				SET @DdtIdMittente = NULLIF(LTRIM(RTRIM(@DdtIdMittente)), '');
 				SET @DdtIdDestinatario = NULLIF(LTRIM(RTRIM(@DdtIdDestinatario)), '');
 				SET @DdtIdTrasportatore = NULLIF(LTRIM(RTRIM(@DdtIdTrasportatore)), '');
+
+				-- DDT ricevuto (emesso da un fornitore esterno) = sezionale R, riservato: ammesso
+				-- solo sui movimenti di carico e sempre con il numero del documento del fornitore;
+				-- viceversa il numero fornitore esiste solo per i DDT ricevuti. Nessun controllo
+				-- di univocità sul numero fornitore (scelta esplicita).
+				IF @DdtSezionale = 'R'
+					AND NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimenti WHERE Id = @Id AND IdOperazione = 'C')
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Il sezionale R è riservato ai DDT ricevuti, ammessi solo sui movimenti di carico';
+					GOTO BRANCH_END;
+				END
+				IF @DdtSezionale = 'R' AND @DdtNumeroFornitore IS NULL
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Indicare il numero fornitore del DDT ricevuto';
+					GOTO BRANCH_END;
+				END
+				IF @DdtNumeroFornitore IS NOT NULL AND ISNULL(@DdtSezionale, '') <> 'R'
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Il numero fornitore si indica solo per i DDT ricevuti';
+					GOTO BRANCH_END;
+				END
 
 				IF @DdtIdCausale IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniCausali WHERE Id = @DdtIdCausale)
 				BEGIN

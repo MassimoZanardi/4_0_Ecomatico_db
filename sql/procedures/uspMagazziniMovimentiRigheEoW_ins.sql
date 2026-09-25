@@ -96,6 +96,15 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- I moduli sono opzionali per dominio: righe di materiale EoW solo con il modulo
+		-- Gestione EoW attivo
+		IF dbo.ufnModuli_get_IsAttivoBySessione('EOW', @IdSessione) = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il modulo Gestione EoW non è attivo sul dominio';
+			GOTO BRANCH_END;
+		END
+
 		-- Il movimento deve esistere (bozza o già confermato, non eliminato) e
 		-- appartenere all'azienda interna corrente della sessione. IdMovimento non
 		-- ha FK verso tblMagazziniMovimenti sullo schema reale: la relazione va

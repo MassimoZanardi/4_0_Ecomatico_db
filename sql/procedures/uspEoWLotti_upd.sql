@@ -136,6 +136,25 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- La quantità massima non può scendere sotto la produzione già attribuita al lotto (quote
+		-- di registrazioni M attive): il lotto EoW è una partita di produzione. Aumentarla è
+		-- sempre possibile (riapre capienza, se il lotto non è chiuso).
+		DECLARE @quantitaAttribuita DECIMAL(18, 2) = ISNULL((
+			SELECT SUM(q.Quantita)
+			FROM
+				dbo.tblEoWLottiRifiutiRegistrazioni q
+				INNER JOIN dbo.tblRifiutiRegistrazioni rr ON q.IdRegistrazione = rr.Id
+			WHERE
+				q.IdLotto = @Id
+				AND rr.Lock < 2
+		), 0);
+		IF @QuantitaMax IS NOT NULL AND @QuantitaMax < @quantitaAttribuita
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La quantità massima non può essere inferiore alla quantità già attribuita al lotto (' + FORMAT(@quantitaAttribuita, 'N2', 'it-IT') + ')';
+			GOTO BRANCH_END;
+		END
+
 		-- Controlla che non esista un altro lotto attivo con lo stesso nome nella stessa sede
 		IF EXISTS (
 			SELECT 1

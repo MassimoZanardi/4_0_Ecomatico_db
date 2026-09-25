@@ -145,6 +145,48 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Lotti non utilizzabili: chiusi (data di chiusura impostata), disabilitati o eliminati,
+			-- come per l'attribuzione manuale (uspEoWLottiRifiutiRegistrazioni_ins). Con il tipo C
+			-- (priorità/capacità) vengono saltati come i lotti pieni e si passa al successivo; con
+			-- U e P (lotto unico / percentuale) non c'è un lotto successivo: errore bloccante.
+			DECLARE @lottoNonUtilizzabile VARCHAR(50) = (
+				SELECT TOP 1 l.Nome
+				FROM
+					@righe r
+					INNER JOIN dbo.tblEoWLotti l ON r.IdLotto = l.Id
+				WHERE
+					l.Lock <> 0
+					OR l.DataChiusura IS NOT NULL
+					OR ISNULL(l.Disabilitato, 0) = 1
+				ORDER BY l.Nome
+			);
+			IF @lottoNonUtilizzabile IS NOT NULL AND @idAllocazioneTipo IN ('U', 'P')
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Il lotto ' + @lottoNonUtilizzabile + ' dell''allocazione è chiuso o disabilitato';
+				GOTO BRANCH_END;
+			END
+			IF @lottoNonUtilizzabile IS NOT NULL
+			BEGIN
+				DELETE r
+				FROM
+					@righe r
+					INNER JOIN dbo.tblEoWLotti l ON r.IdLotto = l.Id
+				WHERE
+					l.Lock <> 0
+					OR l.DataChiusura IS NOT NULL
+					OR ISNULL(l.Disabilitato, 0) = 1;
+
+				IF NOT EXISTS (SELECT 1 FROM @righe)
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Tutti i lotti dell''allocazione sono chiusi o disabilitati';
+					GOTO BRANCH_END;
+				END
+			END
+
 			DECLARE @quantitaMovimento DECIMAL(18, 2) = (SELECT Quantita FROM dbo.tblRifiutiMovimenti WHERE Id = @idMovimento);
 			DECLARE @quantitaAttribuitaRegistrazione DECIMAL(18, 2) = ISNULL((
 				SELECT SUM(Quantita) FROM dbo.tblEoWLottiRifiutiRegistrazioni WHERE IdRegistrazione = @IdRegistrazione

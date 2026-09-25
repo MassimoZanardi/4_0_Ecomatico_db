@@ -63,8 +63,9 @@ BEGIN
 		BEGIN
 			SELECT
 				l.Id,
-				StatoValore = 0,
-				StatoDescrizione = 'OK',
+				-- Lotto pieno: la produzione attribuita ha raggiunto la quantità massima
+				StatoValore = CASE WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAttribuita, 0) >= l.QuantitaMax THEN 1 ELSE 0 END,
+				StatoDescrizione = CASE WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAttribuita, 0) >= l.QuantitaMax THEN 'Lotto pieno: capacità esaurita' ELSE 'OK' END,
 				l.Nome,
 				MaterialeNome = m.Nome,
 				SedeNome = s.Nome,

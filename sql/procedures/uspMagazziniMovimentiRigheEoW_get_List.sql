@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -63,14 +63,59 @@ BEGIN
 			r.IdCriterio,
 			CriterioNome = cr.Nome,
 			r.Quantita,
-			Allocata = ISNULL(q.Allocata, 0),
+			-- Quantità già relazionata ai lotti EoW consumati (costruita in uspMagazziniMovimenti_upd)
+			Relazionata = ISNULL(q.Relazionata, 0),
+			r.IdLotto,
+			LottoNome = lr.Nome,
+			-- Movimento confermato: quantità residua (giacenza attuale) del lotto EoW da cui la
+			-- riga ha scaricato; su più lotti somma dei residui con il dettaglio per lotto.
+			-- NULL su movimento in bozza (residuo non ancora noto).
+			ResiduoLotti = IIF(mv.Lock = 0, z.ResiduoLotti, NULL),
+			ResiduoLottiDettaglio = IIF(mv.Lock = 0, z.ResiduoLottiDettaglio, NULL),
 			r.Lock
 		FROM
 			dbo.tblMagazziniMovimentiRigheEoW r
+			INNER JOIN dbo.tblMagazziniMovimenti mv ON r.IdMovimento = mv.Id
 			INNER JOIN dbo.tblSedi s ON r.IdSede = s.Id
 			LEFT JOIN dbo.tblRifiutiMateriali m ON r.IdMateriale = m.Id
 			LEFT JOIN dbo.tblMagazziniCriteriScarichiLotti cr ON r.IdCriterio = cr.Id
-			OUTER APPLY (SELECT Allocata = SUM(rl.Quantita) FROM dbo.tblMagazziniMovimentiRigheEoWLotti rl WHERE rl.Id = r.Id) q
+			LEFT JOIN dbo.tblEoWLotti lr ON r.IdLotto = lr.Id
+			OUTER APPLY (SELECT Relazionata = SUM(rl.Quantita) FROM dbo.tblMagazziniMovimentiRigheEoWLotti rl WHERE rl.Id = r.Id) q
+			OUTER APPLY (
+				SELECT
+					ResiduoLotti = SUM(g.Giacenza),
+					ResiduoLottiDettaglio = STRING_AGG(t.Testo, N' – ') WITHIN GROUP (ORDER BY g.Nome)
+				FROM
+					dbo.tblMagazziniMovimentiRigheEoWLotti rl
+					INNER JOIN dbo.tblEoWLotti lg ON rl.IdLotto = lg.Id
+					-- Giacenza del lotto EoW: quote di registrazioni M attive meno scarichi
+					-- confermati di questo modulo
+					CROSS APPLY (
+						SELECT
+							lg.Nome,
+							Giacenza = ISNULL((
+								SELECT SUM(qp.Quantita)
+								FROM
+									dbo.tblEoWLottiRifiutiRegistrazioni qp
+									INNER JOIN dbo.tblRifiutiRegistrazioni rr ON qp.IdRegistrazione = rr.Id
+								WHERE
+									qp.IdLotto = lg.Id
+									AND rr.Lock < 2
+							), 0) - ISNULL((
+								SELECT SUM(rs.Quantita)
+								FROM
+									dbo.tblMagazziniMovimentiRigheEoWLotti rs
+									INNER JOIN dbo.tblMagazziniMovimentiRigheEoW rp ON rs.Id = rp.Id
+									INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+								WHERE
+									rs.IdLotto = lg.Id
+									AND rp.Lock = 0
+									AND mp.Lock = 0
+							), 0)
+					) g
+					CROSS APPLY (SELECT Testo = CAST(g.Nome + ': ' + FORMAT(g.Giacenza, 'N2', 'it-IT') AS NVARCHAR(MAX))) t
+				WHERE rl.Id = r.Id
+			) z
 		WHERE r.IdMovimento = @IdMovimento
 		ORDER BY r.Id
 		OPTION (RECOMPILE);

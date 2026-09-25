@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -55,15 +55,41 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Lotti EoW da cui la riga EoW di scarico ha scaricato, nell'ordine di consumo:
+		-- Quantita = quanto questo scarico ne ha scaricato; Residuo = quanto resta oggi del
+		-- lotto (quote di registrazioni M attive meno gli scarichi non eliminati)
 		SELECT
 			rl.IdLotto,
 			LottoNome = l.Nome,
-			rl.Quantita
+			MagazzinoNome = g.Nome,
+			rl.Quantita,
+			Residuo = ISNULL(p.Prodotta, 0) - ISNULL(sc.Scaricata, 0),
+			rl.Pos
 		FROM
 			dbo.tblMagazziniMovimentiRigheEoWLotti rl
 			INNER JOIN dbo.tblEoWLotti l ON rl.IdLotto = l.Id
+			LEFT JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id
+			OUTER APPLY (
+				SELECT Prodotta = SUM(q.Quantita)
+				FROM
+					dbo.tblEoWLottiRifiutiRegistrazioni q
+					INNER JOIN dbo.tblRifiutiRegistrazioni rr ON q.IdRegistrazione = rr.Id
+				WHERE
+					q.IdLotto = l.Id
+					AND rr.Lock < 2
+			) p
+			OUTER APPLY (
+				SELECT Scaricata = SUM(rs.Quantita)
+				FROM
+					dbo.tblMagazziniMovimentiRigheEoWLotti rs
+					INNER JOIN dbo.tblMagazziniMovimentiRigheEoW rp ON rs.Id = rp.Id
+					INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+				WHERE
+					rs.IdLotto = l.Id
+					AND mp.Lock IN (0, 2)
+			) sc
 		WHERE rl.Id = @Id
-		ORDER BY l.Nome
+		ORDER BY rl.Pos, l.Nome
 		OPTION (RECOMPILE);
 
 	END TRY

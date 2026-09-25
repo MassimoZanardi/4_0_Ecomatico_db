@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
@@ -12,6 +12,7 @@ CREATE TABLE [dbo].[tblMagazziniMovimentiRigheEoW](
 	[IdCriterio] [char](1) COLLATE Latin1_General_CI_AS NULL,
 	[Quantita] [decimal](18, 2) NULL,
 	[Lock] [tinyint] NULL,
+	[IdLotto] [char](16) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblMagazziniMovimentiRigheEoW] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC
@@ -43,4 +44,13 @@ REFERENCES [dbo].[tblMagazziniCriteriScarichiLotti] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblMagazziniCriteriScarichiLotti]
+GO
+
+-- IdLotto: lotto EoW da cui scaricare, valorizzato solo con il criterio Manuale (validato in
+-- uspMagazziniMovimentiRigheEoW_ins).
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblEoWLotti] FOREIGN KEY([IdLotto])
+REFERENCES [dbo].[tblEoWLotti] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblEoWLotti]
 GO

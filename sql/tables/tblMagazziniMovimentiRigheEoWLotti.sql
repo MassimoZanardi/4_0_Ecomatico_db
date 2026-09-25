@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
@@ -11,6 +11,7 @@ CREATE TABLE [dbo].[tblMagazziniMovimentiRigheEoWLotti](
 	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdLotto] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Quantita] [decimal](18, 2) NULL,
+	[Pos] [int] NULL,
  CONSTRAINT [PK_tblMagazziniMovimentiRigheEoWLotti] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC,

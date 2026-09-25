@@ -418,23 +418,161 @@ BEGIN
 				DEALLOCATE cRighe;
 			END
 
-			-- Righe EoW: ancora ad allocazione manuale sui lotti EoW (le relazioni EoW arrivano
-			-- nella tranche 2) - devono essere completamente allocate
-			IF EXISTS (
-				SELECT 1
+			-- Relazioni delle righe EoW (stessa logica delle righe tradizionali): per l'EoW il
+			-- "carico" è il lotto EoW, alimentato dalle quote delle registrazioni rifiuti M
+			-- (tblEoWLottiRifiutiRegistrazioni); la riga EoW di scarico si relaziona ai lotti EoW
+			-- che consuma (tblMagazziniMovimentiRigheEoWLotti). Ordine di consumo dal criterio:
+			--   M (Manuale) solo il lotto EoW scelto sulla riga;
+			--   F (FIFO) lotti per data di apertura crescente; L (LIFO) decrescente;
+			--   E (FEFO) lotti per scadenza (DataChiusura) crescente.
+			-- Lotti candidati: stessa Sede+Materiale, attivi, non disabilitati. Disponibile alla
+			-- data dello scarico = quote di registrazioni M attive con data <= data dello scarico
+			-- (non si scarica materiale non ancora prodotto a quella data) meno quanto già
+			-- scaricato dal lotto da scarichi non eliminati.
+			DECLARE
+				@idRigaEoW CHAR(16),
+				@idSedeRigaEoW CHAR(16),
+				@idMaterialeRigaEoW CHAR(2),
+				@idCriterioRigaEoW CHAR(1),
+				@idLottoRigaEoW CHAR(16),
+				@quantitaRigaEoW DECIMAL(18, 2),
+				@materialeNome VARCHAR(100),
+				@lottoEoWNome VARCHAR(50),
+				@daRelazionareEoW DECIMAL(18, 2),
+				@idLottoEoW CHAR(16),
+				@residuoLottoEoW DECIMAL(18, 2),
+				@quotaLottoEoW DECIMAL(18, 2),
+				@rowNumEoW INT,
+				@maxRowEoW INT;
+
+			CREATE TABLE #CandidatiEoW (
+				RowNum INT IDENTITY(1, 1) PRIMARY KEY,
+				IdLotto CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL,
+				Residuo DECIMAL(18, 2) NOT NULL
+			);
+
+			DECLARE cRigheEoW CURSOR LOCAL FAST_FORWARD FOR
+				SELECT
+					r.Id,
+					r.IdSede,
+					r.IdMateriale,
+					r.IdCriterio,
+					r.IdLotto,
+					r.Quantita,
+					m.Nome,
+					lr.Nome
 				FROM
 					dbo.tblMagazziniMovimentiRigheEoW r
-					OUTER APPLY (SELECT Allocata = SUM(rl.Quantita) FROM dbo.tblMagazziniMovimentiRigheEoWLotti rl WHERE rl.Id = r.Id) q
+					LEFT JOIN dbo.tblRifiutiMateriali m ON r.IdMateriale = m.Id
+					LEFT JOIN dbo.tblEoWLotti lr ON r.IdLotto = lr.Id
+					OUTER APPLY (SELECT Relazionata = SUM(rl.Quantita) FROM dbo.tblMagazziniMovimentiRigheEoWLotti rl WHERE rl.Id = r.Id) q
 				WHERE
 					r.IdMovimento = @Id
-					AND ISNULL(q.Allocata, 0) <> r.Quantita
-			)
+					AND (@lockMovimento = 2 OR @dataNumeroModificati = 1 OR ISNULL(q.Relazionata, 0) <> r.Quantita)
+				ORDER BY r.Id;
+
+			OPEN cRigheEoW;
+			FETCH cRigheEoW INTO @idRigaEoW, @idSedeRigaEoW, @idMaterialeRigaEoW, @idCriterioRigaEoW, @idLottoRigaEoW, @quantitaRigaEoW, @materialeNome, @lottoEoWNome;
+
+			WHILE @@FETCH_STATUS = 0
 			BEGIN
-				ROLLBACK TRANSACTION;
-				SET @returnValue = -1;
-				SET @returnMessage = 'Allocare completamente sui lotti EoW le righe di materiale';
-				GOTO BRANCH_END;
+				IF @idCriterioRigaEoW IS NULL OR @idCriterioRigaEoW NOT IN ('M', 'F', 'L', 'E') OR (@idCriterioRigaEoW = 'M' AND @idLottoRigaEoW IS NULL)
+				BEGIN
+					CLOSE cRigheEoW;
+					DEALLOCATE cRigheEoW;
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Completare il criterio di scarico della riga del materiale ' + ISNULL(@materialeNome, '');
+					GOTO BRANCH_END;
+				END
+
+				-- Relazioni ricostruite da zero nell'ordine del criterio. Lock di riga
+				-- (UPDLOCK/HOLDLOCK) sulle relazioni dei lotti candidati, per serializzare
+				-- scarichi concorrenti sugli stessi lotti EoW.
+				TRUNCATE TABLE #CandidatiEoW;
+
+				DELETE dbo.tblMagazziniMovimentiRigheEoWLotti
+				WHERE Id = @idRigaEoW;
+
+				INSERT INTO #CandidatiEoW (IdLotto, Residuo)
+				SELECT
+					l.Id,
+					ISNULL(p.Prodotta, 0) - ISNULL(sc.Scaricata, 0)
+				FROM
+					dbo.tblEoWLotti l
+					OUTER APPLY (
+						SELECT Prodotta = SUM(qp.Quantita)
+						FROM
+							dbo.tblEoWLottiRifiutiRegistrazioni qp
+							INNER JOIN dbo.tblRifiutiRegistrazioni rr ON qp.IdRegistrazione = rr.Id
+						WHERE
+							qp.IdLotto = l.Id
+							AND rr.Lock < 2
+							AND rr.[Data] <= @Data
+					) p
+					OUTER APPLY (
+						SELECT Scaricata = SUM(rs.Quantita)
+						FROM
+							dbo.tblMagazziniMovimentiRigheEoWLotti rs WITH (UPDLOCK, HOLDLOCK)
+							INNER JOIN dbo.tblMagazziniMovimentiRigheEoW rp ON rs.Id = rp.Id
+							INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+						WHERE
+							rs.IdLotto = l.Id
+							AND mp.Lock IN (0, 2)
+					) sc
+				WHERE
+					l.IdSede = @idSedeRigaEoW
+					AND l.IdMateriale = @idMaterialeRigaEoW
+					AND l.Lock = 0
+					AND ISNULL(l.Disabilitato, 0) = 0
+					AND (@idCriterioRigaEoW <> 'M' OR l.Id = @idLottoRigaEoW)
+					AND ISNULL(p.Prodotta, 0) - ISNULL(sc.Scaricata, 0) > 0
+				ORDER BY
+					CASE WHEN @idCriterioRigaEoW = 'L' THEN l.DataApertura END DESC,
+					CASE WHEN @idCriterioRigaEoW = 'E' THEN ISNULL(l.DataChiusura, '9999-12-31') END ASC,
+					l.DataApertura ASC,
+					l.Id;
+
+				-- Distribuzione greedy, lotto per lotto, fino al disponibile di ciascuno
+				SET @daRelazionareEoW = @quantitaRigaEoW;
+				SET @rowNumEoW = 1;
+				SET @maxRowEoW = ISNULL((SELECT MAX(RowNum) FROM #CandidatiEoW), 0);
+
+				WHILE @daRelazionareEoW > 0 AND @rowNumEoW <= @maxRowEoW
+				BEGIN
+					SELECT @idLottoEoW = IdLotto, @residuoLottoEoW = Residuo FROM #CandidatiEoW WHERE RowNum = @rowNumEoW;
+					SET @quotaLottoEoW = IIF(@residuoLottoEoW < @daRelazionareEoW, @residuoLottoEoW, @daRelazionareEoW);
+
+					IF @quotaLottoEoW > 0
+					BEGIN
+						INSERT dbo.tblMagazziniMovimentiRigheEoWLotti (Id, IdLotto, Quantita, Pos)
+						VALUES (@idRigaEoW, @idLottoEoW, @quotaLottoEoW, @rowNumEoW - 1);
+
+						SET @daRelazionareEoW = @daRelazionareEoW - @quotaLottoEoW;
+					END
+
+					SET @rowNumEoW = @rowNumEoW + 1;
+				END
+
+				IF @daRelazionareEoW > 0
+				BEGIN
+					CLOSE cRigheEoW;
+					DEALLOCATE cRigheEoW;
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage =
+						'Disponibilità insufficiente '
+						+ IIF(@idCriterioRigaEoW = 'M', 'nel lotto EoW ' + ISNULL(@lottoEoWNome, '') + ' ', '')
+						+ 'per il materiale ' + ISNULL(@materialeNome, '')
+						+ ' (mancano ' + FORMAT(@daRelazionareEoW, 'N2', 'it-IT') + ')';
+					GOTO BRANCH_END;
+				END
+
+				FETCH cRigheEoW INTO @idRigaEoW, @idSedeRigaEoW, @idMaterialeRigaEoW, @idCriterioRigaEoW, @idLottoRigaEoW, @quantitaRigaEoW, @materialeNome, @lottoEoWNome;
 			END
+
+			CLOSE cRigheEoW;
+			DEALLOCATE cRigheEoW;
 
 			-- Conferma (o riconferma) del movimento: "Salva" conferma sempre, come le
 			-- Registrazioni Rifiuti; ogni condizione non soddisfatta ha già bloccato sopra

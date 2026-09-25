@@ -8,7 +8,8 @@ CREATE OR ALTER PROCEDURE dbo.uspMagazziniMovimentiRigheEoW_ins
 	@IdSede CHAR(16) = NULL,
 	@IdMateriale CHAR(2) = NULL,
 	@IdCriterio CHAR(1) = NULL,
-	@Quantita DECIMAL(18, 2) = NULL
+	@Quantita DECIMAL(18, 2) = NULL,
+	@IdLotto CHAR(16) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -22,6 +23,7 @@ BEGIN
 		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
 		SET @IdMateriale = NULLIF(LTRIM(RTRIM(@IdMateriale)), '');
 		SET @IdCriterio = NULLIF(LTRIM(RTRIM(@IdCriterio)), '');
+		SET @IdLotto = NULLIF(LTRIM(RTRIM(@IdLotto)), '');
 
 		IF @IdMovimento IS NULL
 		BEGIN
@@ -53,10 +55,31 @@ BEGIN
 			SET @returnMessage = 'Indicare una quantità maggiore di zero';
 			GOTO BRANCH_END;
 		END
-		IF @IdCriterio IS NOT NULL AND @IdCriterio NOT IN ('F', 'L', 'E')
+		-- Criterio obbligatorio: M (Manuale, lotto EoW scelto sulla riga), F/L (data di apertura
+		-- del lotto EoW), E (scadenza del lotto EoW). V/R (per singolo carico) non si applicano
+		-- all'EoW: il "carico" è il lotto EoW stesso.
+		IF @IdCriterio IS NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Criterio di scarico non valido';
+			SET @returnMessage = 'Selezionare il criterio di scarico';
+			GOTO BRANCH_END;
+		END
+		IF @IdCriterio NOT IN ('M', 'F', 'L', 'E')
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Criterio di scarico non valido per un materiale EoW';
+			GOTO BRANCH_END;
+		END
+		IF @IdCriterio = 'M' AND @IdLotto IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Con il criterio Manuale selezionare il lotto EoW da cui scaricare';
+			GOTO BRANCH_END;
+		END
+		IF @IdCriterio <> 'M' AND @IdLotto IS NOT NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il lotto EoW si indica solo con il criterio Manuale';
 			GOTO BRANCH_END;
 		END
 
@@ -145,12 +168,30 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Lotto EoW del criterio Manuale: stessa Sede+Materiale della riga, attivo, non
+		-- disabilitato (anche se scaduto: si scarica da ciò che resta)
+		IF @IdLotto IS NOT NULL AND NOT EXISTS (
+			SELECT 1
+			FROM dbo.tblEoWLotti
+			WHERE
+				Id = @IdLotto
+				AND IdSede = @IdSede
+				AND IdMateriale = @IdMateriale
+				AND Lock = 0
+				AND ISNULL(Disabilitato, 0) = 0
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il lotto EoW selezionato non è valido per questa riga';
+			GOTO BRANCH_END;
+		END
+
 		-- uspId_get FUORI dalla transazione
 		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
 
 		BEGIN TRANSACTION;
-			INSERT dbo.tblMagazziniMovimentiRigheEoW (Id, IdMovimento, IdSede, IdMateriale, IdCriterio, Quantita, Lock)
-			VALUES (@returnId, @IdMovimento, @IdSede, @IdMateriale, @IdCriterio, @Quantita, @lockMovimento);
+			INSERT dbo.tblMagazziniMovimentiRigheEoW (Id, IdMovimento, IdSede, IdMateriale, IdCriterio, Quantita, Lock, IdLotto)
+			VALUES (@returnId, @IdMovimento, @IdSede, @IdMateriale, @IdCriterio, @Quantita, @lockMovimento, @IdLotto);
 		COMMIT TRANSACTION;
 
 		SELECT Id = @returnId;

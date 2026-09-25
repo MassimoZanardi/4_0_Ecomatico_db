@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
@@ -53,8 +53,10 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Disponibilità = quantità prodotta (registrazioni M attribuite, modulo EoW
-		-- esistente) - scarichi già eseguiti da questo modulo Magazzino
+		-- Lotti EoW da cui scaricare (criterio Manuale): stessa Sede+Materiale, attivi, non
+		-- disabilitati, con disponibilità (anche se scaduti). Disponibilità = quantità
+		-- prodotta (quote di registrazioni M attive attribuite al lotto, modulo EoW) -
+		-- scarichi confermati di questo modulo Magazzino
 		SELECT
 			l.Id,
 			[Text] = l.Nome + ' (disp. ' + FORMAT(ISNULL(p.Prodotta, 0) - ISNULL(sc.Scaricata, 0), 'N2', 'it-IT') + ')',
@@ -62,9 +64,13 @@ BEGIN
 		FROM
 			dbo.tblEoWLotti l
 			OUTER APPLY (
-				SELECT Prodotta = SUM(Quantita)
-				FROM dbo.tblEoWLottiRifiutiRegistrazioni
-				WHERE IdLotto = l.Id
+				SELECT Prodotta = SUM(q.Quantita)
+				FROM
+					dbo.tblEoWLottiRifiutiRegistrazioni q
+					INNER JOIN dbo.tblRifiutiRegistrazioni rr ON q.IdRegistrazione = rr.Id
+				WHERE
+					q.IdLotto = l.Id
+					AND rr.Lock < 2
 			) p
 			OUTER APPLY (
 				SELECT Scaricata = SUM(rl.Quantita)
@@ -82,7 +88,7 @@ BEGIN
 			AND l.IdMateriale = @IdMateriale
 			AND l.Lock = 0
 			AND ISNULL(l.Disabilitato, 0) = 0
-			AND (l.DataChiusura IS NULL OR l.DataChiusura >= CAST(GETDATE() AS DATE))
+			AND ISNULL(p.Prodotta, 0) - ISNULL(sc.Scaricata, 0) > 0
 			AND (@Search IS NULL OR l.Nome LIKE '%' + @Search + '%')
 		ORDER BY l.Nome
 		OPTION (RECOMPILE);

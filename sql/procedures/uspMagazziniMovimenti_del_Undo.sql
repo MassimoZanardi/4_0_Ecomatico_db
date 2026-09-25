@@ -65,6 +65,49 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Stesso vincolo per le righe EoW: nessun lotto EoW scaricato oltre la quantità
+			-- prodotta (quote di registrazioni M attive)
+			IF EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblEoWLotti l
+					CROSS APPLY (
+						SELECT Scaricata = SUM(rs.Quantita)
+						FROM
+							dbo.tblMagazziniMovimentiRigheEoWLotti rs WITH (UPDLOCK, HOLDLOCK)
+							INNER JOIN dbo.tblMagazziniMovimentiRigheEoW rp ON rs.Id = rp.Id
+							INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+						WHERE
+							rs.IdLotto = l.Id
+							AND mp.Lock IN (0, 2)
+					) sc
+					OUTER APPLY (
+						SELECT Prodotta = SUM(qp.Quantita)
+						FROM
+							dbo.tblEoWLottiRifiutiRegistrazioni qp
+							INNER JOIN dbo.tblRifiutiRegistrazioni rr ON qp.IdRegistrazione = rr.Id
+						WHERE
+							qp.IdLotto = l.Id
+							AND rr.Lock < 2
+					) p
+				WHERE
+					l.Id IN (
+						SELECT rs2.IdLotto
+						FROM
+							dbo.tblMagazziniMovimentiRigheEoWLotti rs2
+							INNER JOIN dbo.tblMagazziniMovimentiRigheEoW rp2 ON rs2.Id = rp2.Id
+							INNER JOIN dbo.tblIdCancellati k ON rp2.IdMovimento = k.Id
+						WHERE k.IdSessione = @IdSessione
+					)
+					AND sc.Scaricata > ISNULL(p.Prodotta, 0)
+			)
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Impossibile ripristinare: i lotti EoW utilizzati dallo scarico sono stati nel frattempo consumati da altri scarichi';
+				GOTO BRANCH_END;
+			END
+
 			DELETE i
 			FROM dbo.tblIdLog i
 			INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id

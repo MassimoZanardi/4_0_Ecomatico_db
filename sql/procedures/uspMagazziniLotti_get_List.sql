@@ -63,7 +63,7 @@ BEGIN
 			dbo.tblMagazziniLotti l
 			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON l.IdSede = i.Id
 			LEFT JOIN dbo.tblMagazziniArticoli art ON l.IdArticolo = art.Id
-			-- Caricato: righe di carico confermate del lotto; Scaricato: relazioni di scarichi
+			-- Caricato: righe di carico confermate del lotto (le righe di scarico Manuale hanno anch'esse IdLotto: filtro sull'operazione); Scaricato: relazioni di scarichi
 			-- confermati su quelle righe di carico (tblMagazziniMovimentiRigheRelazioni)
 			OUTER APPLY (
 				SELECT
@@ -74,6 +74,7 @@ BEGIN
 							INNER JOIN dbo.tblMagazziniMovimenti mc ON rc.IdMovimento = mc.Id
 						WHERE
 							rc.IdLotto = l.Id
+							AND mc.IdOperazione = 'C'
 							AND rc.Lock = 0
 							AND mc.Lock = 0
 					),

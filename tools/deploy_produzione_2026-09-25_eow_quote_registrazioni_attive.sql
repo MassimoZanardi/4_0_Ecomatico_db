@@ -1,7 +1,8 @@
 ﻿-- Deploy produzione 2026-09-25: EoW, le quote di registrazioni eliminate (Lock = 4) non
 -- contano piu' nei lotti EoW (carichi duplicati in Giacenze EoW, quantita' attribuita e
 -- capienza gonfiate) + vista Giacenze EoW > Carichi senza lotto/magazzino di partenza
--- (nuovo parametro facoltativo @IdSede di uspEoWGiacenze_get_Carichi_List). 8 stored procedure.
+-- (nuovo parametro facoltativo @IdSede di uspEoWGiacenze_get_Carichi_List) e residuo del
+-- lotto EoW nell'elenco carichi. 8 stored procedure.
 -- Eseguire con: sqlcmd -S <server> -d 4_0_ecomatico -E -f 65001 -i <questo file>
 
 -- ============================================================ uspEoWGiacenze_get_Carichi_List
@@ -92,6 +93,10 @@ BEGIN
 			LottoNome = l.Nome,
 			QuantitaComplessiva = mo.Quantita,
 			QuantitaAttribuita = lr.Quantita,
+			-- Residuo attuale del lotto EoW della quota (gli scarichi di magazzino prelevano dal
+			-- lotto, non dalla singola registrazione): quote di registrazioni attive meno gli
+			-- scarichi dei movimenti di magazzino confermati
+			ResiduoLotto = ISNULL(pl.Prodotta, 0) - ISNULL(sl.Scaricata, 0),
 			RowsCount = COUNT(*) OVER ()
 		FROM
 			dbo.tblEoWLottiRifiutiRegistrazioni lr
@@ -100,6 +105,26 @@ BEGIN
 			INNER JOIN dbo.tblRifiutiRegistrazioni r ON lr.IdRegistrazione = r.Id
 			INNER JOIN dbo.tblRifiutiMovimenti mo ON r.IdMovimento = mo.Id
 			LEFT JOIN dbo.tblRifiutiMateriali mat ON r.IdMateriale = mat.Id
+			OUTER APPLY (
+				SELECT Prodotta = SUM(qp.Quantita)
+				FROM
+					dbo.tblEoWLottiRifiutiRegistrazioni qp
+					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON qp.IdRegistrazione = rp.Id
+				WHERE
+					qp.IdLotto = l.Id
+					AND rp.Lock < 2
+			) pl
+			OUTER APPLY (
+				SELECT Scaricata = SUM(rs.Quantita)
+				FROM
+					dbo.tblMagazziniMovimentiRigheEoWLotti rs
+					INNER JOIN dbo.tblMagazziniMovimentiRigheEoW rg ON rs.Id = rg.Id
+					INNER JOIN dbo.tblMagazziniMovimenti ms ON rg.IdMovimento = ms.Id
+				WHERE
+					rs.IdLotto = l.Id
+					AND rg.Lock = 0
+					AND ms.Lock = 0
+			) sl
 		-- Solo quote di registrazioni attive (Lock < 2): una registrazione eliminata (Lock = 4)
 		-- mantiene le sue quote per un eventuale ripristino, ma non conta più
 		WHERE

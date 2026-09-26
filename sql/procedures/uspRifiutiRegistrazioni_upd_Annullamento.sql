@@ -14,9 +14,11 @@ GO
 -- registrazione restano quelli calcolati automaticamente (nessuna UI li espone in modifica) ma vengono
 -- comunque passati a uspRifiutiRegistrazioni_upd per la sua validazione standard. Tutti gli altri campi
 -- vengono riletti invariati dalla riga stessa (snapshot copiato dall'originale al momento dell'INSERT,
--- mai più toccato) e passati pari pari a uspRifiutiRegistrazioni_upd. A differenza della correzione, un
--- annullamento non propaga MAI nulla sull'originale (che infatti non viene nemmeno letto qui, se non
--- per verificare il collegamento).
+-- mai più toccato) e passati pari pari a uspRifiutiRegistrazioni_upd. Come la correzione, un annullamento
+-- non modifica mai l'originale: dalla conferma (Lock = 0) l'originale vale Quantita = 0 per giacenze e
+-- relazioni (viewRifiutiRegistrazioniEffettive). Per questo un carico gia' consumato da scarichi attivi non
+-- annullati non puo' essere annullato (vanno annullati prima gli scarichi); uno scarico si' (i carichi che
+-- consumava tornano disponibili).
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd_Annullamento]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -77,11 +79,13 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		IF NOT EXISTS (SELECT 1
+		DECLARE @idOriginale CHAR(16) = (SELECT Id
 		FROM dbo.tblRentriRegistrazioniRettifiche
 		WHERE
 			IdRettifica = @Id
-			AND Annullata = 1)
+			AND Annullata = 1);
+
+		IF @idOriginale IS NULL
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'La registrazione non è un annullamento';
@@ -173,52 +177,79 @@ BEGIN
 			WHERE Id = @Id
 		);
 
-		EXEC dbo.uspRifiutiRegistrazioni_upd
-			@Id = @Id,
-			@IdSessione = @IdSessione,
-			@IdEer = @idEer,
-			@IdProvenienza = @idProvenienza,
-			@EerDescrizione = @eerDescrizione,
-			@IdStatoFisico = @idStatoFisico,
-			@ClassiPericolo = @classiPericolo,
-			@IdAttivitaRs = @idAttivitaRs,
-			@RegistrazioneData = @RegistrazioneData,
-			@RegistrazioneNumero = @RegistrazioneNumero,
-			@IdUnitaMisura = @idUnitaMisura,
-			@Quantita = @quantita,
-			@DataInizioTrasporto = @dataInizioTrasporto,
-			@IdDocumentoTrasportoTipo = @idDocumentoTrasportoTipo,
-			@FormularioNumero = @formularioNumero,
-			@IdAutorizzazioneProduttoreDetentore = @idAutorizzazioneProduttoreDetentore,
-			@IdAutorizzazioneDestinatario = @idAutorizzazioneDestinatario,
-			@IdAutorizzazioneTrasportatore1 = @idAutorizzazioneTrasportatore1,
-			@IdAutorizzazioneTrasportatore2 = @idAutorizzazioneTrasportatore2,
-			@IdAutorizzazioneTrasportatore3 = @idAutorizzazioneTrasportatore3,
-			@IdAutorizzazioneIntermediario1 = @idAutorizzazioneIntermediario1,
-			@IdAutorizzazioneIntermediario2 = @idAutorizzazioneIntermediario2,
-			@IdAutorizzazioneIntermediario3 = @idAutorizzazioneIntermediario3,
-			@RegistrazioneNote = @RegistrazioneNote,
-			@UtenteNote = @utenteNote,
-			@IdEtichette = @idEtichette,
-			@IsVeicoloFuoriUso = @isVeicoloFuoriUso,
-			@VeicoloFuoriUsoNumero = @veicoloFuoriUsoNumero,
-			@VeicoloFuoriUsoData = @veicoloFuoriUsoData,
-			@IdRaee = @idRaee,
-			@IdEsito = @idEsito,
-			@QuantitaVerificata = @quantitaVerificata,
-			@DataFineTrasporto = @dataFineTrasporto,
-			@IdCausaleRespingimento = @idCausaleRespingimento,
-			@CausaleRespingimentoAltro = @causaleRespingimentoAltro,
-			@IdUnitaMisuraQuantitaRespinta = @idUnitaMisuraQuantitaRespinta,
-			@QuantitaRespinta = @quantitaRespinta,
-			@IdMateriale = @idMateriale,
-			@MaterialeDescrizione = @materialeDescrizione,
-			@IdAttivitaProvenienza = @idAttivitaProvenienza,
-			@RegistrazioneAuto = @RegistrazioneAuto,
-			@RinumeraRegistro = @RinumeraRegistro,
-			-- Sempre 1, come per la rettifica di correzione: un annullamento non partecipa mai al grafo
-			-- carichi/scarichi, non è un parametro esposto al chiamante
-			@NessunaRegistrazioneAssociata = 1;
+		BEGIN TRANSACTION;
+
+			-- Carico gia' consumato: relazioni attive in cui l'originale e' il carico (figlio), con uno
+			-- scarico non in bozza e non annullato. UPDLOCK/HOLDLOCK: una nuova associazione sull'originale
+			-- attende la fine di questa transazione (e a quel punto lo trova annullato e viene rifiutata).
+			IF EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblRifiutiRegistrazioniRelazioni l WITH (UPDLOCK, HOLDLOCK)
+					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON l.IdParent = vp.Id
+				WHERE
+					l.Id = @idOriginale
+					AND rp.Operazione = 'S'
+					AND l.Quantita > 0
+					AND rp.Lock < 2
+					AND vp.IsAnnullata = 0
+			)
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Il carico è già stato scaricato da altre registrazioni: annullare prima gli scarichi collegati';
+				GOTO BRANCH_END;
+			END
+
+			EXEC dbo.uspRifiutiRegistrazioni_upd
+				@Id = @Id,
+				@IdSessione = @IdSessione,
+				@IdEer = @idEer,
+				@IdProvenienza = @idProvenienza,
+				@EerDescrizione = @eerDescrizione,
+				@IdStatoFisico = @idStatoFisico,
+				@ClassiPericolo = @classiPericolo,
+				@IdAttivitaRs = @idAttivitaRs,
+				@RegistrazioneData = @RegistrazioneData,
+				@RegistrazioneNumero = @RegistrazioneNumero,
+				@IdUnitaMisura = @idUnitaMisura,
+				@Quantita = @quantita,
+				@DataInizioTrasporto = @dataInizioTrasporto,
+				@IdDocumentoTrasportoTipo = @idDocumentoTrasportoTipo,
+				@FormularioNumero = @formularioNumero,
+				@IdAutorizzazioneProduttoreDetentore = @idAutorizzazioneProduttoreDetentore,
+				@IdAutorizzazioneDestinatario = @idAutorizzazioneDestinatario,
+				@IdAutorizzazioneTrasportatore1 = @idAutorizzazioneTrasportatore1,
+				@IdAutorizzazioneTrasportatore2 = @idAutorizzazioneTrasportatore2,
+				@IdAutorizzazioneTrasportatore3 = @idAutorizzazioneTrasportatore3,
+				@IdAutorizzazioneIntermediario1 = @idAutorizzazioneIntermediario1,
+				@IdAutorizzazioneIntermediario2 = @idAutorizzazioneIntermediario2,
+				@IdAutorizzazioneIntermediario3 = @idAutorizzazioneIntermediario3,
+				@RegistrazioneNote = @RegistrazioneNote,
+				@UtenteNote = @utenteNote,
+				@IdEtichette = @idEtichette,
+				@IsVeicoloFuoriUso = @isVeicoloFuoriUso,
+				@VeicoloFuoriUsoNumero = @veicoloFuoriUsoNumero,
+				@VeicoloFuoriUsoData = @veicoloFuoriUsoData,
+				@IdRaee = @idRaee,
+				@IdEsito = @idEsito,
+				@QuantitaVerificata = @quantitaVerificata,
+				@DataFineTrasporto = @dataFineTrasporto,
+				@IdCausaleRespingimento = @idCausaleRespingimento,
+				@CausaleRespingimentoAltro = @causaleRespingimentoAltro,
+				@IdUnitaMisuraQuantitaRespinta = @idUnitaMisuraQuantitaRespinta,
+				@QuantitaRespinta = @quantitaRespinta,
+				@IdMateriale = @idMateriale,
+				@MaterialeDescrizione = @materialeDescrizione,
+				@IdAttivitaProvenienza = @idAttivitaProvenienza,
+				@RegistrazioneAuto = @RegistrazioneAuto,
+				@RinumeraRegistro = @RinumeraRegistro,
+				-- Sempre 1, come per la rettifica di correzione: un annullamento non partecipa mai al grafo
+				-- carichi/scarichi, non è un parametro esposto al chiamante
+				@NessunaRegistrazioneAssociata = 1;
+
+		COMMIT TRANSACTION;
 
 		SELECT @returnValue AS ReturnValue;
 

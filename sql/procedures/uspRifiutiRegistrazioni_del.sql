@@ -157,26 +157,130 @@ BEGIN
 			IF @idOriginaleRettifica IS NOT NULL
 			BEGIN
 				-- Rettifica confermata (Lock = 0) ma non ancora inviata al RENTRI: cancellazione sempre
-				-- irreversibile (punto 6 della specifica, mai passa da Lock = 4/Undo). Ripristina prima
-				-- sull'originale i valori precedenti la rettifica (no-op se non erano mai stati modificati,
-				-- caso in cui l'originale aveva relazioni carico/scarico attive - punto 4), poi hard delete
-				-- completo della rettifica, stessa sequenza del CASO 3 sotto.
+				-- irreversibile (punto 6 della specifica, mai passa da Lock = 4/Undo), hard delete completo
+				-- della rettifica, stessa sequenza del CASO 3 sotto. L'originale non e' mai stato modificato:
+				-- cancellando la rettifica tornano effettivi i valori precedenti (correzione confermata
+				-- precedente o valori propri dell'originale; per un annullamento, la quantita' piena). Va
+				-- quindi rifiutata se nel frattempo le relazioni carico/scarico si sono basate sui valori
+				-- rettificati e con i valori precedenti una giacenza andrebbe sotto zero.
 				BEGIN TRANSACTION;
 
-					UPDATE mo
-					SET
-						IdEer = t.IdEer,
-						EerDescrizione = t.EerDescrizione,
-						IdStatoFisico = t.IdStatoFisico,
-						IdUnitaMisura = t.IdUnitaMisura,
-						Quantita = t.Quantita
-					FROM
-						dbo.tblRentriRegistrazioniRettifiche t
-						INNER JOIN dbo.tblRifiutiRegistrazioni ro ON t.Id = ro.Id
-						INNER JOIN dbo.tblRifiutiMovimenti mo ON ro.IdMovimento = mo.Id
+					DECLARE @isAnnullamentoRettifica BIT = (SELECT ISNULL(Annullata, 0)
+					FROM dbo.tblRentriRegistrazioniRettifiche
 					WHERE
-						t.Id = @idOriginaleRettifica
-						AND t.IdRettifica = @Id;
+						Id = @idOriginaleRettifica
+						AND IdRettifica = @Id);
+
+					-- Relazioni attive dell'originale (controparte non in bozza e non annullata), bloccate fino
+					-- alla fine della transazione: nessuna nuova associazione puo' nascere durante il controllo
+					DECLARE @relazioni TABLE (Id CHAR(16), IdParent CHAR(16), Quantita DECIMAL(18, 2));
+					INSERT @relazioni (Id, IdParent, Quantita)
+					SELECT l.Id, l.IdParent, l.Quantita
+					FROM
+						dbo.tblRifiutiRegistrazioniRelazioni l WITH (UPDLOCK, HOLDLOCK)
+						INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
+						INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
+						INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON l.Id = v.Id
+						INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON l.IdParent = vp.Id
+					WHERE
+						(
+						l.Id = @idOriginaleRettifica
+						OR l.IdParent = @idOriginaleRettifica
+						)
+						AND l.Quantita > 0
+						AND r.Lock < 2
+						AND rp.Lock < 2
+						AND (v.IsAnnullata = 0 OR l.Id = @idOriginaleRettifica)
+						AND (vp.IsAnnullata = 0 OR l.IdParent = @idOriginaleRettifica);
+
+					IF @isAnnullamentoRettifica = 0 AND EXISTS (SELECT 1 FROM @relazioni)
+					BEGIN
+						-- Correzione: valori effettivi senza questa rettifica = correzione confermata
+						-- precedente, altrimenti i valori propri dell'originale
+						DECLARE @precIdEer CHAR(6), @precIdStatoFisico CHAR(1), @precIdUnitaMisura CHAR(2), @precQuantita DECIMAL(18, 2);
+
+						SELECT
+							@precIdEer = mo.IdEer,
+							@precIdStatoFisico = mo.IdStatoFisico,
+							@precIdUnitaMisura = mo.IdUnitaMisura,
+							@precQuantita = mo.Quantita
+						FROM
+							dbo.tblRifiutiRegistrazioni ro
+							INNER JOIN dbo.tblRifiutiMovimenti mo ON ro.IdMovimento = mo.Id
+						WHERE ro.Id = @idOriginaleRettifica;
+
+						SELECT TOP 1
+							@precIdEer = mx.IdEer,
+							@precIdStatoFisico = mx.IdStatoFisico,
+							@precIdUnitaMisura = mx.IdUnitaMisura,
+							@precQuantita = mx.Quantita
+						FROM
+							dbo.tblRentriRegistrazioniRettifiche x
+							INNER JOIN dbo.tblRifiutiRegistrazioni rx ON x.IdRettifica = rx.Id
+							INNER JOIN dbo.tblRifiutiMovimenti mx ON rx.IdMovimento = mx.Id
+						WHERE
+							x.Id = @idOriginaleRettifica
+							AND x.IdRettifica <> @Id
+							AND ISNULL(x.Annullata, 0) = 0
+							AND rx.Lock = 0
+						ORDER BY
+							rx.[Data] DESC,
+							rx.Numero DESC;
+
+						IF EXISTS (
+							SELECT 1
+							FROM dbo.viewRifiutiRegistrazioniEffettive
+							WHERE
+								Id = @idOriginaleRettifica
+								AND (
+									ISNULL(@precIdEer, '') <> ISNULL(IdEer, '')
+									OR ISNULL(@precIdStatoFisico, '') <> ISNULL(IdStatoFisico, '')
+									OR ISNULL(@precIdUnitaMisura, '') <> ISNULL(IdUnitaMisura, '')
+								)
+						)
+						OR ISNULL(@precQuantita, 0) < (SELECT ISNULL(SUM(Quantita), 0) FROM @relazioni WHERE Id = @idOriginaleRettifica)
+						OR ISNULL(@precQuantita, 0) < (SELECT ISNULL(SUM(Quantita), 0) FROM @relazioni WHERE IdParent = @idOriginaleRettifica)
+						BEGIN
+							ROLLBACK TRANSACTION;
+							SET @returnValue = -1;
+							SET @returnMessage = 'La registrazione rettificata è stata associata ad altre con i valori corretti: la rettifica non può più essere cancellata';
+							GOTO BRANCH_END;
+						END
+					END
+
+					-- Annullamento di uno scarico: cancellandolo lo scarico torna a consumare i suoi carichi, che
+					-- nel frattempo potrebbero essere stati scaricati da altre registrazioni. (Un carico annullato
+					-- invece non poteva essere consumato ne' associato: torna disponibile senza problemi.)
+					IF @isAnnullamentoRettifica = 1 AND EXISTS (
+						SELECT 1
+						FROM
+							@relazioni l
+							INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vc ON l.Id = vc.Id
+							INNER JOIN dbo.tblRifiutiRegistrazioni ro ON l.IdParent = ro.Id
+						WHERE
+							l.IdParent = @idOriginaleRettifica
+							AND ro.Operazione = 'S'
+							AND vc.Quantita < l.Quantita + (
+								SELECT ISNULL(SUM(l2.Quantita), 0)
+								FROM
+									dbo.tblRifiutiRegistrazioniRelazioni l2
+									INNER JOIN dbo.tblRifiutiRegistrazioni rp2 ON l2.IdParent = rp2.Id
+									INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp2 ON l2.IdParent = vp2.Id
+								WHERE
+									l2.Id = l.Id
+									AND rp2.Operazione = 'S'
+									AND l2.IdParent <> @idOriginaleRettifica
+									AND l2.Quantita > 0
+									AND rp2.Lock < 2
+									AND vp2.IsAnnullata = 0
+							)
+					)
+					BEGIN
+						ROLLBACK TRANSACTION;
+						SET @returnValue = -1;
+						SET @returnMessage = 'I carichi dello scarico annullato sono stati scaricati da altre registrazioni: l''annullamento non può più essere cancellato';
+						GOTO BRANCH_END;
+					END
 
 					DELETE dbo.tblRifiutiRegistrazioniRelazioni
 					WHERE
@@ -337,9 +441,8 @@ BEGIN
 				-- tblEoWMovimenti.IdRegistrazione (nullable), va rimossa la riga di collegamento.
 				DELETE dbo.tblEoWLottiRifiutiRegistrazioni
 				WHERE IdRegistrazione = @Id;
-				-- Bozza di rettifica mai confermata: nessun valore è mai stato propagato sull'originale
-				-- (la propagazione avviene solo in uspRifiutiRegistrazioni_upd_Rettifica al salvataggio),
-				-- quindi qui basta rimuovere il collegamento, nessun ripristino necessario.
+				-- Bozza di rettifica mai confermata: non ha mai contato nei valori effettivi
+				-- (viewRifiutiRegistrazioniEffettive considera solo Lock = 0), basta rimuovere il collegamento.
 				DELETE dbo.tblRentriRegistrazioniRettifiche
 				WHERE IdRettifica = @Id;
 				DELETE dbo.tblRifiutiRegistrazioni

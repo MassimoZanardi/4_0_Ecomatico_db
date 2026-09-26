@@ -202,6 +202,8 @@ BEGIN
 					dbo.tblRifiutiRegistrazioniRelazioni l
 					INNER JOIN dbo.tblRifiutiRegistrazioni r2 ON l.Id = r2.Id
 					INNER JOIN dbo.tblRifiutiRegistrazioni rp2 ON l.IdParent = rp2.Id
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v2 ON l.Id = v2.Id
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp2 ON l.IdParent = vp2.Id
 				WHERE
 					(
 					l.Id = rett.Id
@@ -210,6 +212,8 @@ BEGIN
 					AND l.Quantita > 0
 					AND r2.Lock < 2
 					AND rp2.Lock < 2
+					AND v2.IsAnnullata = 0
+					AND vp2.IsAnnullata = 0
 			), 1, 0) AS BIT),
 
 			Lock = r.Lock

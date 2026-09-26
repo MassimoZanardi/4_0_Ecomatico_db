@@ -244,6 +244,28 @@ BEGIN
 				SET @returnMessage = 'Esiste già una rettifica o un annullamento non ancora inviato al RENTRI per questa registrazione';
 				GOTO BRANCH_END;
 			END
+
+			-- Annullamento di un carico gia' consumato da scarichi attivi non annullati: rifiutato gia' qui
+			-- per non creare una bozza che non potrebbe essere confermata (il controllo vincolante, sotto
+			-- lock, resta in uspRifiutiRegistrazioni_upd_Annullamento al momento della conferma)
+			IF @IsAnnullamento = 1 AND EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblRifiutiRegistrazioniRelazioni l
+					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON l.IdParent = vp.Id
+				WHERE
+					l.Id = @IdRettifica
+					AND rp.Operazione = 'S'
+					AND l.Quantita > 0
+					AND rp.Lock < 2
+					AND vp.IsAnnullata = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Il carico è già stato scaricato da altre registrazioni: annullare prima gli scarichi collegati';
+				GOTO BRANCH_END;
+			END
 		END
 
 		-- Lettura unica del modello (era ripetuta fino a 16 volte più sotto, una per ogni campo/EXISTS):
@@ -387,6 +409,19 @@ BEGIN
 				LEFT JOIN dbo.tblRifiutiMovimentiIntermediari i3 ON m.Id = i3.Id AND i3.Pos = 2
 			WHERE r.Id = ISNULL(@IdCopia, @IdRettifica);
 
+		-- Rettifica: Eer/StatoFisico/UnitaMisura/Quantita precompilati dai valori EFFETTIVI dell'originale
+		-- (ultima correzione confermata, vedi viewRifiutiRegistrazioniEffettive), non da quelli propri
+		-- dell'originale, che non viene mai modificato da una rettifica
+		IF @IdFormulario IS NULL AND @IdCopia IS NULL AND @IdRettifica IS NOT NULL
+			SELECT
+				@cIdEer = IdEer,
+				@cEerDescrizione = EerDescrizione,
+				@cIdStatoFisico = IdStatoFisico,
+				@cIdUnitaMisura = IdUnitaMisura,
+				@cQuantitaOriginale = Quantita
+			FROM dbo.viewRifiutiRegistrazioniEffettive
+			WHERE Id = @IdRettifica;
+
 		DECLARE @idMovimento CHAR(16);
 
 		-- uspId_get gestisce la propria transazione internamente: chiamate FUORI dalla transazione
@@ -473,7 +508,7 @@ BEGIN
 				BEGIN
 					-- Quantita: MAI copiata per Copia/incolla (dipende da relazioni/giacenze, la nuova
 					-- registrazione parte sempre senza relazioni - invariato). Per Rettifica invece va
-					-- precompilata con la quantita' corrente dell'originale (@cQuantitaOriginale): se
+					-- precompilata con la quantita' effettiva dell'originale (@cQuantitaOriginale): se
 					-- l'originale ha relazioni attive il campo sara' disabilitato in UI e DEVE già
 					-- contenere il valore reale, altrimenti uspRifiutiRegistrazioni_upd_Rettifica rifiuta
 					-- il salvataggio confrontandolo con un valore mai impostato (0/NULL).
@@ -533,10 +568,9 @@ BEGIN
 					FROM dbo.tblRifiutiRegistrazioniEtichette
 					WHERE Id = ISNULL(@IdCopia, @IdRettifica);
 
-					-- Traccia il collegamento rettifica -> originale, con lo snapshot corrente dei valori
-					-- dell'originale (prima di qualunque modifica): serve sia da guardia per "una rettifica
-					-- alla volta" (punto 7, controllata sopra) sia da backup per il ripristino se questa bozza
-					-- di rettifica viene cancellata prima di essere inviata al RENTRI (punto 6).
+					-- Traccia il collegamento rettifica -> originale (guardia per "una rettifica alla volta",
+					-- punto 7, controllata sopra), con lo snapshot dei valori effettivi dell'originale in
+					-- vigore prima di questa rettifica (solo tracciabilita': nessun ripristino li rilegge).
 					IF @IdRettifica IS NOT NULL
 						INSERT dbo.tblRentriRegistrazioniRettifiche
 							(Id, IdRettifica, IdEer, EerDescrizione, IdStatoFisico, IdUnitaMisura, Quantita, Annullata)

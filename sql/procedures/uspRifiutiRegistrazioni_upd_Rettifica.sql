@@ -7,10 +7,12 @@ GO
 -- tblRentriRegistrazioniRettifiche.IdRettifica). Riusa integralmente uspRifiutiRegistrazioni_upd per
 -- salvare la rettifica stessa (stessa validazione Data/Numero/rinumerazione/autorizzazioni/esito/ecc. di
 -- una registrazione normale - la rettifica non è ancora inviata al RENTRI, quindi il blocco "già inviata"
--- di quella SP non la riguarda), poi applica le regole specifiche di rettifica (punti 4/5 della specifica):
+-- di quella SP non la riguarda), poi applica le regole specifiche di rettifica (punto 4 della specifica):
 -- se l'originale ha relazioni carico/scarico attive, Eer/StatoFisico/UnitaMisura/Quantita non possono
--- differire dai valori correnti dell'originale (rifiutati); altrimenti vengono propagati sull'originale
--- stesso, cosi' che eventuali future relazioni carico/scarico su di esso usino i nuovi valori corretti.
+-- differire dai suoi valori EFFETTIVI (viewRifiutiRegistrazioniEffettive: ultima correzione confermata,
+-- altrimenti i valori propri dell'originale). L'originale non viene mai modificato (registro, stampa e
+-- conservazione lo riportano com'e' stato inviato): i nuovi valori diventano effettivi per giacenze e
+-- relazioni dal momento in cui questa rettifica e' confermata (Lock = 0, impostato da uspRifiutiRegistrazioni_upd).
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd_Rettifica]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -133,56 +135,61 @@ BEGIN
 		DECLARE @idStatoFisicoNorm CHAR(1) = NULLIF(LTRIM(RTRIM(@IdStatoFisico)), '');
 		DECLARE @idUnitaMisuraNorm CHAR(2) = ISNULL(NULLIF(LTRIM(RTRIM(@IdUnitaMisura)), ''), 'KG');
 
-		DECLARE @originaleIdEer CHAR(6), @originaleIdStatoFisico CHAR(1), @originaleIdUnitaMisura CHAR(2), @originaleQuantita DECIMAL(18, 2), @originaleIdMateriale CHAR(2);
-		SELECT
-			@originaleIdEer = mo.IdEer,
-			@originaleIdStatoFisico = mo.IdStatoFisico,
-			@originaleIdUnitaMisura = mo.IdUnitaMisura,
-			@originaleQuantita = mo.Quantita,
-			@originaleIdMateriale = ro.IdMateriale
-		FROM
-			dbo.tblRifiutiRegistrazioni ro
-			INNER JOIN dbo.tblRifiutiMovimenti mo ON ro.IdMovimento = mo.Id
-		WHERE ro.Id = @idOriginale;
-
 		-- L'unità di misura per il Materiale è sempre KG (stesso vincolo di uspRifiutiRegistrazioni_upd,
-		-- richiamata più sotto per il salvataggio della rettifica stessa): qui serve anche per il gate di
-		-- confronto e per la propagazione sull'originale, quindi derivata dal Materiale dell'originale
-		-- (server-side, non dal parametro client) invece di fidarsi di @IdUnitaMisura.
-		IF @originaleIdMateriale IS NOT NULL
+		-- richiamata più sotto per il salvataggio della rettifica stessa): qui serve per il gate di
+		-- confronto, quindi derivata dal Materiale dell'originale (server-side, non dal parametro client)
+		-- invece di fidarsi di @IdUnitaMisura.
+		IF EXISTS (SELECT 1
+		FROM dbo.tblRifiutiRegistrazioni
+		WHERE
+			Id = @idOriginale
+			AND IdMateriale IS NOT NULL
+		)
 			SET @idUnitaMisuraNorm = 'KG';
 
-		-- Punto 4: relazione carico/scarico attiva sull'originale, su entrambi i lati (figlio e padre) -
-		-- Eer/StatoFisico/UnitaMisura/Quantita restano bloccati sui valori correnti dell'originale
-		DECLARE @originaleHaRelazioniAttive BIT = CAST(IIF(EXISTS (
-			SELECT 1
-			FROM
-				dbo.tblRifiutiRegistrazioniRelazioni l
-				INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
-				INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
-			WHERE
-				(
-				l.Id = @idOriginale
-				OR l.IdParent = @idOriginale
-				)
-				AND l.Quantita > 0
-				AND r.Lock < 2
-				AND rp.Lock < 2
-		), 1, 0) AS BIT);
-
-		IF @originaleHaRelazioniAttive = 1 AND (
-			ISNULL(@idEerNorm, '') <> ISNULL(@originaleIdEer, '')
-			OR ISNULL(@idStatoFisicoNorm, '') <> ISNULL(@originaleIdStatoFisico, '')
-			OR ISNULL(@idUnitaMisuraNorm, '') <> ISNULL(@originaleIdUnitaMisura, '')
-			OR ISNULL(@Quantita, 0) <> ISNULL(@originaleQuantita, 0)
-		)
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'La registrazione rettificata è associata ad altre con carico/scarico: Eer, stato fisico, unità di misura e quantità non possono essere modificati';
-			GOTO BRANCH_END;
-		END
-
 		BEGIN TRANSACTION;
+
+			-- Punto 4: relazione carico/scarico attiva sull'originale, su entrambi i lati (figlio e padre),
+			-- con controparti non annullate (le relazioni di una registrazione annullata restano ma non
+			-- consumano piu' nulla) - Eer/StatoFisico/UnitaMisura/Quantita restano bloccati sui valori
+			-- effettivi correnti. UPDLOCK/HOLDLOCK: una nuova associazione sull'originale attende la fine di
+			-- questa transazione, cosi' non puo' nascere tra il controllo e la conferma della rettifica.
+			IF EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblRifiutiRegistrazioniRelazioni l WITH (UPDLOCK, HOLDLOCK)
+					INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
+					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON l.Id = v.Id
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON l.IdParent = vp.Id
+				WHERE
+					(
+					l.Id = @idOriginale
+					OR l.IdParent = @idOriginale
+					)
+					AND l.Quantita > 0
+					AND r.Lock < 2
+					AND rp.Lock < 2
+					AND v.IsAnnullata = 0
+					AND vp.IsAnnullata = 0
+			) AND EXISTS (
+				SELECT 1
+				FROM dbo.viewRifiutiRegistrazioniEffettive
+				WHERE
+					Id = @idOriginale
+					AND (
+						ISNULL(@idEerNorm, '') <> ISNULL(IdEer, '')
+						OR ISNULL(@idStatoFisicoNorm, '') <> ISNULL(IdStatoFisico, '')
+						OR ISNULL(@idUnitaMisuraNorm, '') <> ISNULL(IdUnitaMisura, '')
+						OR ISNULL(@Quantita, 0) <> ISNULL(Quantita, 0)
+					)
+			)
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'La registrazione rettificata è associata ad altre con carico/scarico: Eer, stato fisico, unità di misura e quantità non possono essere modificati';
+				GOTO BRANCH_END;
+			END
 
 			EXEC dbo.uspRifiutiRegistrazioni_upd
 				@Id = @Id,
@@ -231,22 +238,6 @@ BEGIN
 				-- specifica) - non è un parametro esposto al chiamante, bypassa anche il controllo
 				-- "quantità disponibile nelle registrazioni associate" che non ha senso qui
 				@NessunaRegistrazioneAssociata = 1;
-
-			-- Punto 5: nessuna relazione attiva sull'originale -> propaga i nuovi valori sull'originale
-			-- stesso (bypassa volutamente il blocco "già inviata" di uspRifiutiRegistrazioni_upd: qui si
-			-- sta scrivendo sull'originale per effetto della rettifica, non modificandolo direttamente da UI)
-			IF @originaleHaRelazioniAttive = 0
-				UPDATE mo
-				SET
-					IdEer = @idEerNorm,
-					EerDescrizione = CASE WHEN @idEerNorm LIKE '%99' THEN @EerDescrizione ELSE NULL END,
-					IdStatoFisico = @idStatoFisicoNorm,
-					IdUnitaMisura = @idUnitaMisuraNorm,
-					Quantita = @Quantita
-				FROM
-					dbo.tblRifiutiMovimenti mo
-					INNER JOIN dbo.tblRifiutiRegistrazioni ro ON ro.IdMovimento = mo.Id
-				WHERE ro.Id = @idOriginale;
 
 		COMMIT TRANSACTION;
 

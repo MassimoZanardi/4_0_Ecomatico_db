@@ -61,15 +61,22 @@ BEGIN
 		DECLARE @idModello CHAR(16);
 		DECLARE @data DATE;
 		DECLARE @quantitaOrigine DECIMAL(18, 2);
+		DECLARE @isRettificaOrigine BIT;
+		DECLARE @isAnnullataOrigine BIT;
 
+		-- Quantità effettiva (viewRifiutiRegistrazioniEffettive): una rettifica non modifica l'originale,
+		-- il valore operativo è quello dell'ultima rettifica confermata (annullamento operativo = 0)
 		SELECT
 			@idRegistro = m.IdRegistro,
 			@idModello = m.IdModello,
 			@data = r.[Data],
-			@quantitaOrigine = m.Quantita
+			@quantitaOrigine = v.Quantita,
+			@isRettificaOrigine = v.IsRettifica,
+			@isAnnullataOrigine = v.IsAnnullata
 		FROM
 			dbo.tblRifiutiRegistrazioni r
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
 			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 		WHERE r.Id = @IdRegistrazioneOrigine;
@@ -78,6 +85,18 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Registrazione di origine non trovata o non disponibile';
+			GOTO BRANCH_END;
+		END
+		IF @isRettificaOrigine = 1
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Una registrazione di rettifica o annullamento non può generare carichi';
+			GOTO BRANCH_END;
+		END
+		IF @isAnnullataOrigine = 1
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Una registrazione annullata non può generare carichi';
 			GOTO BRANCH_END;
 		END
 
@@ -91,10 +110,13 @@ BEGIN
 			FROM
 				dbo.tblRifiutiRegistrazioniRelazioni l
 				INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON rp.Id = vp.Id
 			WHERE
 				l.Id = @IdRegistrazioneOrigine
 				AND l.Quantita > 0
 				AND rp.Lock < 2
+				-- Un carico derivato annullato non occupa piu' la quantità dello scarico (stesso criterio di _upd)
+				AND vp.IsAnnullata = 0
 		), 0);
 
 		IF @quantitaGiaAssociata + @Quantita > ISNULL(@quantitaOrigine, 0)

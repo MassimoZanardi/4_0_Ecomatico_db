@@ -43,6 +43,8 @@ RETURN
 	),
 	-- Stessa logica di quantità residua di uspRifiutiGiacenze_get_Quantita, non ristretta
 	-- a un singolo registro/EER/stato fisico: il filtro per limite avviene nelle APPLY sotto.
+	-- Quantità, EER e unità di misura sono i valori effettivi (viewRifiutiRegistrazioniEffettive),
+	-- mai quelli dell'originale: una rettifica non modifica la registrazione originale.
 	QuantitaAssegnata AS (
 		SELECT
 			l.Id,
@@ -50,10 +52,11 @@ RETURN
 		FROM
 			dbo.tblRifiutiRegistrazioniRelazioni l
 			INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
-			INNER JOIN dbo.tblRifiutiMovimenti mp ON p.IdMovimento = mp.Id
+			INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON p.Id = vp.Id
 		WHERE
 			p.Lock = 0
-			AND mp.Quantita > 0
+			-- Uno scarico annullato ha Quantita = 0: le sue relazioni restano ma non consumano piu' il carico
+			AND vp.Quantita > 0
 			AND p.[Data] <= CAST(GETDATE() AS DATE)
 		GROUP BY l.Id
 	)
@@ -91,11 +94,12 @@ RETURN
 					-- Le due espressioni portano un riferimento esterno (c.IdUnitaMisura):
 					-- va isolato in una derived table prima dell'aggregazione, altrimenti
 					-- SQL Server rifiuta l'aggregato per riferimento esterno misto a colonne locali.
-					ResiduoUnitaMisura = CASE WHEN m.IdUnitaMisura = c.IdUnitaMisura THEN (m.Quantita - ISNULL(a.Quantita, 0)) END,
-					DataSeResiduo = CASE WHEN (m.Quantita - ISNULL(a.Quantita, 0)) > 0 THEN r.[Data] END
+					ResiduoUnitaMisura = CASE WHEN v.IdUnitaMisura = c.IdUnitaMisura THEN (v.Quantita - ISNULL(a.Quantita, 0)) END,
+					DataSeResiduo = CASE WHEN (v.Quantita - ISNULL(a.Quantita, 0)) > 0 THEN r.[Data] END
 				FROM
 					dbo.tblRifiutiRegistrazioni r
 					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 					INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 					LEFT JOIN QuantitaAssegnata a ON r.Id = a.Id
 				WHERE
@@ -105,14 +109,16 @@ RETURN
 						(le.IdRegistroVerifica IS NOT NULL AND m.IdRegistro = le.IdRegistroVerifica)
 						OR (le.IdRegistroVerifica IS NULL AND m.IdRegistro IN (SELECT Id FROM dbo.tblRifiutiRegistri WHERE IdSede = c.IdSede AND Lock = 0))
 					)
-					AND m.Quantita > 0
+					AND v.Quantita > 0
+					-- Una registrazione di rettifica o annullamento non è un movimento reale: mai in giacenza
+					AND v.IsRettifica = 0
 					AND (
 						(ISNULL(m.IdOperazione, '') <> 'R' AND o.Operazione = 'C')
 						OR (m.IdOperazione = 'R' AND o.Operazione = 'S')
 					)
 					AND (
 						NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiLimitiEer WHERE IdLimite = c.Id)
-						OR m.IdEer IN (SELECT IdEer FROM dbo.tblRifiutiLimitiEer WHERE IdLimite = c.Id)
+						OR v.IdEer IN (SELECT IdEer FROM dbo.tblRifiutiLimitiEer WHERE IdLimite = c.Id)
 					)
 					AND (
 						NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiLimitiEtichette WHERE IdLimite = c.Id)
@@ -132,10 +138,11 @@ RETURN
 			FROM (
 				SELECT
 					-- Riferimento esterno c.IdUnitaMisura isolato in derived table, stesso motivo di giac.
-					QuantitaUnitaMisura = CASE WHEN m.IdUnitaMisura = c.IdUnitaMisura THEN m.Quantita END
+					QuantitaUnitaMisura = CASE WHEN v.IdUnitaMisura = c.IdUnitaMisura THEN v.Quantita END
 				FROM
 					dbo.tblRifiutiRegistrazioni r
 					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
 				WHERE
 					r.Lock = 0
 					AND r.[Data] <= CAST(GETDATE() AS DATE)
@@ -149,10 +156,13 @@ RETURN
 						(le.IdRegistroVerifica IS NOT NULL AND m.IdRegistro = le.IdRegistroVerifica)
 						OR (le.IdRegistroVerifica IS NULL AND m.IdRegistro IN (SELECT Id FROM dbo.tblRifiutiRegistri WHERE IdSede = c.IdSede AND Lock = 0))
 					)
-					AND m.Quantita > 0
+					-- Un annullamento operativo porta la quantità effettiva a 0: esclusa
+					AND v.Quantita > 0
+					-- Bug pre-esistente: le registrazioni di rettifica/annullamento venivano contate come operazioni
+					AND v.IsRettifica = 0
 					AND (
 						NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiLimitiEer WHERE IdLimite = c.Id)
-						OR m.IdEer IN (SELECT IdEer FROM dbo.tblRifiutiLimitiEer WHERE IdLimite = c.Id)
+						OR v.IdEer IN (SELECT IdEer FROM dbo.tblRifiutiLimitiEer WHERE IdLimite = c.Id)
 					)
 					AND (
 						NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiLimitiEtichette WHERE IdLimite = c.Id)

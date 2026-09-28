@@ -7,12 +7,13 @@ GO
 -- tblRentriRegistrazioniRettifiche.IdRettifica). Riusa integralmente uspRifiutiRegistrazioni_upd per
 -- salvare la rettifica stessa (stessa validazione Data/Numero/rinumerazione/autorizzazioni/esito/ecc. di
 -- una registrazione normale - la rettifica non è ancora inviata al RENTRI, quindi il blocco "già inviata"
--- di quella SP non la riguarda), poi applica le regole specifiche di rettifica (punto 4 della specifica):
--- se l'originale ha relazioni carico/scarico attive, Eer/StatoFisico/UnitaMisura/Quantita non possono
--- differire dai suoi valori EFFETTIVI (viewRifiutiRegistrazioniEffettive: ultima correzione confermata,
--- altrimenti i valori propri dell'originale). L'originale non viene mai modificato (registro, stampa e
--- conservazione lo riportano com'e' stato inviato): i nuovi valori diventano effettivi per giacenze e
--- relazioni dal momento in cui questa rettifica e' confermata (Lock = 0, impostato da uspRifiutiRegistrazioni_upd).
+-- di quella SP non la riguarda). Stato amministrativo e stato operativo sono separati: la rettifica viene
+-- sempre salvata con i valori indicati (sono quelli trasmessi al RENTRI) e le relazioni carico/scarico non la
+-- bloccano mai; l'originale non viene mai modificato. Alla conferma i valori OPERATIVI (giacenze, residui,
+-- relazioni - viewRifiutiRegistrazioniEffettive) vengono scritti nella riga di tblRentriRegistrazioniRettifiche:
+-- i nuovi valori se non rendono incoerenti le relazioni dell'originale, altrimenti tutti quelli operativi
+-- precedenti ("tutto o niente", ufnRifiutiRegistrazioni_get_RettificaOperativa). Ogni salvataggio prima
+-- dell'invio ricalcola la decisione; dopo l'invio la rettifica non e' piu' modificabile e la decisione resta.
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd_Rettifica]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -129,67 +130,17 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Normalizzazione minima per il confronto col gate qui sotto (la normalizzazione "vera" per il
-		-- salvataggio della rettifica resta tutta dentro uspRifiutiRegistrazioni_upd, richiamata più sotto)
-		DECLARE @idEerNorm CHAR(6) = NULLIF(LTRIM(RTRIM(@IdEer)), '');
-		DECLARE @idStatoFisicoNorm CHAR(1) = NULLIF(LTRIM(RTRIM(@IdStatoFisico)), '');
-		DECLARE @idUnitaMisuraNorm CHAR(2) = ISNULL(NULLIF(LTRIM(RTRIM(@IdUnitaMisura)), ''), 'KG');
-
-		-- L'unità di misura per il Materiale è sempre KG (stesso vincolo di uspRifiutiRegistrazioni_upd,
-		-- richiamata più sotto per il salvataggio della rettifica stessa): qui serve per il gate di
-		-- confronto, quindi derivata dal Materiale dell'originale (server-side, non dal parametro client)
-		-- invece di fidarsi di @IdUnitaMisura.
-		IF EXISTS (SELECT 1
-		FROM dbo.tblRifiutiRegistrazioni
-		WHERE
-			Id = @idOriginale
-			AND IdMateriale IS NOT NULL
-		)
-			SET @idUnitaMisuraNorm = 'KG';
-
 		BEGIN TRANSACTION;
 
-			-- Punto 4: relazione carico/scarico attiva sull'originale, su entrambi i lati (figlio e padre),
-			-- con controparti non annullate (le relazioni di una registrazione annullata restano ma non
-			-- consumano piu' nulla) - Eer/StatoFisico/UnitaMisura/Quantita restano bloccati sui valori
-			-- effettivi correnti. UPDLOCK/HOLDLOCK: una nuova associazione sull'originale attende la fine di
-			-- questa transazione, cosi' non puo' nascere tra il controllo e la conferma della rettifica.
-			IF EXISTS (
-				SELECT 1
-				FROM
-					dbo.tblRifiutiRegistrazioniRelazioni l WITH (UPDLOCK, HOLDLOCK)
-					INNER JOIN dbo.tblRifiutiRegistrazioni r ON l.Id = r.Id
-					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
-					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON l.Id = v.Id
-					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON l.IdParent = vp.Id
-				WHERE
-					(
-					l.Id = @idOriginale
-					OR l.IdParent = @idOriginale
-					)
-					AND l.Quantita > 0
-					AND r.Lock < 2
-					AND rp.Lock < 2
-					AND v.IsAnnullata = 0
-					AND vp.IsAnnullata = 0
-			) AND EXISTS (
-				SELECT 1
-				FROM dbo.viewRifiutiRegistrazioniEffettive
-				WHERE
-					Id = @idOriginale
-					AND (
-						ISNULL(@idEerNorm, '') <> ISNULL(IdEer, '')
-						OR ISNULL(@idStatoFisicoNorm, '') <> ISNULL(IdStatoFisico, '')
-						OR ISNULL(@idUnitaMisuraNorm, '') <> ISNULL(IdUnitaMisura, '')
-						OR ISNULL(@Quantita, 0) <> ISNULL(Quantita, 0)
-					)
-			)
-			BEGIN
-				ROLLBACK TRANSACTION;
-				SET @returnValue = -1;
-				SET @returnMessage = 'La registrazione rettificata è associata ad altre con carico/scarico: Eer, stato fisico, unità di misura e quantità non possono essere modificati';
-				GOTO BRANCH_END;
-			END
+			-- Relazioni carico/scarico dell'originale bloccate fino alla fine della transazione
+			-- (UPDLOCK/HOLDLOCK): una nuova associazione sull'originale attende la conferma di questa
+			-- rettifica, cosi' la decisione sui valori operativi presa sotto resta valida.
+			DECLARE @relazioniOriginale INT = (SELECT COUNT(*)
+			FROM dbo.tblRifiutiRegistrazioniRelazioni WITH (UPDLOCK, HOLDLOCK)
+			WHERE
+				Id = @idOriginale
+				OR IdParent = @idOriginale
+			);
 
 			EXEC dbo.uspRifiutiRegistrazioni_upd
 				@Id = @Id,
@@ -238,6 +189,22 @@ BEGIN
 				-- specifica) - non è un parametro esposto al chiamante, bypassa anche il controllo
 				-- "quantità disponibile nelle registrazioni associate" che non ha senso qui
 				@NessunaRegistrazioneAssociata = 1;
+
+			-- Valori operativi (vedi header), calcolati sui valori appena salvati nel movimento della
+			-- rettifica (gia' normalizzati da uspRifiutiRegistrazioni_upd, es. KG per il Materiale)
+			UPDATE t
+			SET
+				t.IdEer = IIF(o.IsOperativa = 1, m.IdEer, o.IdEer),
+				t.EerDescrizione = IIF(o.IsOperativa = 1, m.EerDescrizione, o.EerDescrizione),
+				t.IdStatoFisico = IIF(o.IsOperativa = 1, m.IdStatoFisico, o.IdStatoFisico),
+				t.IdUnitaMisura = IIF(o.IsOperativa = 1, m.IdUnitaMisura, o.IdUnitaMisura),
+				t.Quantita = IIF(o.IsOperativa = 1, m.Quantita, o.Quantita)
+			FROM
+				dbo.tblRentriRegistrazioniRettifiche t
+				INNER JOIN dbo.tblRifiutiRegistrazioni r ON t.IdRettifica = r.Id
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				CROSS APPLY dbo.ufnRifiutiRegistrazioni_get_RettificaOperativa(t.IdRettifica, m.IdEer, m.IdStatoFisico, m.IdUnitaMisura, m.Quantita) o
+			WHERE t.IdRettifica = @Id;
 
 		COMMIT TRANSACTION;
 

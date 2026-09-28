@@ -15,10 +15,13 @@ GO
 -- comunque passati a uspRifiutiRegistrazioni_upd per la sua validazione standard. Tutti gli altri campi
 -- vengono riletti invariati dalla riga stessa (snapshot copiato dall'originale al momento dell'INSERT,
 -- mai più toccato) e passati pari pari a uspRifiutiRegistrazioni_upd. Come la correzione, un annullamento
--- non modifica mai l'originale: dalla conferma (Lock = 0) l'originale vale Quantita = 0 per giacenze e
--- relazioni (viewRifiutiRegistrazioniEffettive). Per questo un carico gia' consumato da scarichi attivi non
--- annullati non puo' essere annullato (vanno annullati prima gli scarichi); uno scarico si' (i carichi che
--- consumava tornano disponibili).
+-- non modifica mai l'originale e non e' mai bloccato dalle relazioni carico/scarico (l'annullamento va sempre
+-- trasmesso al RENTRI). Alla conferma i valori OPERATIVI vengono scritti nella riga di
+-- tblRentriRegistrazioniRettifiche (ufnRifiutiRegistrazioni_get_RettificaOperativa): Quantita = 0 (registrazione
+-- esclusa da giacenze e relazioni, viewRifiutiRegistrazioniEffettive.IsAnnullata) se l'esclusione non rende
+-- incoerenti le relazioni - sempre per uno scarico, i cui carichi tornano disponibili; per un carico gia'
+-- consumato da scarichi invece restano i valori operativi precedenti: annullato per il RENTRI, continua ad
+-- avere effetto in Ecomatico.
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd_Annullamento]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -179,28 +182,15 @@ BEGIN
 
 		BEGIN TRANSACTION;
 
-			-- Carico gia' consumato: relazioni attive in cui l'originale e' il carico (figlio), con uno
-			-- scarico non in bozza e non annullato. UPDLOCK/HOLDLOCK: una nuova associazione sull'originale
-			-- attende la fine di questa transazione (e a quel punto lo trova annullato e viene rifiutata).
-			IF EXISTS (
-				SELECT 1
-				FROM
-					dbo.tblRifiutiRegistrazioniRelazioni l WITH (UPDLOCK, HOLDLOCK)
-					INNER JOIN dbo.tblRifiutiRegistrazioni rp ON l.IdParent = rp.Id
-					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON l.IdParent = vp.Id
-				WHERE
-					l.Id = @idOriginale
-					AND rp.Operazione = 'S'
-					AND l.Quantita > 0
-					AND rp.Lock < 2
-					AND vp.IsAnnullata = 0
-			)
-			BEGIN
-				ROLLBACK TRANSACTION;
-				SET @returnValue = -1;
-				SET @returnMessage = 'Il carico è già stato scaricato da altre registrazioni: annullare prima gli scarichi collegati';
-				GOTO BRANCH_END;
-			END
+			-- Relazioni carico/scarico dell'originale bloccate fino alla fine della transazione
+			-- (UPDLOCK/HOLDLOCK): una nuova associazione sull'originale attende la conferma di questo
+			-- annullamento, cosi' la decisione sui valori operativi presa sotto resta valida.
+			DECLARE @relazioniOriginale INT = (SELECT COUNT(*)
+			FROM dbo.tblRifiutiRegistrazioniRelazioni WITH (UPDLOCK, HOLDLOCK)
+			WHERE
+				Id = @idOriginale
+				OR IdParent = @idOriginale
+			);
 
 			EXEC dbo.uspRifiutiRegistrazioni_upd
 				@Id = @Id,
@@ -248,6 +238,20 @@ BEGIN
 				-- Sempre 1, come per la rettifica di correzione: un annullamento non partecipa mai al grafo
 				-- carichi/scarichi, non è un parametro esposto al chiamante
 				@NessunaRegistrazioneAssociata = 1;
+
+			-- Valori operativi (vedi header): Quantita = 0 se l'annullamento vale anche per Ecomatico,
+			-- altrimenti tutti i valori operativi precedenti
+			UPDATE t
+			SET
+				t.IdEer = o.IdEer,
+				t.EerDescrizione = o.EerDescrizione,
+				t.IdStatoFisico = o.IdStatoFisico,
+				t.IdUnitaMisura = o.IdUnitaMisura,
+				t.Quantita = IIF(o.IsOperativa = 1, 0, o.Quantita)
+			FROM
+				dbo.tblRentriRegistrazioniRettifiche t
+				CROSS APPLY dbo.ufnRifiutiRegistrazioni_get_RettificaOperativa(t.IdRettifica, NULL, NULL, NULL, NULL) o
+			WHERE t.IdRettifica = @Id;
 
 		COMMIT TRANSACTION;
 

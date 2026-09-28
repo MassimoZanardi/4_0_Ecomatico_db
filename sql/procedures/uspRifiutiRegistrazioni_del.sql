@@ -159,10 +159,11 @@ BEGIN
 				-- Rettifica confermata (Lock = 0) ma non ancora inviata al RENTRI: cancellazione sempre
 				-- irreversibile (punto 6 della specifica, mai passa da Lock = 4/Undo), hard delete completo
 				-- della rettifica, stessa sequenza del CASO 3 sotto. L'originale non e' mai stato modificato:
-				-- cancellando la rettifica tornano effettivi i valori precedenti (correzione confermata
-				-- precedente o valori propri dell'originale; per un annullamento, la quantita' piena). Va
-				-- quindi rifiutata se nel frattempo le relazioni carico/scarico si sono basate sui valori
-				-- rettificati e con i valori precedenti una giacenza andrebbe sotto zero.
+				-- cancellando la rettifica tornano operativi i valori precedenti (quelli scritti dalla rettifica
+				-- confermata precedente o i valori propri dell'originale; per un annullamento, la quantita'
+				-- piena). Va quindi rifiutata se nel frattempo le relazioni carico/scarico si sono basate sui
+				-- valori rettificati e con i valori precedenti una giacenza andrebbe sotto zero. Una rettifica
+				-- non applicata a Ecomatico (valori operativi = precedenti) si cancella sempre.
 				BEGIN TRANSACTION;
 
 					DECLARE @isAnnullamentoRettifica BIT = (SELECT ISNULL(Annullata, 0)
@@ -195,37 +196,16 @@ BEGIN
 
 					IF @isAnnullamentoRettifica = 0 AND EXISTS (SELECT 1 FROM @relazioni)
 					BEGIN
-						-- Correzione: valori effettivi senza questa rettifica = correzione confermata
-						-- precedente, altrimenti i valori propri dell'originale
+						-- Correzione: valori operativi senza questa rettifica = quelli scritti dall'ultima altra
+						-- rettifica confermata, altrimenti i valori propri dell'originale
 						DECLARE @precIdEer CHAR(6), @precIdStatoFisico CHAR(1), @precIdUnitaMisura CHAR(2), @precQuantita DECIMAL(18, 2);
 
 						SELECT
-							@precIdEer = mo.IdEer,
-							@precIdStatoFisico = mo.IdStatoFisico,
-							@precIdUnitaMisura = mo.IdUnitaMisura,
-							@precQuantita = mo.Quantita
-						FROM
-							dbo.tblRifiutiRegistrazioni ro
-							INNER JOIN dbo.tblRifiutiMovimenti mo ON ro.IdMovimento = mo.Id
-						WHERE ro.Id = @idOriginaleRettifica;
-
-						SELECT TOP 1
-							@precIdEer = mx.IdEer,
-							@precIdStatoFisico = mx.IdStatoFisico,
-							@precIdUnitaMisura = mx.IdUnitaMisura,
-							@precQuantita = mx.Quantita
-						FROM
-							dbo.tblRentriRegistrazioniRettifiche x
-							INNER JOIN dbo.tblRifiutiRegistrazioni rx ON x.IdRettifica = rx.Id
-							INNER JOIN dbo.tblRifiutiMovimenti mx ON rx.IdMovimento = mx.Id
-						WHERE
-							x.Id = @idOriginaleRettifica
-							AND x.IdRettifica <> @Id
-							AND ISNULL(x.Annullata, 0) = 0
-							AND rx.Lock = 0
-						ORDER BY
-							rx.[Data] DESC,
-							rx.Numero DESC;
+							@precIdEer = IdEer,
+							@precIdStatoFisico = IdStatoFisico,
+							@precIdUnitaMisura = IdUnitaMisura,
+							@precQuantita = Quantita
+						FROM dbo.ufnRifiutiRegistrazioni_get_RettificaOperativa(@Id, NULL, NULL, NULL, NULL);
 
 						IF EXISTS (
 							SELECT 1

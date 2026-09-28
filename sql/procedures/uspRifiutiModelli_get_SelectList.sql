@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiModelli_get_SelectList]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiModelli_get_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@Search VARCHAR(50) = NULL,
 	@IsRentri BIT = NULL,

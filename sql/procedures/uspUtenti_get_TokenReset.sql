@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_TokenReset]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_TokenReset]
 	@Token NVARCHAR(32) = NULL
 AS
 BEGIN

@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_ListByDominio]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_ListByDominio]
 	@IdDominio CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS

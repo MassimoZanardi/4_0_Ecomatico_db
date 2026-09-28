@@ -1,4 +1,4 @@
-
+﻿
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_get_List]
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,

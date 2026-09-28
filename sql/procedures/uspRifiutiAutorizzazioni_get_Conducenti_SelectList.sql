@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_get_Conducenti_SelectList]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_get_Conducenti_SelectList]
 	@Id CHAR(16) = NULL,
 	@Search VARCHAR(50) = NULL,
 	@IdSessione CHAR(16) = NULL

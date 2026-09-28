@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspComuni_get_Lista]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspComuni_get_Lista]
 	@IdProvincia CHAR(3) = NULL
 AS
 BEGIN

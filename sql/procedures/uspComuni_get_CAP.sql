@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspComuni_get_CAP]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspComuni_get_CAP]
 	@Id CHAR(6) = NULL
 AS
 BEGIN

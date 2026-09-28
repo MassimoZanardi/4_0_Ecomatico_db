@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_IsQuantitaSuperiore]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_IsQuantitaSuperiore]
 	@Id CHAR(16) = NULL,
 	@Quantita DECIMAL(18, 2) = NULL,
 	@IdSessione CHAR(16) = NULL

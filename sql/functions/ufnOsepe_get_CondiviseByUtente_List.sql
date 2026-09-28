@@ -1,4 +1,4 @@
-
+﻿
 CREATE OR ALTER FUNCTION [dbo].[ufnOsepe_get_CondiviseByUtente_List] (
 	@IdUtente CHAR(16))
 RETURNS TABLE

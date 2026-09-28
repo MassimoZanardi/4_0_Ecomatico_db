@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_IsDominioMaster]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_IsDominioMaster]
 	@IdSessione CHAR(16) = NULL
 AS
 BEGIN

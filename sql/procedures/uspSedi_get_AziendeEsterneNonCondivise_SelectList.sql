@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspSedi_get_AziendeEsterneNonCondivise_SelectList]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspSedi_get_AziendeEsterneNonCondivise_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@IdSelected CHAR(16) = NULL,
 	@Search VARCHAR(50) = NULL

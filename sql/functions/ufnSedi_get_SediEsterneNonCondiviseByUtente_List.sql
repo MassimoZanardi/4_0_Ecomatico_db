@@ -1,4 +1,4 @@
-
+﻿
 CREATE OR ALTER FUNCTION [dbo].[ufnSedi_get_SediEsterneNonCondiviseByUtente_List] (
 	@i dbo.tvpAziendeInterneByUtente READONLY)
 RETURNS TABLE

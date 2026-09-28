@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_get_TargaEer_List]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_get_TargaEer_List]
 	@Id CHAR(16) = NULL,
 	@Numero VARCHAR(20) = NULL,
 	@IdSessione CHAR(16) = NULL

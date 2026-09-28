@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspEventi_get_Utenti_SelectList]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspEventi_get_Utenti_SelectList]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS

@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_IsDataPrecedente]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_IsDataPrecedente]
 	@IdRegistro CHAR(16) = NULL,
 	@RegistrazioneData DATE = NULL,
 	@IdSessione CHAR(16) = NULL

@@ -1,4 +1,4 @@
-CREATE OR ALTER FUNCTION [dbo].[ufnEventi_get_All_List] (
+﻿CREATE OR ALTER FUNCTION [dbo].[ufnEventi_get_All_List] (
 	@DallaData SMALLDATETIME,
 	@AllaData SMALLDATETIME,
 	@IdUtente CHAR(16),

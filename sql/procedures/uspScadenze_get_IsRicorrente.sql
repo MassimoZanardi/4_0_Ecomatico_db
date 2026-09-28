@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspScadenze_get_IsRicorrente]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspScadenze_get_IsRicorrente]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS

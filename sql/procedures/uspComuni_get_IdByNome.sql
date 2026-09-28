@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspComuni_get_IdByNome]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspComuni_get_IdByNome]
 	@Nome VARCHAR(50) = NULL
 AS
 BEGIN

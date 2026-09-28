@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspDomini_get_Start]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspDomini_get_Start]
 	@Codice CHAR(5) = NULL
 AS
 BEGIN

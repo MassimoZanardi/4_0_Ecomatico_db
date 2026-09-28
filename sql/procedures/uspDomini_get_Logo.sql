@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspDomini_get_Logo]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspDomini_get_Logo]
 	@Id CHAR(16) = NULL
 AS
 BEGIN

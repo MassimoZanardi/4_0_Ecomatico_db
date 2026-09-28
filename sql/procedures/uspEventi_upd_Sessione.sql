@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspEventi_upd_Sessione]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspEventi_upd_Sessione]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS

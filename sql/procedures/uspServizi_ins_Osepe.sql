@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspServizi_ins_Osepe]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspServizi_ins_Osepe]
 	@Id CHAR(16) = NULL,
 	@IdOsepe CHAR(16) = NULL,
 	@Quantita DECIMAL(18,4) = NULL,

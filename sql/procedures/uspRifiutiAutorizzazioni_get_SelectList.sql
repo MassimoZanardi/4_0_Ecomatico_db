@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_get_SelectList]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_get_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@IdRuolo CHAR(1) = NULL,
 	@IdOperazione CHAR(1) = NULL,

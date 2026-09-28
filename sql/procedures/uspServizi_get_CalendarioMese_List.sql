@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspServizi_get_CalendarioMese_List]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspServizi_get_CalendarioMese_List]
 	@IdSessione CHAR(16) = NULL,
 	@DallaData SMALLDATETIME = NULL
 AS

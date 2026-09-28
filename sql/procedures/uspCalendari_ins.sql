@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspCalendari_ins]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspCalendari_ins]
 	@IdModulo CHAR(3) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS

@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspServiziAssegnati_ins]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspServiziAssegnati_ins]
 	@IdSessione CHAR(16) = NULL,
 	@IdTipo CHAR(16) = NULL
 AS

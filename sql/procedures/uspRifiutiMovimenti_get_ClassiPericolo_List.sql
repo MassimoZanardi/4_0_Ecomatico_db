@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiMovimenti_get_ClassiPericolo_List]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiMovimenti_get_ClassiPericolo_List]
 	@Id CHAR(16) = NULL
 AS
 BEGIN

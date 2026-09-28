@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_Start]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_Start]
 	@Email VARCHAR(50) = NULL
 AS
 BEGIN

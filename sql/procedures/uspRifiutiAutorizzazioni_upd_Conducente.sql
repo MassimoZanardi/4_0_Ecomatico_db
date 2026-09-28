@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_upd_Conducente]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_upd_Conducente]
 	@Id CHAR(16) = NULL,
 	@Nome VARCHAR(50) = NULL,
 	@Cognome VARCHAR(50) = NULL,

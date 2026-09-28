@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspSessioni_upd_AziendaByContesto]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspSessioni_upd_AziendaByContesto]
 	@Id CHAR(16) = NULL,
 	@Contesto INT = NULL
 AS

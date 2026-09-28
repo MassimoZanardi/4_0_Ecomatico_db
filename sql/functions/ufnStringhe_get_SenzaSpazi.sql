@@ -1,4 +1,4 @@
-CREATE OR ALTER FUNCTION [dbo].[ufnStringhe_get_SenzaSpazi]
+﻿CREATE OR ALTER FUNCTION [dbo].[ufnStringhe_get_SenzaSpazi]
 (
 	@str VARCHAR(8000),
 	@len INT = 0, -- 0 = nessun troncamento

@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_LoginByEmail]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_LoginByEmail]
 	@Email NVARCHAR(255) = NULL
 AS
 BEGIN

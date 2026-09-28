@@ -59,12 +59,13 @@ BEGIN
 			r.Numero,
 			r.Data,
 			MaterialeNome = ISNULL(r.MaterialeDescrizione, mat.Nome),
-			QuantitaComplessiva = mo.Quantita,
+			-- Quantità effettiva (viewRifiutiRegistrazioniEffettive): una rettifica non modifica l'originale
+			QuantitaComplessiva = vo.Quantita,
 			QuantitaAttribuita = lr.Quantita
 		FROM
 			dbo.tblEoWLottiRifiutiRegistrazioni lr
 			INNER JOIN dbo.tblRifiutiRegistrazioni r ON lr.IdRegistrazione = r.Id
-			INNER JOIN dbo.tblRifiutiMovimenti mo ON r.IdMovimento = mo.Id
+			INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vo ON r.Id = vo.Id
 			LEFT JOIN dbo.tblRifiutiMateriali mat ON r.IdMateriale = mat.Id
 		-- Solo quote di registrazioni attive (Lock < 2): una registrazione eliminata (Lock = 4)
 		-- mantiene le sue quote per un eventuale ripristino, ma non conta più

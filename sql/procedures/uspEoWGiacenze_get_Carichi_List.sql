@@ -83,7 +83,8 @@ BEGIN
 			r.Data,
 			MaterialeNome = ISNULL(r.MaterialeDescrizione, mat.Nome),
 			LottoNome = l.Nome,
-			QuantitaComplessiva = mo.Quantita,
+			-- Quantità effettiva (viewRifiutiRegistrazioniEffettive): una rettifica non modifica l'originale
+			QuantitaComplessiva = vo.Quantita,
 			QuantitaAttribuita = lr.Quantita,
 			-- Residuo attuale del lotto EoW della quota (gli scarichi di magazzino prelevano dal
 			-- lotto, non dalla singola registrazione): quote di registrazioni attive meno gli
@@ -95,7 +96,7 @@ BEGIN
 			INNER JOIN dbo.tblEoWLotti l ON lr.IdLotto = l.Id
 			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON l.IdSede = i.Id
 			INNER JOIN dbo.tblRifiutiRegistrazioni r ON lr.IdRegistrazione = r.Id
-			INNER JOIN dbo.tblRifiutiMovimenti mo ON r.IdMovimento = mo.Id
+			INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vo ON r.Id = vo.Id
 			LEFT JOIN dbo.tblRifiutiMateriali mat ON r.IdMateriale = mat.Id
 			OUTER APPLY (
 				SELECT Prodotta = SUM(qp.Quantita)

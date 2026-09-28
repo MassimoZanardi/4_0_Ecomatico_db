@@ -75,6 +75,14 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Una registrazione di rettifica o annullamento non è un movimento reale: non riceve quote EoW
+		IF EXISTS (SELECT 1 FROM dbo.viewRifiutiRegistrazioniEffettive WHERE Id = @IdRegistrazione AND IsRettifica = 1)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Una registrazione di rettifica o annullamento non può ricevere quote EoW';
+			GOTO BRANCH_END;
+		END
+
 		-- Titolarità + dati dell'allocazione
 		DECLARE @idSedeAllocazione CHAR(16);
 		DECLARE @idAllocazioneTipo CHAR(1);
@@ -187,7 +195,8 @@ BEGIN
 				END
 			END
 
-			DECLARE @quantitaMovimento DECIMAL(18, 2) = (SELECT Quantita FROM dbo.tblRifiutiMovimenti WHERE Id = @idMovimento);
+			-- Quantità effettiva (viewRifiutiRegistrazioniEffettive): una rettifica non modifica l'originale
+			DECLARE @quantitaMovimento DECIMAL(18, 2) = (SELECT Quantita FROM dbo.viewRifiutiRegistrazioniEffettive WHERE Id = @IdRegistrazione);
 			DECLARE @quantitaAttribuitaRegistrazione DECIMAL(18, 2) = ISNULL((
 				SELECT SUM(Quantita) FROM dbo.tblEoWLottiRifiutiRegistrazioni WHERE IdRegistrazione = @IdRegistrazione
 			), 0);

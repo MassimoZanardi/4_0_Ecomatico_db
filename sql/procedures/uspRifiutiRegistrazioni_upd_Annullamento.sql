@@ -19,9 +19,9 @@ GO
 -- trasmesso al RENTRI). Alla conferma i valori OPERATIVI vengono scritti nella riga di
 -- tblRentriRegistrazioniRettifiche (ufnRifiutiRegistrazioni_get_RettificaOperativa): Quantita = 0 (registrazione
 -- esclusa da giacenze e relazioni, viewRifiutiRegistrazioniEffettive.IsAnnullata) se l'esclusione non rende
--- incoerenti le relazioni - sempre per uno scarico, i cui carichi tornano disponibili; per un carico gia'
--- consumato da scarichi invece restano i valori operativi precedenti: annullato per il RENTRI, continua ad
--- avere effetto in Ecomatico.
+-- incoerenti le relazioni (es. scarico senza carichi derivati, i cui carichi tornano disponibili); per un
+-- carico gia' consumato da scarichi o uno scarico da cui derivano carichi (es. I -> M/NP) restano invece i
+-- valori operativi precedenti: annullato per il RENTRI, continua ad avere effetto in Ecomatico.
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_upd_Annullamento]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,

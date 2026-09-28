@@ -15,8 +15,12 @@ GO
 -- relazioni e: Eer/stato fisico/unita' di misura cambiano, oppure la quantita' scende sotto quella gia'
 -- prelevata dalle registrazioni padre (lato figlio), oppure cambia la quantita' di una registrazione che ha
 -- figli (lato padre: le quantita' delle relazioni sono gia' distribuite su quella quantita').
--- Annullamento (parametri valore ignorati) non operativo se l'originale e' un carico gia' consumato da scarichi
--- (padre con Operazione S); uno scarico annullato e' sempre operativo (i carichi tornano disponibili).
+-- Annullamento (parametri valore ignorati) non operativo se l'originale e' figlio di relazioni attive: carico
+-- gia' consumato da scarichi (padre S), oppure scarico da cui derivano carichi (padre C, es. scarico per
+-- trattamento interno I con carichi M/NP generati) - escluderlo lascerebbe carichi derivati da uno scarico a 0.
+-- Uno scarico senza carichi derivati e' annullabile anche operativamente (i carichi che consumava tornano
+-- disponibili), cosi' come un carico non consumato (es. un carico Materiale, che non puo' mai essere figlio).
+-- Le quote EoW e il magazzino non contano: il registro prevale, i moduli si adeguano.
 -- Chiamata da uspRifiutiRegistrazioni_upd_Rettifica/_upd_Annullamento (alla conferma, sotto lock) e da
 -- uspRifiutiRegistrazioni_get_RettificaIsOperativa (anteprima per la modale di conferma in Edit).
 CREATE OR ALTER FUNCTION [dbo].[ufnRifiutiRegistrazioni_get_RettificaOperativa] (
@@ -66,8 +70,7 @@ l AS (
 	SELECT
 		a.Id,
 		a.IdParent,
-		a.Quantita,
-		OperazioneParent = rp.Operazione
+		a.Quantita
 	FROM
 		p
 		INNER JOIN dbo.tblRifiutiRegistrazioniRelazioni a ON a.Id = p.Id OR a.IdParent = p.Id
@@ -102,10 +105,7 @@ SELECT
 		WHEN p.IsAnnullamento = 1 THEN IIF(EXISTS (
 			SELECT 1
 			FROM l
-			WHERE
-				l.Id = p.Id
-				AND l.OperazioneParent = 'S'
-		), 0, 1)
+			WHERE l.Id = p.Id), 0, 1)
 		WHEN NOT EXISTS (SELECT 1
 		FROM l) THEN 1
 		WHEN ISNULL(@IdEer, '') <> ISNULL(p.IdEer, '')

@@ -186,35 +186,13 @@ BEGIN
 			IsMateriale = ISNULL(o.IsMateriale, 0),
 			IsStoccaggioIstantaneo = ISNULL(o.IsStoccaggioIstantaneo, 0),
 
-			-- Rettifica: rett.Id valorizzato solo se questa registrazione è essa stessa una rettifica di
-			-- un'altra (tblRentriRegistrazioniRettifiche.IdRettifica = r.Id). IsRettificaCampiBloccati
-			-- riflette lato UI lo stesso gate applicato in uspRifiutiRegistrazioni_upd_Rettifica (punto 4
-			-- della specifica): Eer/StatoFisico/UnitaMisura/Quantita non modificabili se l'originale ha
-			-- relazioni carico/scarico attive su entrambi i lati.
+			-- Rettifica: rett.Id valorizzato solo se questa registrazione e' essa stessa una rettifica di
+			-- un'altra (tblRentriRegistrazioniRettifiche.IdRettifica = r.Id).
 			IdRegistrazioneOriginaleRettifica = rett.Id,
 			RettificaRegistrazioneNumero = ro.Numero,
 			RettificaRegistrazioneData = ro.Data,
 			IsRettifica = CAST(IIF(rett.Id IS NOT NULL, 1, 0) AS BIT),
 			IsAnnullamento = CAST(ISNULL(rett.Annullata, 0) AS BIT),
-			IsRettificaCampiBloccati = CAST(IIF(rett.Id IS NOT NULL AND EXISTS (
-				SELECT 1
-				FROM
-					dbo.tblRifiutiRegistrazioniRelazioni l
-					INNER JOIN dbo.tblRifiutiRegistrazioni r2 ON l.Id = r2.Id
-					INNER JOIN dbo.tblRifiutiRegistrazioni rp2 ON l.IdParent = rp2.Id
-					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v2 ON l.Id = v2.Id
-					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp2 ON l.IdParent = vp2.Id
-				WHERE
-					(
-					l.Id = rett.Id
-					OR l.IdParent = rett.Id
-					)
-					AND l.Quantita > 0
-					AND r2.Lock < 2
-					AND rp2.Lock < 2
-					AND v2.IsAnnullata = 0
-					AND vp2.IsAnnullata = 0
-			), 1, 0) AS BIT),
 
 			Lock = r.Lock
 		FROM

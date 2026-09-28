@@ -1,3 +1,7 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER FUNCTION [dbo].[ufnModuli_get_IsAttivoByUtente]
 (
 	@Id CHAR(3),

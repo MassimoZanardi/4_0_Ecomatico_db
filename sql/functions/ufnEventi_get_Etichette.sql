@@ -1,3 +1,7 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER FUNCTION [dbo].[ufnEventi_get_Etichette]
 (
 	@Id CHAR(16)

@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspAree_get_List]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspAree_get_List]
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
 	@IdSessione CHAR(16) = NULL,

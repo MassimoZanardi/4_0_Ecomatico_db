@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER FUNCTION [dbo].[ufnRifiutiLimiti_get_Verifica_List] (
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER FUNCTION [dbo].[ufnRifiutiLimiti_get_Verifica_List] (
 	@IdSede CHAR(16) = NULL)
 RETURNS TABLE
 AS

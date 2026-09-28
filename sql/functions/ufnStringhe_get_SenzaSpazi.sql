@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER FUNCTION [dbo].[ufnStringhe_get_SenzaSpazi]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER FUNCTION [dbo].[ufnStringhe_get_SenzaSpazi]
 (
 	@str VARCHAR(8000),
 	@len INT = 0, -- 0 = nessun troncamento

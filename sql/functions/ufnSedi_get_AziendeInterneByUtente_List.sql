@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER FUNCTION [dbo].[ufnSedi_get_AziendeInterneByUtente_List] (
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER FUNCTION [dbo].[ufnSedi_get_AziendeInterneByUtente_List] (
 	@IdUtente CHAR(16))
 RETURNS TABLE
 WITH SCHEMABINDING

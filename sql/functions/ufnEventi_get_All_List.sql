@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER FUNCTION [dbo].[ufnEventi_get_All_List] (
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER FUNCTION [dbo].[ufnEventi_get_All_List] (
 	@DallaData SMALLDATETIME,
 	@AllaData SMALLDATETIME,
 	@IdUtente CHAR(16),

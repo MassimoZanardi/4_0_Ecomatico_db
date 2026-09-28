@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspAree_del]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspAree_del]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Reset BIT = 0

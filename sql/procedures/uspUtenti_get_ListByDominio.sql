@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_ListByDominio]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_ListByDominio]
 	@IdDominio CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
 AS

@@ -1,3 +1,7 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER FUNCTION [dbo].[ufnDate_get_GiornoDelMeseRelativo]
 (
 	@DataInizio SMALLDATETIME,

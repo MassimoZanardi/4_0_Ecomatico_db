@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER FUNCTION [dbo].[ufnOsepe_get_NonCondiviseByDominio_List] (
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER FUNCTION [dbo].[ufnOsepe_get_NonCondiviseByDominio_List] (
 	@IdDominio CHAR(16))
 RETURNS TABLE
 WITH SCHEMABINDING

@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspSessioni_upd]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspSessioni_upd]
 	@Id CHAR(16) = NULL,
 	@Contesto INT = NULL,
 	@IdContesto CHAR(16) = NULL

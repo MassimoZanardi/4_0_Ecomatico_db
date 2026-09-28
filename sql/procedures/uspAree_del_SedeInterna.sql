@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspAree_del_SedeInterna]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspAree_del_SedeInterna]
 	@Id CHAR(16) = NULL,
 	@IdSede CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL

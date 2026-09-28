@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspAree_get_Osepe_List]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspAree_get_Osepe_List]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Search VARCHAR(50) = NULL

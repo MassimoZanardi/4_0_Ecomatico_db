@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspSedi_get_Sedi_SelectList]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspSedi_get_Sedi_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@Contesto INT = -1,
 	@IdSelected CHAR(16) = NULL,

@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspOsepe_get_SelectList]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspOsepe_get_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@Contesto INT = -1,
 	@IncludiOggetti BIT = 1,

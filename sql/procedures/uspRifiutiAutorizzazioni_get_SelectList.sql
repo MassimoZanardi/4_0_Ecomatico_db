@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_get_SelectList]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_get_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@IdRuolo CHAR(1) = NULL,
 	@IdOperazione CHAR(1) = NULL,
@@ -55,11 +59,13 @@ BEGIN
 
 		-- @isSede = 1 → @idSede è la sede specifica del registro (o azienda interna per T/I)
 		-- @isSede = 0 → @idSede è l'azienda interna, usata per filtrare per IdAziendaInterna
+		-- (anche per P/D: con un registro su una sede figlia s.Id non è mai un IdAziendaInterna
+		-- e resterebbero solo le sedi condivise)
 		DECLARE @idSede CHAR(16);
 		DECLARE @idUtente CHAR(16);
 		SELECT
 			@idSede = CASE
-						  WHEN @IdRuolo IN ('T', 'I') THEN s.IdAziendaInterna
+						  WHEN @IdRuolo IN ('T', 'I') OR @isSede = 0 THEN s.IdAziendaInterna
 						  ELSE s.Id
 					  END,
 			@idUtente = e.IdUtente

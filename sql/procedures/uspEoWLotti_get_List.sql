@@ -54,11 +54,27 @@ BEGIN
 
 		SELECT
 			l.Id,
-			-- Lotto pieno: la produzione attribuita ha raggiunto la quantità massima (il lotto EoW è
-			-- una partita di produzione, gli scarichi non liberano capienza); resta aperto, ma non
-			-- riceve più quote
-			StatoValore = CASE WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAttribuita, 0) >= l.QuantitaMax THEN 1 ELSE 0 END,
-			StatoDescrizione = CASE WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAttribuita, 0) >= l.QuantitaMax THEN 'Lotto pieno: capacità esaurita' ELSE 'OK' END,
+			-- Stato della capacità (solo con quantità massima impostata; il lotto EoW è una partita di
+			-- produzione, gli scarichi non liberano capienza): 2 = capacità superata, 1 = lotto pieno o
+			-- capacità residua sotto il 30% della quantità massima, 0 = OK
+			StatoValore = CASE
+				WHEN l.QuantitaMax IS NULL THEN 0
+				WHEN c.QuantitaAttribuita > l.QuantitaMax THEN 2
+				WHEN l.QuantitaMax - c.QuantitaAttribuita < l.QuantitaMax * 0.3 THEN 1
+				ELSE 0
+			END,
+			StatoDescrizione = CASE
+				WHEN l.QuantitaMax IS NULL THEN 'OK'
+				WHEN c.QuantitaAttribuita > l.QuantitaMax
+					THEN 'Capacità superata di ' + FORMAT(c.QuantitaAttribuita - l.QuantitaMax, 'N2', 'it-IT') + ' kg: attribuiti '
+						+ FORMAT(c.QuantitaAttribuita, 'N2', 'it-IT') + ' kg su ' + FORMAT(l.QuantitaMax, 'N2', 'it-IT') + ' kg'
+				WHEN c.QuantitaAttribuita = l.QuantitaMax THEN 'Lotto pieno: capacità esaurita'
+				WHEN l.QuantitaMax - c.QuantitaAttribuita < l.QuantitaMax * 0.3
+					THEN 'Capacità residua sotto il 30%: ' + FORMAT(l.QuantitaMax - c.QuantitaAttribuita, 'N2', 'it-IT') + ' kg su '
+						+ FORMAT(l.QuantitaMax, 'N2', 'it-IT') + ' kg'
+				ELSE 'OK'
+			END,
+			NumeroRegistrazioni = ISNULL(q.NumeroRegistrazioni, 0),
 			l.Nome,
 			MaterialeNome = m.Nome,
 			MagazzinoNome = g.Nome,
@@ -77,7 +93,9 @@ BEGIN
 			OUTER APPLY (
 				-- Solo quote di registrazioni attive (Lock < 2): una registrazione eliminata (Lock = 4)
 				-- mantiene le sue quote per un eventuale ripristino, ma non conta più
-				SELECT QuantitaAttribuita = SUM(r.Quantita)
+				SELECT
+					QuantitaAttribuita = SUM(r.Quantita),
+					NumeroRegistrazioni = COUNT(DISTINCT r.IdRegistrazione)
 				FROM
 					dbo.tblEoWLottiRifiutiRegistrazioni r
 					INNER JOIN dbo.tblRifiutiRegistrazioni rr ON r.IdRegistrazione = rr.Id
@@ -85,6 +103,7 @@ BEGIN
 					r.IdLotto = l.Id
 					AND rr.Lock < 2
 			) q
+			CROSS APPLY (SELECT QuantitaAttribuita = ISNULL(q.QuantitaAttribuita, 0)) c
 		WHERE
 			l.Lock = 0
 			AND (@IdSede IS NULL OR l.IdSede = @IdSede)

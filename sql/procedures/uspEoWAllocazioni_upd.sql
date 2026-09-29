@@ -79,20 +79,66 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Non è possibile cambiare il tipo se l'allocazione ha già lotti collegati (il vincolo di
-		-- riga per tipo, es. Lotto unico = max 1 riga, è validato solo in inserimento riga)
+		-- Non è possibile cambiare il tipo se l'allocazione ha già lotti collegati, anche se non
+		-- ancora salvata (uspEoWAllocazioni_ins_Lotto memorizza il tipo con il primo lotto)
 		IF EXISTS (
 			SELECT 1
 			FROM dbo.tblEoWAllocazioni
 			WHERE
 				Id = @Id
-				AND Lock = 0
 				AND IdAllocazioneTipo <> @IdAllocazioneTipo
 				AND EXISTS (SELECT 1 FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id)
 		)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non è possibile cambiare il tipo di un''allocazione con lotti associati';
+			GOTO BRANCH_END;
+		END
+
+		-- I lotti presenti devono rispettare il tipo (stessi vincoli di uspEoWAllocazioni_ins_Lotto):
+		-- intercetta anche lotti aggiunti quando il tipo non era ancora salvato
+		IF @IdAllocazioneTipo = 'U' AND (SELECT COUNT(*) FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id) > 1
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Un''allocazione di tipo Lotto unico può contenere un solo lotto';
+			GOTO BRANCH_END;
+		END
+
+		IF @IdAllocazioneTipo = 'P' AND (
+			EXISTS (
+				SELECT 1
+				FROM dbo.tblEoWLottiAllocazioni
+				WHERE
+					IdAllocazione = @Id
+					AND (Valore IS NULL OR Valore <= 0 OR Valore > 100)
+			)
+			OR (SELECT ISNULL(SUM(Valore), 0) FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id) > 100
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Le percentuali dei lotti devono essere maggiori di zero e la loro somma non può superare 100';
+			GOTO BRANCH_END;
+		END
+
+		IF @IdAllocazioneTipo = 'C' AND (
+			EXISTS (
+				SELECT 1
+				FROM dbo.tblEoWLottiAllocazioni
+				WHERE
+					IdAllocazione = @Id
+					AND (Valore IS NULL OR Valore <= 0)
+			)
+			OR EXISTS (
+				SELECT 1
+				FROM dbo.tblEoWLottiAllocazioni
+				WHERE IdAllocazione = @Id
+				GROUP BY Valore
+				HAVING COUNT(*) > 1
+			)
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Ogni lotto deve avere una priorità diversa: togliere e aggiungere di nuovo i lotti con la stessa priorità';
 			GOTO BRANCH_END;
 		END
 

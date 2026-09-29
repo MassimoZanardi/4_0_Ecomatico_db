@@ -6,7 +6,10 @@ CREATE OR ALTER PROCEDURE dbo.uspEoWAllocazioni_ins_Lotto
 	@Id CHAR(16) = NULL,
 	@IdLotto CHAR(16) = NULL,
 	@Valore DECIMAL(18, 2) = NULL,
-	@IdSessione CHAR(16) = NULL
+	@IdSessione CHAR(16) = NULL,
+	-- Tipo scelto nella pagina: un'allocazione nuova ha il tipo salvato solo con il primo "Salva",
+	-- quindi senza questo parametro i controlli per tipo verrebbero saltati (tipo NULL)
+	@IdAllocazioneTipo CHAR(1) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -17,6 +20,7 @@ BEGIN
 		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @IdLotto = NULLIF(LTRIM(RTRIM(@IdLotto)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdAllocazioneTipo = NULLIF(LTRIM(RTRIM(@IdAllocazioneTipo)), '');
 
 		IF @Id IS NULL
 		BEGIN
@@ -52,10 +56,10 @@ BEGIN
 
 		-- Titolarità + dati dell'allocazione
 		DECLARE @idSedeAllocazione CHAR(16);
-		DECLARE @idAllocazioneTipo CHAR(1);
+		DECLARE @tipo CHAR(1);
 		SELECT
 			@idSedeAllocazione = c.IdSede,
-			@idAllocazioneTipo = c.IdAllocazioneTipo
+			@tipo = c.IdAllocazioneTipo
 		FROM
 			dbo.tblEoWAllocazioni c
 			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
@@ -121,23 +125,51 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Tipo effettivo: con lotti già presenti vale quello salvato (non si può cambiare, come in
+		-- uspEoWAllocazioni_upd); senza lotti vale quello scelto nella pagina, che viene memorizzato
+		-- insieme al lotto cosi' i controlli sotto non vengono mai saltati.
+		DECLARE @isLottiPresenti BIT = IIF(EXISTS (SELECT 1 FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id), 1, 0);
+
+		IF @isLottiPresenti = 1 AND @tipo IS NOT NULL AND @IdAllocazioneTipo IS NOT NULL AND @IdAllocazioneTipo <> @tipo
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non è possibile cambiare il tipo di un''allocazione con lotti associati';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @isTipoDaSalvare BIT = 0;
+		-- (anche con lotti presenti se il tipo non era mai stato salvato: allocazioni create prima di
+		-- questo controllo)
+		IF (@isLottiPresenti = 0 OR @tipo IS NULL) AND @IdAllocazioneTipo IS NOT NULL AND @IdAllocazioneTipo <> ISNULL(@tipo, '')
+		BEGIN
+			SET @tipo = @IdAllocazioneTipo;
+			SET @isTipoDaSalvare = 1;
+		END
+
+		IF @tipo IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.tblEoWAllocazioniTipi WHERE Id = @tipo)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare il tipo di allocazione prima di aggiungere i lotti';
+			GOTO BRANCH_END;
+		END
+
 		-- Validazione specifica per tipo (i valori dei tipi sono in tblEoWAllocazioniTipi: U=Lotto
 		-- unico, P=Percentuale, C=Priorità/Capacità)
-		IF @idAllocazioneTipo = 'U' AND EXISTS (SELECT 1 FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id)
+		IF @tipo = 'U' AND EXISTS (SELECT 1 FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Un''allocazione di tipo Lotto unico può contenere un solo lotto';
 			GOTO BRANCH_END;
 		END
 
-		IF @idAllocazioneTipo = 'P' AND (@Valore IS NULL OR @Valore <= 0 OR @Valore > 100)
+		IF @tipo = 'P' AND (@Valore IS NULL OR @Valore <= 0 OR @Valore > 100)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'La percentuale deve essere maggiore di zero e non superiore a 100';
 			GOTO BRANCH_END;
 		END
 
-		IF @idAllocazioneTipo = 'P' AND @Valore + ISNULL((
+		IF @tipo = 'P' AND @Valore + ISNULL((
 				SELECT SUM(la.Valore)
 				FROM dbo.tblEoWLottiAllocazioni la
 				WHERE la.IdAllocazione = @Id
@@ -148,14 +180,14 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		IF @idAllocazioneTipo = 'C' AND (@Valore IS NULL OR @Valore <= 0)
+		IF @tipo = 'C' AND (@Valore IS NULL OR @Valore <= 0)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'La priorità deve essere un valore maggiore di zero';
 			GOTO BRANCH_END;
 		END
 
-		IF @idAllocazioneTipo = 'C' AND EXISTS (
+		IF @tipo = 'C' AND EXISTS (
 				SELECT 1
 				FROM dbo.tblEoWLottiAllocazioni la
 				WHERE la.IdAllocazione = @Id AND la.Valore = @Valore
@@ -166,10 +198,15 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		IF @idAllocazioneTipo = 'U'
+		IF @tipo = 'U'
 			SET @Valore = NULL;
 
 		BEGIN TRANSACTION;
+			IF @isTipoDaSalvare = 1
+				UPDATE dbo.tblEoWAllocazioni
+				SET IdAllocazioneTipo = @tipo
+				WHERE Id = @Id;
+
 			INSERT dbo.tblEoWLottiAllocazioni (IdLotto, IdAllocazione, Valore)
 			VALUES (@IdLotto, @Id, @Valore);
 		COMMIT TRANSACTION;

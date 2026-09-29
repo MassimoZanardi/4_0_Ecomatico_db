@@ -209,6 +209,36 @@ BEGIN
 				dbo.tblEtichette e
 				INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value;
 
+			-- Produttore/detentore: la select propone anche le sedi senza autorizzazione specifica (Id della
+			-- sede). Come in uspRifiutiRegistrazioni_upd/uspRifiutiFormulari_upd, la sede viene convertita
+			-- nella sua autorizzazione "Nessuna" (creata se non esiste): la colonna ha FK verso
+			-- tblRifiutiAutorizzazioni.
+			IF @IdAutorizzazioneProduttoreDetentore IS NOT NULL
+				AND EXISTS (SELECT 1
+				FROM dbo.tblSedi
+				WHERE Id = @IdAutorizzazioneProduttoreDetentore)
+			BEGIN
+				DECLARE @idSede CHAR(16) = @IdAutorizzazioneProduttoreDetentore;
+				SET @IdAutorizzazioneProduttoreDetentore = NULL;
+
+				SELECT @IdAutorizzazioneProduttoreDetentore = Id
+				FROM dbo.tblRifiutiAutorizzazioni
+				WHERE
+					IdSede = @idSede
+					AND Nessuna = 1
+					AND Lock = 0;
+
+				IF @IdAutorizzazioneProduttoreDetentore IS NULL
+				BEGIN
+					EXEC dbo.uspId_get @IdSessione = @IdSessione, @NoLog = 1, @Id = @IdAutorizzazioneProduttoreDetentore OUTPUT;
+
+					INSERT dbo.tblRifiutiAutorizzazioni
+						(Id, IdSede, IdRuolo, DataInizio, DataFine, Nessuna, Disabilitata, Lock)
+					VALUES
+						(@IdAutorizzazioneProduttoreDetentore, @idSede, 'P', '19000101', '20501231', 1, 0, 0);
+				END
+			END
+
 			UPDATE dbo.tblRifiutiModelli
 			SET
 				Nome = @Nome,

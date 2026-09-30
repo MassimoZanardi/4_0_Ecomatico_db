@@ -185,8 +185,12 @@ BEGIN
 
 		DECLARE @eerDescrizione VARCHAR(200);
 		DECLARE @materialeDescrizione VARCHAR(200);
-		SELECT @eerDescrizione = Descrizione FROM dbo.tblRifiutiEer WHERE Id = @idEer;
-		SELECT @materialeDescrizione = Nome FROM dbo.tblRifiutiMateriali WHERE Id = @idMateriale;
+		SELECT @eerDescrizione = Descrizione
+		FROM dbo.tblRifiutiEer
+		WHERE Id = @idEer;
+		SELECT @materialeDescrizione = Nome
+		FROM dbo.tblRifiutiMateriali
+		WHERE Id = @idMateriale;
 
 		-- Prossimo numero disponibile per Registro/anno (stesso schema di uspRifiutiRegistrazioni_upd,
 		-- ramo di rinumerazione: 1 + MAX(Numero) tra le registrazioni confermate/bozza dell'anno).
@@ -225,10 +229,13 @@ BEGIN
 			INSERT dbo.tblRifiutiMovimentiProduttori (Id, IdAutorizzazione, Pos)
 			VALUES (@idMovimento, @idAutorizzazioneProduttoreDetentore, 0);
 
+			-- QuantitaVerificata non valorizzata: un carico generato non ha esito da verificare e
+			-- uspRifiutiRegistrazioni_upd la riporterebbe comunque a NULL al primo salvataggio (uguale alla
+			-- quantita' / causale senza esito); il payload RENTRI usa ISNULL(QuantitaVerificata, Quantita)
 			INSERT dbo.tblRifiutiRegistrazioni
-				(Id, IdMovimento, Operazione, [Data], Numero, QuantitaVerificata, IdMateriale, MaterialeDescrizione, Lock)
+				(Id, IdMovimento, Operazione, [Data], Numero, IdMateriale, MaterialeDescrizione, Lock)
 			VALUES
-				(@returnId, @idMovimento, @operazioneGruppo, @data, @numero, @Quantita, @idMateriale, @materialeDescrizione, 0);
+				(@returnId, @idMovimento, @operazioneGruppo, @data, @numero, @idMateriale, @materialeDescrizione, 0);
 
 			-- Relazione mancava del tutto, il carico auto restava senza legame con lo scarico che lo ha
 			-- generato. Verificato sui dati reali (registrazione Id=65bddb1e1fe94a5a, carico K/M) contro

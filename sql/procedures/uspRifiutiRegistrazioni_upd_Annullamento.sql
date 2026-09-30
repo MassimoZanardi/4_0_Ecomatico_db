@@ -86,7 +86,8 @@ BEGIN
 		FROM dbo.tblRentriRegistrazioniRettifiche
 		WHERE
 			IdRettifica = @Id
-			AND Annullata = 1);
+			AND Annullata = 1
+		);
 
 		IF @idOriginale IS NULL
 		BEGIN
@@ -157,28 +158,58 @@ BEGIN
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 		WHERE r.Id = @Id;
 
-		SELECT @idAutorizzazioneProduttoreDetentore = IdAutorizzazione FROM dbo.tblRifiutiMovimentiProduttori WHERE Id = @idMovimento AND Pos = 0;
-		SELECT @idAutorizzazioneDestinatario = IdAutorizzazione FROM dbo.tblRifiutiMovimentiDestinatari WHERE Id = @idMovimento AND Pos = 0;
-		SELECT @idAutorizzazioneTrasportatore1 = IdAutorizzazione FROM dbo.tblRifiutiMovimentiTrasportatori WHERE Id = @idMovimento AND Pos = 0;
-		SELECT @idAutorizzazioneTrasportatore2 = IdAutorizzazione FROM dbo.tblRifiutiMovimentiTrasportatori WHERE Id = @idMovimento AND Pos = 1;
-		SELECT @idAutorizzazioneTrasportatore3 = IdAutorizzazione FROM dbo.tblRifiutiMovimentiTrasportatori WHERE Id = @idMovimento AND Pos = 2;
-		SELECT @idAutorizzazioneIntermediario1 = IdAutorizzazione FROM dbo.tblRifiutiMovimentiIntermediari WHERE Id = @idMovimento AND Pos = 0;
-		SELECT @idAutorizzazioneIntermediario2 = IdAutorizzazione FROM dbo.tblRifiutiMovimentiIntermediari WHERE Id = @idMovimento AND Pos = 1;
-		SELECT @idAutorizzazioneIntermediario3 = IdAutorizzazione FROM dbo.tblRifiutiMovimentiIntermediari WHERE Id = @idMovimento AND Pos = 2;
+		SELECT @idAutorizzazioneProduttoreDetentore = IdAutorizzazione
+		FROM dbo.tblRifiutiMovimentiProduttori
+		WHERE
+			Id = @idMovimento
+			AND Pos = 0;
+		SELECT @idAutorizzazioneDestinatario = IdAutorizzazione
+		FROM dbo.tblRifiutiMovimentiDestinatari
+		WHERE
+			Id = @idMovimento
+			AND Pos = 0;
+		SELECT @idAutorizzazioneTrasportatore1 = IdAutorizzazione
+		FROM dbo.tblRifiutiMovimentiTrasportatori
+		WHERE
+			Id = @idMovimento
+			AND Pos = 0;
+		SELECT @idAutorizzazioneTrasportatore2 = IdAutorizzazione
+		FROM dbo.tblRifiutiMovimentiTrasportatori
+		WHERE
+			Id = @idMovimento
+			AND Pos = 1;
+		SELECT @idAutorizzazioneTrasportatore3 = IdAutorizzazione
+		FROM dbo.tblRifiutiMovimentiTrasportatori
+		WHERE
+			Id = @idMovimento
+			AND Pos = 2;
+		SELECT @idAutorizzazioneIntermediario1 = IdAutorizzazione
+		FROM dbo.tblRifiutiMovimentiIntermediari
+		WHERE
+			Id = @idMovimento
+			AND Pos = 0;
+		SELECT @idAutorizzazioneIntermediario2 = IdAutorizzazione
+		FROM dbo.tblRifiutiMovimentiIntermediari
+		WHERE
+			Id = @idMovimento
+			AND Pos = 1;
+		SELECT @idAutorizzazioneIntermediario3 = IdAutorizzazione
+		FROM dbo.tblRifiutiMovimentiIntermediari
+		WHERE
+			Id = @idMovimento
+			AND Pos = 2;
 
 		DECLARE @classiPericolo VARCHAR(50) = (
 			SELECT STRING_AGG(c.Codice, ';')
 			FROM
 				dbo.tblRifiutiMovimentiClassiPericolo mc
 				INNER JOIN dbo.tblRifiutiClassiPericolo c ON mc.IdClasse = c.Id
-			WHERE mc.Id = @idMovimento
-		);
+			WHERE mc.Id = @idMovimento);
 
 		DECLARE @idEtichette VARCHAR(50) = (
 			SELECT STRING_AGG(IdEtichetta, ';')
 			FROM dbo.tblRifiutiRegistrazioniEtichette
-			WHERE Id = @Id
-		);
+			WHERE Id = @Id);
 
 		BEGIN TRANSACTION;
 
@@ -252,6 +283,10 @@ BEGIN
 				dbo.tblRentriRegistrazioniRettifiche t
 				CROSS APPLY dbo.ufnRifiutiRegistrazioni_get_RettificaOperativa(t.IdRettifica, NULL, NULL, NULL, NULL) o
 			WHERE t.IdRettifica = @Id;
+
+			-- Magazzino EoW allineato al registro operativo: una M annullata (quantita' operativa 0) perde
+			-- tutte le allocazioni sui lotti
+			EXEC dbo.uspEoWLottiRifiutiRegistrazioni_upd_Allinea @IdRegistrazione = @idOriginale;
 
 		COMMIT TRANSACTION;
 

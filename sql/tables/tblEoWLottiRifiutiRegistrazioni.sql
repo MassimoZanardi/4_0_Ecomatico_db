@@ -11,6 +11,7 @@ CREATE TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni](
 	[IdRegistrazione] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdLotto] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Quantita] [decimal](18, 2) NULL,
+	[Pos] [int] NULL,
  CONSTRAINT [PK_tblEoWLottiRifiutiRegistrazioni] PRIMARY KEY CLUSTERED 
 (
 	[IdRegistrazione] ASC,

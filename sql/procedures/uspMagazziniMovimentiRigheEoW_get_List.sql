@@ -47,7 +47,8 @@ BEGIN
 				INNER JOIN dbo.tblSessioni e ON c.IdSede = e.IdAzienda
 			WHERE
 				c.Id = @IdMovimento
-				AND e.Id = @IdSessione)
+				AND e.Id = @IdSessione
+		)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
@@ -72,6 +73,10 @@ BEGIN
 			-- NULL su movimento in bozza (residuo non ancora noto).
 			ResiduoLotti = IIF(mv.Lock = 0, z.ResiduoLotti, NULL),
 			ResiduoLottiDettaglio = IIF(mv.Lock = 0, z.ResiduoLottiDettaglio, NULL),
+			-- Anomalia "Scaricato più del prodotto": almeno un lotto EoW da cui la riga ha scaricato ha
+			-- giacenza negativa (il registro operativo gli attribuisce meno di quanto già scaricato; il
+			-- magazzino EoW prevale, i movimenti non vengono corretti in automatico)
+			IsScaricatoPiuDelProdotto = CAST(IIF(mv.Lock = 0 AND ISNULL(z.LottiAnomali, 0) > 0, 1, 0) AS BIT),
 			r.Lock
 		FROM
 			dbo.tblMagazziniMovimentiRigheEoW r
@@ -80,10 +85,13 @@ BEGIN
 			LEFT JOIN dbo.tblRifiutiMateriali m ON r.IdMateriale = m.Id
 			LEFT JOIN dbo.tblMagazziniCriteriScarichiLotti cr ON r.IdCriterio = cr.Id
 			LEFT JOIN dbo.tblEoWLotti lr ON r.IdLotto = lr.Id
-			OUTER APPLY (SELECT Relazionata = SUM(rl.Quantita) FROM dbo.tblMagazziniMovimentiRigheEoWLotti rl WHERE rl.Id = r.Id) q
+			OUTER APPLY (SELECT Relazionata = SUM(rl.Quantita)
+			FROM dbo.tblMagazziniMovimentiRigheEoWLotti rl
+			WHERE rl.Id = r.Id) q
 			OUTER APPLY (
 				SELECT
 					ResiduoLotti = SUM(g.Giacenza),
+					LottiAnomali = SUM(IIF(g.Giacenza < 0, 1, 0)),
 					ResiduoLottiDettaglio = STRING_AGG(t.Testo, N' – ') WITHIN GROUP (ORDER BY g.Nome)
 				FROM
 					dbo.tblMagazziniMovimentiRigheEoWLotti rl
@@ -113,9 +121,8 @@ BEGIN
 									AND mp.Lock = 0
 							), 0)
 					) g
-					CROSS APPLY (SELECT Testo = CAST(g.Nome + ': ' + FORMAT(g.Giacenza, 'N2', 'it-IT') AS NVARCHAR(MAX))) t
-				WHERE rl.Id = r.Id
-			) z
+									CROSS APPLY (SELECT Testo = CAST(g.Nome + ': ' + FORMAT(g.Giacenza, 'N2', 'it-IT') AS NVARCHAR(MAX))) t
+				WHERE rl.Id = r.Id) z
 		WHERE r.IdMovimento = @IdMovimento
 		ORDER BY r.Id
 		OPTION (RECOMPILE);

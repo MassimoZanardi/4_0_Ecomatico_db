@@ -76,7 +76,12 @@ BEGIN
 		END
 
 		-- Una registrazione di rettifica o annullamento non è un movimento reale: non riceve quote EoW
-		IF EXISTS (SELECT 1 FROM dbo.viewRifiutiRegistrazioniEffettive WHERE Id = @IdRegistrazione AND IsRettifica = 1)
+		IF EXISTS (SELECT 1
+		FROM dbo.viewRifiutiRegistrazioniEffettive
+		WHERE
+			Id = @IdRegistrazione
+			AND IsRettifica = 1
+		)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Una registrazione di rettifica o annullamento non può ricevere quote EoW';
@@ -129,7 +134,9 @@ BEGIN
 			WHERE l.Id IN (SELECT IdLotto FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id)
 			ORDER BY l.Id;
 
-			SELECT @lockRow = Id FROM dbo.tblRifiutiMovimenti WITH (UPDLOCK, HOLDLOCK) WHERE Id = @idMovimento;
+			SELECT @lockRow = Id
+			FROM dbo.tblRifiutiMovimenti WITH (UPDLOCK, HOLDLOCK)
+			WHERE Id = @idMovimento;
 
 			-- Righe di configurazione + quantità già attribuita ad ognuno dei lotti coinvolti, lette
 			-- sotto lock (fonte unica di verità, nessun ricalcolo su dati stimati prima del lock)
@@ -139,13 +146,19 @@ BEGIN
 				la.IdLotto,
 				la.Valore,
 				l.QuantitaMax,
-				QuantitaAttribuita = ISNULL((SELECT SUM(r.Quantita) FROM dbo.tblEoWLottiRifiutiRegistrazioni r INNER JOIN dbo.tblRifiutiRegistrazioni rr ON r.IdRegistrazione = rr.Id WHERE r.IdLotto = la.IdLotto AND rr.Lock < 2), 0)
+				QuantitaAttribuita = ISNULL((SELECT SUM(r.Quantita)
+				FROM dbo.tblEoWLottiRifiutiRegistrazioni r INNER JOIN dbo.tblRifiutiRegistrazioni rr ON r.IdRegistrazione = rr.Id
+				WHERE
+					r.IdLotto = la.IdLotto
+					AND rr.Lock < 2
+				), 0)
 			FROM
 				dbo.tblEoWLottiAllocazioni la
 				INNER JOIN dbo.tblEoWLotti l ON la.IdLotto = l.Id
 			WHERE la.IdAllocazione = @Id;
 
-			IF NOT EXISTS (SELECT 1 FROM @righe)
+			IF NOT EXISTS (SELECT 1
+			FROM @righe)
 			BEGIN
 				ROLLBACK TRANSACTION;
 				SET @returnValue = -1;
@@ -186,7 +199,8 @@ BEGIN
 					OR l.DataChiusura IS NOT NULL
 					OR ISNULL(l.Disabilitato, 0) = 1;
 
-				IF NOT EXISTS (SELECT 1 FROM @righe)
+				IF NOT EXISTS (SELECT 1
+				FROM @righe)
 				BEGIN
 					ROLLBACK TRANSACTION;
 					SET @returnValue = -1;
@@ -196,10 +210,13 @@ BEGIN
 			END
 
 			-- Quantità effettiva (viewRifiutiRegistrazioniEffettive): una rettifica non modifica l'originale
-			DECLARE @quantitaMovimento DECIMAL(18, 2) = (SELECT Quantita FROM dbo.viewRifiutiRegistrazioniEffettive WHERE Id = @IdRegistrazione);
+			DECLARE @quantitaMovimento DECIMAL(18, 2) = (SELECT Quantita
+			FROM dbo.viewRifiutiRegistrazioniEffettive
+			WHERE Id = @IdRegistrazione);
 			DECLARE @quantitaAttribuitaRegistrazione DECIMAL(18, 2) = ISNULL((
-				SELECT SUM(Quantita) FROM dbo.tblEoWLottiRifiutiRegistrazioni WHERE IdRegistrazione = @IdRegistrazione
-			), 0);
+				SELECT SUM(Quantita)
+				FROM dbo.tblEoWLottiRifiutiRegistrazioni
+				WHERE IdRegistrazione = @IdRegistrazione), 0);
 			DECLARE @quantitaDaAllocare DECIMAL(18, 2) = ISNULL(@quantitaMovimento, 0) - @quantitaAttribuitaRegistrazione;
 
 			IF @quantitaDaAllocare <= 0
@@ -215,7 +232,8 @@ BEGIN
 
 			IF @idAllocazioneTipo = 'U'
 			BEGIN
-				IF (SELECT COUNT(*) FROM @righe) <> 1
+				IF (SELECT COUNT(*)
+				FROM @righe) <> 1
 				BEGIN
 					ROLLBACK TRANSACTION;
 					SET @returnValue = -1;
@@ -224,11 +242,13 @@ BEGIN
 				END
 
 				INSERT INTO @piano (IdLotto, Quantita)
-				SELECT IdLotto, @quantitaDaAllocare FROM @righe;
+				SELECT IdLotto, @quantitaDaAllocare
+				FROM @righe;
 			END
 			ELSE IF @idAllocazioneTipo = 'P'
 			BEGIN
-				DECLARE @sommaPercentuali DECIMAL(18, 2) = (SELECT SUM(ISNULL(Valore, 0)) FROM @righe);
+				DECLARE @sommaPercentuali DECIMAL(18, 2) = (SELECT SUM(ISNULL(Valore, 0))
+				FROM @righe);
 				IF @sommaPercentuali > 100
 				BEGIN
 					ROLLBACK TRANSACTION;
@@ -250,9 +270,13 @@ BEGIN
 
 				IF @sommaPercentuali = 100
 				BEGIN
-					DECLARE @idUltimoLotto CHAR(16) = (SELECT TOP 1 IdLotto FROM @righe ORDER BY IdLotto DESC);
-					DECLARE @resto DECIMAL(18, 2) = @quantitaDaAllocare - (SELECT SUM(Quantita) FROM @piano);
-					UPDATE @piano SET Quantita = Quantita + @resto WHERE IdLotto = @idUltimoLotto;
+					DECLARE @idUltimoLotto CHAR(16) = (SELECT TOP 1 IdLotto
+					FROM @righe ORDER BY IdLotto DESC);
+					DECLARE @resto DECIMAL(18, 2) = @quantitaDaAllocare - (SELECT SUM(Quantita)
+					FROM @piano);
+					UPDATE @piano
+					SET Quantita = Quantita + @resto
+					WHERE IdLotto = @idUltimoLotto;
 				END
 			END
 			ELSE IF @idAllocazioneTipo = 'C'
@@ -268,7 +292,8 @@ BEGIN
 					ORDER BY ISNULL(Valore, 999999999), IdLotto;
 
 				OPEN curRighe;
-				FETCH NEXT FROM curRighe INTO @curIdLotto, @curQuantitaMax, @curQuantitaAttribuita;
+				FETCH NEXT
+				FROM curRighe INTO @curIdLotto, @curQuantitaMax, @curQuantitaAttribuita;
 				WHILE @@FETCH_STATUS = 0 AND @rimanente > 0
 				BEGIN
 					DECLARE @capacitaResidua DECIMAL(18, 2) = CASE
@@ -281,7 +306,8 @@ BEGIN
 						INSERT INTO @piano (IdLotto, Quantita) VALUES (@curIdLotto, @presoQui);
 						SET @rimanente -= @presoQui;
 					END
-					FETCH NEXT FROM curRighe INTO @curIdLotto, @curQuantitaMax, @curQuantitaAttribuita;
+					FETCH NEXT
+					FROM curRighe INTO @curIdLotto, @curQuantitaMax, @curQuantitaAttribuita;
 				END
 				CLOSE curRighe;
 				DEALLOCATE curRighe;
@@ -300,7 +326,9 @@ BEGIN
 			IF EXISTS (
 				SELECT 1
 				FROM @piano p INNER JOIN @righe r ON p.IdLotto = r.IdLotto
-				WHERE r.QuantitaMax IS NOT NULL AND r.QuantitaAttribuita + p.Quantita > r.QuantitaMax
+				WHERE
+					r.QuantitaMax IS NOT NULL
+					AND r.QuantitaAttribuita + p.Quantita > r.QuantitaMax
 			)
 			BEGIN
 				ROLLBACK TRANSACTION;
@@ -309,14 +337,27 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Pos = ordine di riempimento (uspEoWLottiRifiutiRegistrazioni_upd_Allinea riduce partendo dall'ultimo
+			-- lotto riempito): i lotti nuovi seguono quelli gia' allocati, nell'ordine di configurazione
+			-- (Valore crescente = per il tipo C la priorita' con cui sono stati riempiti)
+			DECLARE @posMax INT = ISNULL((SELECT MAX(Pos)
+			FROM dbo.tblEoWLottiRifiutiRegistrazioni
+			WHERE IdRegistrazione = @IdRegistrazione), 0);
+
 			MERGE dbo.tblEoWLottiRifiutiRegistrazioni AS target
-			USING @piano AS source
+			USING (
+				SELECT
+					p.IdLotto,
+					p.Quantita,
+					Pos = @posMax + ROW_NUMBER() OVER (ORDER BY ISNULL(r.Valore, 999999999), p.IdLotto)
+				FROM
+					@piano p
+					INNER JOIN @righe r ON p.IdLotto = r.IdLotto
+			) AS source
 				ON target.IdRegistrazione = @IdRegistrazione AND target.IdLotto = source.IdLotto
 			WHEN MATCHED THEN
-				UPDATE SET Quantita = target.Quantita + source.Quantita
-			WHEN NOT MATCHED THEN
-				INSERT (IdRegistrazione, IdLotto, Quantita)
-				VALUES (@IdRegistrazione, source.IdLotto, source.Quantita);
+				UPDATE
+				SET Quantita = target.Quantita + source.Quantita WHEN NOT MATCHED THEN INSERT (IdRegistrazione, IdLotto, Quantita, Pos) VALUES (@IdRegistrazione, source.IdLotto, source.Quantita, source.Pos);
 
 		COMMIT TRANSACTION;
 

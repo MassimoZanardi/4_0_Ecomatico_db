@@ -797,6 +797,11 @@ BEGIN
 				LEFT JOIN dbo.tblRifiutiAutorizzazioni ai ON mi.IdAutorizzazione = ai.Id
 			WHERE m.Id = @idMovimento;
 
+			-- Magazzino EoW allineato al registro operativo: la quantita' del movimento e' anche quella della
+			-- registrazione associata, se e' una M con allocazioni queste si adeguano
+			IF @idRegistrazione IS NOT NULL
+				EXEC dbo.uspEoWLottiRifiutiRegistrazioni_upd_Allinea @IdRegistrazione = @idRegistrazione;
+
 		COMMIT TRANSACTION;
 
 		-- Log FUORI dalla transazione (intenzionale)

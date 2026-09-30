@@ -54,16 +54,22 @@ BEGIN
 
 		SELECT
 			l.Id,
-			-- Stato della capacità (solo con quantità massima impostata; il lotto EoW è una partita di
-			-- produzione, gli scarichi non liberano capienza): 2 = capacità superata, 1 = lotto pieno o
-			-- capacità residua sotto il 30% della quantità massima, 0 = OK
+			-- Stato: prima l'anomalia "Scaricato più del prodotto" (il magazzino tradizionale ha scaricato
+			-- più di quanto il registro operativo attribuisce al lotto: il magazzino EoW prevale e non viene
+			-- mai corretto in automatico), poi la capacità (solo con quantità massima impostata; il lotto EoW
+			-- è una partita di produzione, gli scarichi non liberano capienza): 2 = anomalia o capacità
+			-- superata, 1 = lotto pieno o capacità residua sotto il 30% della quantità massima, 0 = OK
 			StatoValore = CASE
+				WHEN s.Giacenza < 0 THEN 2
 				WHEN l.QuantitaMax IS NULL THEN 0
 				WHEN c.QuantitaAttribuita > l.QuantitaMax THEN 2
 				WHEN l.QuantitaMax - c.QuantitaAttribuita < l.QuantitaMax * 0.3 THEN 1
 				ELSE 0
 			END,
 			StatoDescrizione = CASE
+				WHEN s.Giacenza < 0
+					THEN 'Scaricato più del prodotto: prodotti ' + FORMAT(s.Prodotta, 'N2', 'it-IT') + ' kg, scaricati '
+						+ FORMAT(s.Scaricata, 'N2', 'it-IT') + ' kg dal magazzino'
 				WHEN l.QuantitaMax IS NULL THEN 'OK'
 				WHEN c.QuantitaAttribuita > l.QuantitaMax
 					THEN 'Capacità superata di ' + FORMAT(c.QuantitaAttribuita - l.QuantitaMax, 'N2', 'it-IT') + ' kg: attribuiti '
@@ -103,17 +109,59 @@ BEGIN
 					r.IdLotto = l.Id
 					AND rr.Lock < 2
 			) q
-			CROSS APPLY (SELECT QuantitaAttribuita = ISNULL(q.QuantitaAttribuita, 0)) c
+					CROSS APPLY (SELECT QuantitaAttribuita = ISNULL(q.QuantitaAttribuita, 0)) c
+					CROSS APPLY dbo.ufnEoWLotti_get_Saldo(l.Id) s
 		WHERE
 			l.Lock = 0
-			AND (@IdSede IS NULL OR l.IdSede = @IdSede)
-			AND (@IdMagazzino IS NULL OR l.IdMagazzino = @IdMagazzino)
-			AND (@IdMateriale IS NULL OR l.IdMateriale = @IdMateriale)
-			AND (@Aperto IS NULL OR (@Aperto = 1 AND l.DataChiusura IS NULL) OR (@Aperto = 0 AND l.DataChiusura IS NOT NULL))
-			AND (@Disabilitato IS NULL OR ISNULL(l.Disabilitato, 0) = @Disabilitato)
-			AND (@DataAperturaDa IS NULL OR l.DataApertura >= @DataAperturaDa)
-			AND (@DataAperturaA IS NULL OR l.DataApertura <= @DataAperturaA)
-			AND (@Search IS NULL OR l.Nome LIKE '%' + @Search + '%')
+			AND
+				(
+				@IdSede IS NULL
+				OR l.IdSede = @IdSede
+				)
+			AND
+				(
+				@IdMagazzino IS NULL
+				OR l.IdMagazzino = @IdMagazzino
+				)
+			AND
+				(
+				@IdMateriale IS NULL
+				OR l.IdMateriale = @IdMateriale
+				)
+			AND
+				(
+				@Aperto IS NULL
+				OR
+					(
+					@Aperto = 1
+					AND l.DataChiusura IS NULL
+					)
+				OR
+					(
+					@Aperto = 0
+					AND l.DataChiusura IS NOT NULL
+					)
+				)
+			AND
+				(
+				@Disabilitato IS NULL
+				OR ISNULL(l.Disabilitato, 0) = @Disabilitato
+				)
+			AND
+				(
+				@DataAperturaDa IS NULL
+				OR l.DataApertura >= @DataAperturaDa
+				)
+			AND
+				(
+				@DataAperturaA IS NULL
+				OR l.DataApertura <= @DataAperturaA
+				)
+			AND
+				(
+				@Search IS NULL
+				OR l.Nome LIKE '%' + @Search + '%'
+				)
 		ORDER BY l.Nome
 		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY

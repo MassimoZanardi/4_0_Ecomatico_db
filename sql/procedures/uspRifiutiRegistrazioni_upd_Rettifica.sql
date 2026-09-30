@@ -206,6 +206,10 @@ BEGIN
 				CROSS APPLY dbo.ufnRifiutiRegistrazioni_get_RettificaOperativa(t.IdRettifica, m.IdEer, m.IdStatoFisico, m.IdUnitaMisura, m.Quantita) o
 			WHERE t.IdRettifica = @Id;
 
+			-- Magazzino EoW allineato al registro operativo: se la correzione riduce la quantita' operativa di
+			-- una M, le sue allocazioni sui lotti si riducono (correzione non operativa: nessun effetto)
+			EXEC dbo.uspEoWLottiRifiutiRegistrazioni_upd_Allinea @IdRegistrazione = @idOriginale;
+
 		COMMIT TRANSACTION;
 
 		SELECT @returnValue AS ReturnValue;

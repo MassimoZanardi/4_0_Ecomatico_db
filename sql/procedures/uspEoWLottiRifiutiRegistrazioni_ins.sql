@@ -92,7 +92,12 @@ BEGIN
 		END
 
 		-- Una registrazione di rettifica o annullamento non è un movimento reale: non riceve quote EoW
-		IF EXISTS (SELECT 1 FROM dbo.viewRifiutiRegistrazioniEffettive WHERE Id = @IdRegistrazione AND IsRettifica = 1)
+		IF EXISTS (SELECT 1
+		FROM dbo.viewRifiutiRegistrazioniEffettive
+		WHERE
+			Id = @IdRegistrazione
+			AND IsRettifica = 1
+		)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Una registrazione di rettifica o annullamento non può ricevere quote EoW';
@@ -158,11 +163,17 @@ BEGIN
 			-- Lock in ordine stabile (sempre Lotto, poi Movimento) per evitare deadlock con
 			-- esecuzioni concorrenti che toccano insiemi di lotti/registrazioni sovrapposti.
 			DECLARE @lockRow CHAR(16);
-			SELECT @lockRow = Id FROM dbo.tblEoWLotti WITH (UPDLOCK, HOLDLOCK) WHERE Id = @IdLotto;
+			SELECT @lockRow = Id
+			FROM dbo.tblEoWLotti WITH (UPDLOCK, HOLDLOCK)
+			WHERE Id = @IdLotto;
 
 			DECLARE @quantitaAttribuitaLotto DECIMAL(18, 2) = (
 				-- Capienza occupata solo dalle quote di registrazioni attive (Lock < 2)
-				SELECT SUM(q.Quantita) FROM dbo.tblEoWLottiRifiutiRegistrazioni q INNER JOIN dbo.tblRifiutiRegistrazioni rr ON q.IdRegistrazione = rr.Id WHERE q.IdLotto = @IdLotto AND rr.Lock < 2
+				SELECT SUM(q.Quantita)
+				FROM dbo.tblEoWLottiRifiutiRegistrazioni q INNER JOIN dbo.tblRifiutiRegistrazioni rr ON q.IdRegistrazione = rr.Id
+				WHERE
+					q.IdLotto = @IdLotto
+					AND rr.Lock < 2
 			);
 			IF @quantitaMaxLotto IS NOT NULL AND ISNULL(@quantitaAttribuitaLotto, 0) + @Quantita > @quantitaMaxLotto
 			BEGIN
@@ -172,13 +183,18 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			SELECT @lockRow = Id FROM dbo.tblRifiutiMovimenti WITH (UPDLOCK, HOLDLOCK) WHERE Id = @idMovimento;
+			SELECT @lockRow = Id
+			FROM dbo.tblRifiutiMovimenti WITH (UPDLOCK, HOLDLOCK)
+			WHERE Id = @idMovimento;
 
 			-- Quantità effettiva (viewRifiutiRegistrazioniEffettive): una rettifica non modifica l'originale
-			DECLARE @quantitaMovimento DECIMAL(18, 2) = (SELECT Quantita FROM dbo.viewRifiutiRegistrazioniEffettive WHERE Id = @IdRegistrazione);
+			DECLARE @quantitaMovimento DECIMAL(18, 2) = (SELECT Quantita
+			FROM dbo.viewRifiutiRegistrazioniEffettive
+			WHERE Id = @IdRegistrazione);
 			DECLARE @quantitaAttribuitaRegistrazione DECIMAL(18, 2) = (
-				SELECT SUM(Quantita) FROM dbo.tblEoWLottiRifiutiRegistrazioni WHERE IdRegistrazione = @IdRegistrazione
-			);
+				SELECT SUM(Quantita)
+				FROM dbo.tblEoWLottiRifiutiRegistrazioni
+				WHERE IdRegistrazione = @IdRegistrazione);
 			IF ISNULL(@quantitaAttribuitaRegistrazione, 0) + @Quantita > ISNULL(@quantitaMovimento, 0)
 			BEGIN
 				ROLLBACK TRANSACTION;
@@ -187,7 +203,12 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			IF EXISTS (SELECT 1 FROM dbo.tblEoWLottiRifiutiRegistrazioni WHERE IdRegistrazione = @IdRegistrazione AND IdLotto = @IdLotto)
+			IF EXISTS (SELECT 1
+			FROM dbo.tblEoWLottiRifiutiRegistrazioni
+			WHERE
+				IdRegistrazione = @IdRegistrazione
+				AND IdLotto = @IdLotto
+			)
 			BEGIN
 				ROLLBACK TRANSACTION;
 				SET @returnValue = -1;
@@ -195,8 +216,16 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			INSERT dbo.tblEoWLottiRifiutiRegistrazioni (IdRegistrazione, IdLotto, Quantita)
-			VALUES (@IdRegistrazione, @IdLotto, @Quantita);
+			-- Pos = ordine di riempimento: se la quantita' operativa della M scende, le allocazioni si riducono
+			-- partendo dall'ultimo lotto riempito (uspEoWLottiRifiutiRegistrazioni_upd_Allinea)
+			INSERT dbo.tblEoWLottiRifiutiRegistrazioni (IdRegistrazione, IdLotto, Quantita, Pos)
+			SELECT
+				@IdRegistrazione,
+				@IdLotto,
+				@Quantita,
+				ISNULL(MAX(Pos), 0) + 1
+			FROM dbo.tblEoWLottiRifiutiRegistrazioni
+			WHERE IdRegistrazione = @IdRegistrazione;
 
 		COMMIT TRANSACTION;
 

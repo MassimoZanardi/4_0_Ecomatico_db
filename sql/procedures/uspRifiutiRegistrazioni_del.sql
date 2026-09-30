@@ -170,7 +170,8 @@ BEGIN
 					FROM dbo.tblRentriRegistrazioniRettifiche
 					WHERE
 						Id = @idOriginaleRettifica
-						AND IdRettifica = @Id);
+						AND IdRettifica = @Id
+					);
 
 					-- Relazioni attive dell'originale (controparte non in bozza e non annullata), bloccate fino
 					-- alla fine della transazione: nessuna nuova associazione puo' nascere durante il controllo
@@ -191,10 +192,19 @@ BEGIN
 						AND l.Quantita > 0
 						AND r.Lock < 2
 						AND rp.Lock < 2
-						AND (v.IsAnnullata = 0 OR l.Id = @idOriginaleRettifica)
-						AND (vp.IsAnnullata = 0 OR l.IdParent = @idOriginaleRettifica);
+						AND
+							(
+							v.IsAnnullata = 0
+							OR l.Id = @idOriginaleRettifica
+							)
+						AND
+							(
+							vp.IsAnnullata = 0
+							OR l.IdParent = @idOriginaleRettifica
+							);
 
-					IF @isAnnullamentoRettifica = 0 AND EXISTS (SELECT 1 FROM @relazioni)
+					IF @isAnnullamentoRettifica = 0 AND EXISTS (SELECT 1
+					FROM @relazioni)
 					BEGIN
 						-- Correzione: valori operativi senza questa rettifica = quelli scritti dall'ultima altra
 						-- rettifica confermata, altrimenti i valori propri dell'originale
@@ -212,14 +222,19 @@ BEGIN
 							FROM dbo.viewRifiutiRegistrazioniEffettive
 							WHERE
 								Id = @idOriginaleRettifica
-								AND (
+								AND
+									(
 									ISNULL(@precIdEer, '') <> ISNULL(IdEer, '')
 									OR ISNULL(@precIdStatoFisico, '') <> ISNULL(IdStatoFisico, '')
 									OR ISNULL(@precIdUnitaMisura, '') <> ISNULL(IdUnitaMisura, '')
-								)
+									)
 						)
-						OR ISNULL(@precQuantita, 0) < (SELECT ISNULL(SUM(Quantita), 0) FROM @relazioni WHERE Id = @idOriginaleRettifica)
-						OR ISNULL(@precQuantita, 0) < (SELECT ISNULL(SUM(Quantita), 0) FROM @relazioni WHERE IdParent = @idOriginaleRettifica)
+						OR ISNULL(@precQuantita, 0) < (SELECT ISNULL(SUM(Quantita), 0)
+						FROM @relazioni
+						WHERE Id = @idOriginaleRettifica)
+						OR ISNULL(@precQuantita, 0) < (SELECT ISNULL(SUM(Quantita), 0)
+						FROM @relazioni
+						WHERE IdParent = @idOriginaleRettifica)
 						BEGIN
 							ROLLBACK TRANSACTION;
 							SET @returnValue = -1;
@@ -240,20 +255,7 @@ BEGIN
 						WHERE
 							l.IdParent = @idOriginaleRettifica
 							AND ro.Operazione = 'S'
-							AND vc.Quantita < l.Quantita + (
-								SELECT ISNULL(SUM(l2.Quantita), 0)
-								FROM
-									dbo.tblRifiutiRegistrazioniRelazioni l2
-									INNER JOIN dbo.tblRifiutiRegistrazioni rp2 ON l2.IdParent = rp2.Id
-									INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp2 ON l2.IdParent = vp2.Id
-								WHERE
-									l2.Id = l.Id
-									AND rp2.Operazione = 'S'
-									AND l2.IdParent <> @idOriginaleRettifica
-									AND l2.Quantita > 0
-									AND rp2.Lock < 2
-									AND vp2.IsAnnullata = 0
-							)
+							AND vc.Quantita < l.Quantita + ( SELECT ISNULL(SUM(l2.Quantita), 0) FROM dbo.tblRifiutiRegistrazioniRelazioni l2 INNER JOIN dbo.tblRifiutiRegistrazioni rp2 ON l2.IdParent = rp2.Id INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp2 ON l2.IdParent = vp2.Id WHERE l2.Id = l.Id AND rp2.Operazione = 'S' AND l2.IdParent <> @idOriginaleRettifica AND l2.Quantita > 0 AND rp2.Lock < 2 AND vp2.IsAnnullata = 0 )
 					)
 					BEGIN
 						ROLLBACK TRANSACTION;
@@ -327,6 +329,11 @@ BEGIN
 							Id = @idMovimento
 							AND @idFormulario IS NULL
 							);
+
+					-- Magazzino EoW allineato al registro operativo: senza questa rettifica l'originale torna ai
+					-- valori operativi precedenti; se sono piu' bassi (la correzione cancellata aveva aumentato
+					-- una M) le sue allocazioni sui lotti si riducono
+					EXEC dbo.uspEoWLottiRifiutiRegistrazioni_upd_Allinea @IdRegistrazione = @idOriginaleRettifica;
 
 				COMMIT TRANSACTION;
 			END

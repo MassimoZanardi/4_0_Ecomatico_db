@@ -55,7 +55,9 @@ BEGIN
 		-- Giacenza (coerente con Rifiuti/Giacenze): Quantita = quanto c'è oggi nel lotto, cioè le
 		-- quote di registrazioni M attive (Lock < 2: una registrazione eliminata mantiene le sue
 		-- quote per un eventuale ripristino, ma non conta più) meno gli scarichi dei movimenti di
-		-- magazzino confermati; solo le righe con giacenza > 0. GiacenzaGiorni = giorni dalla
+		-- magazzino confermati; solo le righe con giacenza diversa da 0: una giacenza negativa è
+		-- l'anomalia "Scaricato più del prodotto" (il magazzino EoW deriva dal registro operativo e
+		-- prevale sul magazzino tradizionale, non viene mai corretto in automatico). GiacenzaGiorni = giorni dalla
 		-- prima registrazione M del lotto. La capacità residua resta riferita alla produzione
 		-- (QuantitaMax - quantità attribuita): il lotto EoW è una partita di produzione, gli
 		-- scarichi non liberano capienza.
@@ -63,9 +65,20 @@ BEGIN
 		BEGIN
 			SELECT
 				l.Id,
-				-- Lotto pieno: la produzione attribuita ha raggiunto la quantità massima
-				StatoValore = CASE WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAttribuita, 0) >= l.QuantitaMax THEN 1 ELSE 0 END,
-				StatoDescrizione = CASE WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAttribuita, 0) >= l.QuantitaMax THEN 'Lotto pieno: capacità esaurita' ELSE 'OK' END,
+				-- 2 = anomalia (scaricato più del prodotto), 1 = lotto pieno (la produzione attribuita ha
+				-- raggiunto la quantità massima), 0 = OK
+				StatoValore = CASE
+					WHEN ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0) < 0 THEN 2
+					WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAttribuita, 0) >= l.QuantitaMax THEN 1
+					ELSE 0
+				END,
+				StatoDescrizione = CASE
+					WHEN ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0) < 0
+						THEN 'Scaricato più del prodotto: prodotti ' + FORMAT(ISNULL(q.QuantitaAttribuita, 0), 'N2', 'it-IT') + ' kg, scaricati '
+							+ FORMAT(ISNULL(sc.Scaricata, 0), 'N2', 'it-IT') + ' kg dal magazzino'
+					WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAttribuita, 0) >= l.QuantitaMax THEN 'Lotto pieno: capacità esaurita'
+					ELSE 'OK'
+				END,
 				l.Nome,
 				MaterialeNome = m.Nome,
 				SedeNome = s.Nome,
@@ -93,7 +106,7 @@ BEGIN
 						r.IdLotto = l.Id
 						AND rr.Lock < 2
 				) q
-				OUTER APPLY (
+						OUTER APPLY (
 					SELECT Scaricata = SUM(rs.Quantita)
 					FROM
 						dbo.tblMagazziniMovimentiRigheEoWLotti rs
@@ -103,12 +116,20 @@ BEGIN
 						rs.IdLotto = l.Id
 						AND rg.Lock = 0
 						AND ms.Lock = 0
-				) sc
+						) sc
 			WHERE
 				l.Lock = 0
-				AND (@IdSede IS NULL OR l.IdSede = @IdSede)
-				AND (@Search IS NULL OR l.Nome LIKE '%' + @Search + '%')
-				AND ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0) > 0
+				AND
+					(
+					@IdSede IS NULL
+					OR l.IdSede = @IdSede
+					)
+				AND
+					(
+					@Search IS NULL
+					OR l.Nome LIKE '%' + @Search + '%'
+					)
+				AND ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0) <> 0
 			ORDER BY l.Nome
 			OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
 			FETCH NEXT @RowsPerPage ROWS ONLY
@@ -118,8 +139,12 @@ BEGIN
 		BEGIN
 			SELECT
 				g.Id,
-				StatoValore = 0,
-				StatoDescrizione = 'OK',
+				-- 2 = almeno un lotto del magazzino in anomalia (nella somma un lotto negativo resterebbe
+				-- nascosto dagli altri)
+				StatoValore = IIF(ISNULL(an.LottiAnomali, 0) > 0, 2, 0),
+				StatoDescrizione = IIF(ISNULL(an.LottiAnomali, 0) > 0,
+					'Scaricato più del prodotto in ' + CAST(an.LottiAnomali AS VARCHAR(10)) + IIF(an.LottiAnomali = 1, ' lotto', ' lotti'),
+					'OK'),
 				g.Nome,
 				MaterialeNome = CAST(NULL AS VARCHAR(100)),
 				SedeNome = s.Nome,
@@ -147,7 +172,7 @@ BEGIN
 						l.IdMagazzino = g.Id
 						AND rr.Lock < 2
 				) q
-				OUTER APPLY (
+						OUTER APPLY (
 					SELECT Scaricata = SUM(rs.Quantita)
 					FROM
 						dbo.tblEoWLotti l
@@ -158,12 +183,34 @@ BEGIN
 						l.IdMagazzino = g.Id
 						AND rg.Lock = 0
 						AND ms.Lock = 0
-				) sc
+						) sc
+						OUTER APPLY (
+					SELECT LottiAnomali = COUNT(*)
+					FROM
+						dbo.tblEoWLotti l
+						CROSS APPLY dbo.ufnEoWLotti_get_Saldo(l.Id) sl
+					WHERE
+						l.IdMagazzino = g.Id
+						AND l.Lock = 0
+						AND sl.Giacenza < 0
+						) an
 			WHERE
 				g.Lock = 0
-				AND (@IdSede IS NULL OR g.IdSede = @IdSede)
-				AND (@Search IS NULL OR g.Nome LIKE '%' + @Search + '%')
-				AND ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0) > 0
+				AND
+					(
+					@IdSede IS NULL
+					OR g.IdSede = @IdSede
+					)
+				AND
+					(
+					@Search IS NULL
+					OR g.Nome LIKE '%' + @Search + '%'
+					)
+				AND
+					(
+					ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0) <> 0
+					OR ISNULL(an.LottiAnomali, 0) > 0
+					)
 			ORDER BY g.Nome
 			OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
 			FETCH NEXT @RowsPerPage ROWS ONLY

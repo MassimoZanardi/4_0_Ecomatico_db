@@ -12,6 +12,7 @@ CREATE TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni](
 	[IdLotto] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Quantita] [decimal](18, 2) NULL,
 	[Pos] [int] NULL,
+	[IdAllocazioneTipo] [char](1) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblEoWLottiRifiutiRegistrazioni] PRIMARY KEY CLUSTERED 
 (
 	[IdRegistrazione] ASC,
@@ -36,3 +37,8 @@ REFERENCES [dbo].[tblRifiutiRegistrazioni] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblEoWLottiRifiutiRegistrazioni_tblRifiutiRegistrazioni]
+GO
+ALTER TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblEoWLottiRifiutiRegistrazioni_tblEoWAllocazioniTipi] FOREIGN KEY([IdAllocazioneTipo])
+REFERENCES [dbo].[tblEoWAllocazioniTipi] ([Id])
+GO
+ALTER TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblEoWLottiRifiutiRegistrazioni_tblEoWAllocazioniTipi]

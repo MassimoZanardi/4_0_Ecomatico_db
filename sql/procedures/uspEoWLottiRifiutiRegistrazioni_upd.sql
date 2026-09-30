@@ -85,7 +85,12 @@ BEGIN
 			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON l.IdSede = i.Id
 		WHERE l.Id = @IdLotto;
 
-		IF NOT EXISTS (SELECT 1 FROM dbo.tblEoWLottiRifiutiRegistrazioni WHERE IdRegistrazione = @IdRegistrazione AND IdLotto = @IdLotto)
+		IF NOT EXISTS (SELECT 1
+		FROM dbo.tblEoWLottiRifiutiRegistrazioni
+		WHERE
+			IdRegistrazione = @IdRegistrazione
+			AND IdLotto = @IdLotto
+		)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Associazione non trovata';
@@ -96,11 +101,18 @@ BEGIN
 
 			-- Lock in ordine stabile (sempre Lotto, poi Movimento), stesso ordine di _ins
 			DECLARE @lockRow CHAR(16);
-			SELECT @lockRow = Id FROM dbo.tblEoWLotti WITH (UPDLOCK, HOLDLOCK) WHERE Id = @IdLotto;
+			SELECT @lockRow = Id
+			FROM dbo.tblEoWLotti WITH (UPDLOCK, HOLDLOCK)
+			WHERE Id = @IdLotto;
 
 			DECLARE @quantitaAttribuitaLotto DECIMAL(18, 2) = (
 				-- Capienza occupata solo dalle quote di registrazioni attive (Lock < 2)
-				SELECT SUM(q.Quantita) FROM dbo.tblEoWLottiRifiutiRegistrazioni q INNER JOIN dbo.tblRifiutiRegistrazioni rr ON q.IdRegistrazione = rr.Id WHERE q.IdLotto = @IdLotto AND rr.Lock < 2 AND q.IdRegistrazione <> @IdRegistrazione
+				SELECT SUM(q.Quantita)
+				FROM dbo.tblEoWLottiRifiutiRegistrazioni q INNER JOIN dbo.tblRifiutiRegistrazioni rr ON q.IdRegistrazione = rr.Id
+				WHERE
+					q.IdLotto = @IdLotto
+					AND rr.Lock < 2
+					AND q.IdRegistrazione <> @IdRegistrazione
 			);
 			IF @quantitaMaxLotto IS NOT NULL AND ISNULL(@quantitaAttribuitaLotto, 0) + @Quantita > @quantitaMaxLotto
 			BEGIN
@@ -110,12 +122,20 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			SELECT @lockRow = Id FROM dbo.tblRifiutiMovimenti WITH (UPDLOCK, HOLDLOCK) WHERE Id = @idMovimento;
+			SELECT @lockRow = Id
+			FROM dbo.tblRifiutiMovimenti WITH (UPDLOCK, HOLDLOCK)
+			WHERE Id = @idMovimento;
 
 			-- Quantità effettiva (viewRifiutiRegistrazioniEffettive): una rettifica non modifica l'originale
-			DECLARE @quantitaMovimento DECIMAL(18, 2) = (SELECT Quantita FROM dbo.viewRifiutiRegistrazioniEffettive WHERE Id = @IdRegistrazione);
+			DECLARE @quantitaMovimento DECIMAL(18, 2) = (SELECT Quantita
+			FROM dbo.viewRifiutiRegistrazioniEffettive
+			WHERE Id = @IdRegistrazione);
 			DECLARE @quantitaAttribuitaRegistrazione DECIMAL(18, 2) = (
-				SELECT SUM(Quantita) FROM dbo.tblEoWLottiRifiutiRegistrazioni WHERE IdRegistrazione = @IdRegistrazione AND IdLotto <> @IdLotto
+				SELECT SUM(Quantita)
+				FROM dbo.tblEoWLottiRifiutiRegistrazioni
+				WHERE
+					IdRegistrazione = @IdRegistrazione
+					AND IdLotto <> @IdLotto
 			);
 			IF ISNULL(@quantitaAttribuitaRegistrazione, 0) + @Quantita > ISNULL(@quantitaMovimento, 0)
 			BEGIN
@@ -125,8 +145,12 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Quantita' decisa a mano: l'allocazione diventa manuale (IdAllocazioneTipo NULL), una riduzione
+			-- automatica successiva non la tratta piu' come parte di un'allocazione in percentuale/priorita'
 			UPDATE dbo.tblEoWLottiRifiutiRegistrazioni
-			SET Quantita = @Quantita
+			SET
+				Quantita = @Quantita,
+				IdAllocazioneTipo = NULL
 			WHERE
 				IdRegistrazione = @IdRegistrazione
 				AND IdLotto = @IdLotto;

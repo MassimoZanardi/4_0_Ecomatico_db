@@ -10,3 +10,15 @@ GO
 IF COL_LENGTH('dbo.tblEoWLottiRifiutiRegistrazioni', 'Pos') IS NULL
 	ALTER TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni] ADD [Pos] [int] NULL;
 GO
+
+-- Metodo con cui e' nata l'allocazione (U = Lotto unico, P = Percentuale, C = Priorita'/capacita'; NULL = manuale):
+-- la riduzione automatica rispetta il metodo (percentuale in proporzione, priorita' e manuale dall'ultimo lotto
+-- riempito). Salvato il tipo e non l'allocazione configurata, che puo' essere cancellata fisicamente.
+IF COL_LENGTH('dbo.tblEoWLottiRifiutiRegistrazioni', 'IdAllocazioneTipo') IS NULL
+	ALTER TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni] ADD [IdAllocazioneTipo] [char](1) COLLATE Latin1_General_CI_AS NULL;
+GO
+
+IF OBJECT_ID('dbo.FK_tblEoWLottiRifiutiRegistrazioni_tblEoWAllocazioniTipi', 'F') IS NULL
+	ALTER TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblEoWLottiRifiutiRegistrazioni_tblEoWAllocazioniTipi] FOREIGN KEY([IdAllocazioneTipo])
+	REFERENCES [dbo].[tblEoWAllocazioniTipi] ([Id]);
+GO

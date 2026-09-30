@@ -337,9 +337,12 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			-- Pos = ordine di riempimento (uspEoWLottiRifiutiRegistrazioni_upd_Allinea riduce partendo dall'ultimo
-			-- lotto riempito): i lotti nuovi seguono quelli gia' allocati, nell'ordine di configurazione
-			-- (Valore crescente = per il tipo C la priorita' con cui sono stati riempiti)
+			-- Pos = ordine di riempimento e IdAllocazioneTipo = metodo: quando la quantita' operativa della M scende,
+			-- uspEoWLottiRifiutiRegistrazioni_upd_Allinea riduce partendo dall'ultima allocazione fatta rispettando
+			-- il metodo (P in proporzione, C/U dall'ultimo lotto riempito). I lotti di questa esecuzione seguono
+			-- quelli gia' allocati, nell'ordine di configurazione (Valore crescente = per il tipo C la priorita'
+			-- con cui sono stati riempiti). Un lotto gia' allocato prende metodo e Pos di questa esecuzione
+			-- (l'ultima operazione).
 			DECLARE @posMax INT = ISNULL((SELECT MAX(Pos)
 			FROM dbo.tblEoWLottiRifiutiRegistrazioni
 			WHERE IdRegistrazione = @IdRegistrazione), 0);
@@ -356,8 +359,13 @@ BEGIN
 			) AS source
 				ON target.IdRegistrazione = @IdRegistrazione AND target.IdLotto = source.IdLotto
 			WHEN MATCHED THEN
-				UPDATE
-				SET Quantita = target.Quantita + source.Quantita WHEN NOT MATCHED THEN INSERT (IdRegistrazione, IdLotto, Quantita, Pos) VALUES (@IdRegistrazione, source.IdLotto, source.Quantita, source.Pos);
+				UPDATE SET
+					Quantita = target.Quantita + source.Quantita,
+					Pos = source.Pos,
+					IdAllocazioneTipo = @idAllocazioneTipo
+			WHEN NOT MATCHED THEN
+				INSERT (IdRegistrazione, IdLotto, Quantita, Pos, IdAllocazioneTipo)
+				VALUES (@IdRegistrazione, source.IdLotto, source.Quantita, source.Pos, @idAllocazioneTipo);
 
 		COMMIT TRANSACTION;
 

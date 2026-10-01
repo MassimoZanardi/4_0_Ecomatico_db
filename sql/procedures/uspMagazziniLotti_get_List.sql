@@ -6,7 +6,6 @@ CREATE OR ALTER PROCEDURE dbo.uspMagazziniLotti_get_List
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
 	@IdSessione CHAR(16) = NULL,
-	@IdSede CHAR(16) = NULL,
 	@IdArticolo CHAR(16) = NULL,
 	@Aperto BIT = NULL,
 	@Disabilitato BIT = NULL,
@@ -19,7 +18,6 @@ BEGIN
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
-		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
 		SET @IdArticolo = NULLIF(LTRIM(RTRIM(@IdArticolo)), '');
 		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
 
@@ -46,6 +44,13 @@ BEGIN
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
 			GOTO BRANCH_END;
 		END
+
+		-- La sede è sempre quella del contesto della sessione (tblSessioni.IdSede): il chiamante non
+		-- può indicarne un'altra. Contesto "tutte le sedi" (NULL o sedici zeri) = nessuna riga
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = NULLIF(IdSede, REPLICATE('0', 16))
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
 
 		SELECT
 			l.Id,
@@ -93,7 +98,7 @@ BEGIN
 			) q
 		WHERE
 			l.Lock = 0
-			AND (@IdSede IS NULL OR l.IdSede = @IdSede)
+			AND l.IdSede = @idSede
 			AND (@IdArticolo IS NULL OR l.IdArticolo = @IdArticolo)
 			AND (@Aperto IS NULL OR (@Aperto = 1 AND l.DataChiusura IS NULL) OR (@Aperto = 0 AND l.DataChiusura IS NOT NULL))
 			AND (@Disabilitato IS NULL OR ISNULL(l.Disabilitato, 0) = @Disabilitato)

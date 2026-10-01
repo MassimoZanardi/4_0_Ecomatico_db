@@ -49,6 +49,14 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdTipo non può essere vuoto';
 			GOTO BRANCH_END;
 		END
+		-- Nome obbligatorio: distingue il registro tra quelli della stessa sede interna
+		-- (es. colonna Registro in EoW > Giacenze > Carichi)
+		IF @Nome IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il nome del registro non può essere vuoto';
+			GOTO BRANCH_END;
+		END
 
 		-- Controlla il permesso sulla funzione
 		DECLARE @permesso TINYINT;

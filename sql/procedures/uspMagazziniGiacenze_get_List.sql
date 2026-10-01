@@ -4,7 +4,6 @@ SET QUOTED_IDENTIFIER ON
 GO
 CREATE OR ALTER PROCEDURE dbo.uspMagazziniGiacenze_get_List
 	@IdSessione CHAR(16) = NULL,
-	@IdSede CHAR(16) = NULL,
 	@IdArticolo CHAR(16) = NULL
 AS
 BEGIN
@@ -14,7 +13,6 @@ BEGIN
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
-		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
 		SET @IdArticolo = NULLIF(LTRIM(RTRIM(@IdArticolo)), '');
 
 		IF @IdSessione IS NULL
@@ -35,6 +33,13 @@ BEGIN
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
 			GOTO BRANCH_END;
 		END
+
+		-- La sede è sempre quella del contesto della sessione (tblSessioni.IdSede): il chiamante non
+		-- può indicarne un'altra. Contesto "tutte le sedi" (NULL o sedici zeri) = tutte le sedi interne
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = NULLIF(IdSede, REPLICATE('0', 16))
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
 
 		-- Giacenza per Articolo + Sede, aggregata su tutti i lotti: mai memorizzata,
 		-- sempre calcolata dalle righe di carico confermate meno le relazioni degli scarichi
@@ -81,7 +86,7 @@ BEGIN
 			INNER JOIN dbo.tblMagazziniArticoli art ON g.IdArticolo = art.Id
 			LEFT JOIN dbo.tblUnitaMisura u ON art.IdUnitaMisura = u.Id
 		WHERE
-			(@IdSede IS NULL OR g.IdSede = @IdSede)
+			(@idSede IS NULL OR g.IdSede = @idSede)
 			AND (@IdArticolo IS NULL OR g.IdArticolo = @IdArticolo)
 		GROUP BY art.Id, art.Nome, art.IdUnitaMisura, g.IdSede, s.Nome, u.Nome
 		HAVING ISNULL(SUM(g.Quantita), 0) <> 0

@@ -8,8 +8,7 @@ CREATE OR ALTER PROCEDURE dbo.uspEoWGiacenze_get_Carichi_List
 	@IdSessione CHAR(16) = NULL,
 	@Vista CHAR(1) = NULL,
 	@Id CHAR(16) = NULL,
-	@Search VARCHAR(50) = NULL,
-	@IdSede CHAR(16) = NULL
+	@Search VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -21,7 +20,6 @@ BEGIN
 		SET @Vista = NULLIF(LTRIM(RTRIM(@Vista)), '');
 		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
-		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -30,7 +28,7 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 		-- Senza @Id: tutti i carichi EoW delle sedi interne della sessione (filtrati per
-		-- @IdSede, la sede del contesto, se indicata); con @Id: i carichi del lotto (@Vista = L)
+		-- la sede del contesto della sessione, se impostata); con @Id: i carichi del lotto (@Vista = L)
 		-- o del magazzino EoW (@Vista = M) indicato
 		IF @Id IS NOT NULL AND ISNULL(@Vista, '') NOT IN ('L', 'M')
 		BEGIN
@@ -57,6 +55,13 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- La sede è sempre quella del contesto della sessione (tblSessioni.IdSede): il chiamante non
+		-- può indicarne un'altra. Contesto "tutte le sedi" (NULL o sedici zeri) = tutte le sedi interne
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = NULLIF(IdSede, REPLICATE('0', 16))
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
 		-- Titolarità sul Lotto/Magazzino indicato
 		IF @Id IS NOT NULL AND @Vista = 'L' AND NOT EXISTS (
 			SELECT 1
@@ -79,6 +84,8 @@ BEGIN
 
 		SELECT
 			lr.IdRegistrazione AS Id,
+			-- Registro della registrazione: la sede interna può averne più di uno
+			RegistroNome = g.Nome,
 			r.Numero,
 			r.Data,
 			MaterialeNome = ISNULL(r.MaterialeDescrizione, mat.Nome),
@@ -97,6 +104,8 @@ BEGIN
 			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON l.IdSede = i.Id
 			INNER JOIN dbo.tblRifiutiRegistrazioni r ON lr.IdRegistrazione = r.Id
 			INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vo ON r.Id = vo.Id
+			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			LEFT JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
 			LEFT JOIN dbo.tblRifiutiMateriali mat ON r.IdMateriale = mat.Id
 			OUTER APPLY (
 				SELECT Prodotta = SUM(qp.Quantita)
@@ -123,7 +132,7 @@ BEGIN
 		WHERE
 			r.Lock < 2
 			AND (
-				(@Id IS NULL AND (@IdSede IS NULL OR l.IdSede = @IdSede))
+				(@Id IS NULL AND (@idSede IS NULL OR l.IdSede = @idSede))
 				OR (@Vista = 'L' AND l.Id = @Id)
 				OR (@Vista = 'M' AND l.IdMagazzino = @Id)
 			)

@@ -6,7 +6,6 @@ CREATE OR ALTER PROCEDURE dbo.uspEoWLotti_get_List
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
 	@IdSessione CHAR(16) = NULL,
-	@IdSede CHAR(16) = NULL,
 	@IdMagazzino CHAR(16) = NULL,
 	@IdMateriale CHAR(2) = NULL,
 	@Aperto BIT = NULL,
@@ -22,7 +21,6 @@ BEGIN
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
-		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
 		SET @IdMagazzino = NULLIF(LTRIM(RTRIM(@IdMagazzino)), '');
 		SET @IdMateriale = NULLIF(LTRIM(RTRIM(@IdMateriale)), '');
 		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
@@ -51,6 +49,13 @@ BEGIN
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
 			GOTO BRANCH_END;
 		END
+
+		-- La sede è sempre quella del contesto della sessione (tblSessioni.IdSede): il chiamante non
+		-- può indicarne un'altra. Contesto "tutte le sedi" (NULL o sedici zeri) = nessuna riga
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = NULLIF(IdSede, REPLICATE('0', 16))
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
 
 		SELECT
 			l.Id,
@@ -113,11 +118,7 @@ BEGIN
 					CROSS APPLY dbo.ufnEoWLotti_get_Saldo(l.Id) s
 		WHERE
 			l.Lock = 0
-			AND
-				(
-				@IdSede IS NULL
-				OR l.IdSede = @IdSede
-				)
+			AND l.IdSede = @idSede
 			AND
 				(
 				@IdMagazzino IS NULL

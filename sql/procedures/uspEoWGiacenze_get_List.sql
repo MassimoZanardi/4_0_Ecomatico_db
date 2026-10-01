@@ -6,7 +6,6 @@ CREATE OR ALTER PROCEDURE dbo.uspEoWGiacenze_get_List
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
 	@IdSessione CHAR(16) = NULL,
-	@IdSede CHAR(16) = NULL,
 	@Vista CHAR(1) = NULL,
 	@Search VARCHAR(50) = NULL
 AS
@@ -17,7 +16,6 @@ BEGIN
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
-		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
 		SET @Vista = NULLIF(LTRIM(RTRIM(@Vista)), '');
 		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
 
@@ -52,6 +50,13 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- La sede è sempre quella del contesto della sessione (tblSessioni.IdSede): il chiamante non
+		-- può indicarne un'altra. Contesto "tutte le sedi" (NULL o sedici zeri) = nessuna riga
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = NULLIF(IdSede, REPLICATE('0', 16))
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
 		-- Giacenza (coerente con Rifiuti/Giacenze): Quantita = quanto c'è oggi nel lotto, cioè le
 		-- quote di registrazioni M attive (Lock < 2: una registrazione eliminata mantiene le sue
 		-- quote per un eventuale ripristino, ma non conta più) meno gli scarichi dei movimenti di
@@ -81,7 +86,6 @@ BEGIN
 				END,
 				l.Nome,
 				MaterialeNome = m.Nome,
-				SedeNome = s.Nome,
 				l.QuantitaMax,
 				QuantitaAttribuita = ISNULL(q.QuantitaAttribuita, 0),
 				Quantita = ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0),
@@ -92,7 +96,6 @@ BEGIN
 			FROM
 				dbo.tblEoWLotti l
 				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON l.IdSede = i.Id
-				INNER JOIN dbo.tblSedi s ON l.IdSede = s.Id
 				LEFT JOIN dbo.tblRifiutiMateriali m ON l.IdMateriale = m.Id
 				OUTER APPLY (
 					SELECT
@@ -119,11 +122,7 @@ BEGIN
 						) sc
 			WHERE
 				l.Lock = 0
-				AND
-					(
-					@IdSede IS NULL
-					OR l.IdSede = @IdSede
-					)
+				AND l.IdSede = @idSede
 				AND
 					(
 					@Search IS NULL
@@ -147,7 +146,6 @@ BEGIN
 					'OK'),
 				g.Nome,
 				MaterialeNome = CAST(NULL AS VARCHAR(100)),
-				SedeNome = s.Nome,
 				QuantitaMax = CAST(NULL AS DECIMAL(18, 2)),
 				QuantitaAttribuita = ISNULL(q.QuantitaAttribuita, 0),
 				Quantita = ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0),
@@ -158,7 +156,6 @@ BEGIN
 			FROM
 				dbo.tblEoWMagazzini g
 				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
-				INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
 				OUTER APPLY (
 					SELECT
 						QuantitaAttribuita = SUM(r.Quantita),
@@ -196,11 +193,7 @@ BEGIN
 						) an
 			WHERE
 				g.Lock = 0
-				AND
-					(
-					@IdSede IS NULL
-					OR g.IdSede = @IdSede
-					)
+				AND g.IdSede = @idSede
 				AND
 					(
 					@Search IS NULL

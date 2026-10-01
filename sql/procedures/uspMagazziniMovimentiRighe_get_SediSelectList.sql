@@ -64,13 +64,14 @@ BEGIN
 
 		SELECT TOP (50)
 			s.Id,
-			[Text] = s.NomeCompleto,
+			-- Nome + indirizzo come la select delle sedi interne del contesto (uspSedi_get_SediInterne_SelectList)
+			[Text] = s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, ''),
 			Selected = CAST(IIF(s.Id = @IdSelected, 1, 0) AS BIT)
 		FROM dbo.tblSedi s
 		WHERE
 			(s.Id = @idAzienda OR s.IdParent = @idAzienda)
 			AND ISNULL(s.Disabilitata, 0) = 0
-			AND (@Search IS NULL OR s.NomeCompleto LIKE '%' + @Search + '%')
+			AND (@Search IS NULL OR s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, '') LIKE '%' + @Search + '%')
 		ORDER BY s.NomeCompleto
 		OPTION (RECOMPILE);
 

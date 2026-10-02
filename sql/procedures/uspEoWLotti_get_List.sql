@@ -21,8 +21,9 @@ BEGIN
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
-		SET @IdMagazzino = NULLIF(LTRIM(RTRIM(@IdMagazzino)), '');
-		SET @IdMateriale = NULLIF(LTRIM(RTRIM(@IdMateriale)), '');
+		-- Le select della ricerca usano gli zeri come "nessuna selezione" ((Nessuno)/(Selezionare))
+		SET @IdMagazzino = NULLIF(NULLIF(LTRIM(RTRIM(@IdMagazzino)), ''), REPLICATE('0', 16));
+		SET @IdMateriale = NULLIF(NULLIF(LTRIM(RTRIM(@IdMateriale)), ''), REPLICATE('0', 2));
 		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
 
 		IF @IdSessione IS NULL

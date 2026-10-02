@@ -1,4 +1,7 @@
--- Step 3: ripristina lo SCHEMABINDING sul chiamante (versione finale CRLF-corretta)
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER FUNCTION [dbo].[ufnFunzioni_get_PermessoBySessione]
 (
 	@IdFunzione CHAR(3),

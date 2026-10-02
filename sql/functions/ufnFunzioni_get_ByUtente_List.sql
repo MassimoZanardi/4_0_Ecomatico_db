@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER FUNCTION [dbo].[ufnFunzioni_get_ByUtente_List] (
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER FUNCTION [dbo].[ufnFunzioni_get_ByUtente_List] (
 	@IdUtente CHAR(16))
 RETURNS TABLE
 WITH SCHEMABINDING
@@ -26,6 +30,14 @@ RETURN
 			OR f.[Master] = 0
 			)
 		AND EXISTS ( SELECT 1 FROM dbo.tblModuliFunzioni mf INNER JOIN dbo.tblModuli m ON mf.Id = m.Id WHERE mf.IdFunzione = f.Id AND m.Attivo = 1 AND ( d.[Master] = 1 OR EXISTS ( SELECT 1 FROM dbo.tblDominiModuli dm WHERE dm.Id = d.Id AND dm.IdModulo = mf.Id ) ) )
+		-- Aree (ARE): solo con almeno 2 aziende interne attive nel dominio; l'Admin Master le vede sempre
+		-- (stessa regola di ufnFunzioni_get_PermessoByUtente)
+		AND
+			(
+			f.Id <> 'ARE'
+			OR d.[Master] = 1
+			OR ( SELECT COUNT(*) FROM dbo.tblSediInterne si INNER JOIN dbo.tblSedi s ON si.Id = s.Id WHERE si.IdDominio = d.Id AND s.Lock = 0 ) >= 2
+			)
 	UNION ALL
 
 	-- ── RAMO 2: Utenti Standard ──────────────────────────────────────────
@@ -58,6 +70,11 @@ RETURN
 		u.Id = @IdUtente
 		AND u.IdRuolo = 'US'
 		AND d.[Master] = 0
+		AND
+			(
+			f.Id <> 'ARE'
+			OR ( SELECT COUNT(*) FROM dbo.tblSediInterne si INNER JOIN dbo.tblSedi s ON si.Id = s.Id WHERE si.IdDominio = d.Id AND s.Lock = 0 ) >= 2
+			)
 		AND
 			(
 			EXISTS ( SELECT 1 FROM dbo.tblModuliFunzioni mf WHERE mf.IdFunzione = f.Id AND mf.Id = 'BAS' )

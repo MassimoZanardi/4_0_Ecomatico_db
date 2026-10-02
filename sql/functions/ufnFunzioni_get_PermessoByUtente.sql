@@ -1,4 +1,7 @@
--- Step 2: ora l'ALTER e' sbloccato
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER FUNCTION [dbo].[ufnFunzioni_get_PermessoByUtente]
 (
 	@IdFunzione CHAR(3),
@@ -9,6 +12,32 @@ WITH SCHEMABINDING
 AS
 BEGIN
 	IF @IdFunzione IS NULL OR @IdUtente IS NULL
+		RETURN 0;
+
+	-- Aree (ARE): servono solo con almeno 2 aziende interne attive nel dominio dell'utente (le aree
+	-- condividono anagrafiche tra aziende interne); l'amministratore del dominio Master le vede sempre.
+	-- Stessa regola di ufnFunzioni_get_ByUtente_List (menu)
+	IF @IdFunzione = 'ARE'
+		AND NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblUtenti AS u
+				INNER JOIN dbo.tblDomini AS d ON u.IdDominio = d.Id
+			WHERE
+				u.Id = @IdUtente
+				AND u.IdRuolo = 'AD'
+				AND d.[Master] = 1
+		)
+		AND (
+			SELECT COUNT(*)
+			FROM
+				dbo.tblUtenti AS u
+				INNER JOIN dbo.tblSediInterne AS si ON u.IdDominio = si.IdDominio
+				INNER JOIN dbo.tblSedi AS s ON si.Id = s.Id
+			WHERE
+				u.Id = @IdUtente
+				AND s.Lock = 0
+		) < 2
 		RETURN 0;
 
 	RETURN

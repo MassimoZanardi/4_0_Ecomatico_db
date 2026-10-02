@@ -60,15 +60,15 @@ BEGIN
 		SELECT
 			l.Id,
 			-- Stato: prima l'anomalia "Scaricato più del prodotto" (il magazzino tradizionale ha scaricato
-			-- più di quanto il registro operativo attribuisce al lotto: il magazzino EoW prevale e non viene
+			-- più di quanto il registro operativo alloca al lotto: il magazzino EoW prevale e non viene
 			-- mai corretto in automatico), poi la capacità (solo con quantità massima impostata; il lotto EoW
 			-- è una partita di produzione, gli scarichi non liberano capienza): 2 = anomalia o capacità
 			-- superata, 1 = lotto pieno o capacità residua sotto il 30% della quantità massima, 0 = OK
 			StatoValore = CASE
 				WHEN s.Giacenza < 0 THEN 2
 				WHEN l.QuantitaMax IS NULL THEN 0
-				WHEN c.QuantitaAttribuita > l.QuantitaMax THEN 2
-				WHEN l.QuantitaMax - c.QuantitaAttribuita < l.QuantitaMax * 0.3 THEN 1
+				WHEN c.QuantitaAllocata > l.QuantitaMax THEN 2
+				WHEN l.QuantitaMax - c.QuantitaAllocata < l.QuantitaMax * 0.3 THEN 1
 				ELSE 0
 			END,
 			StatoDescrizione = CASE
@@ -76,12 +76,12 @@ BEGIN
 					THEN 'Scaricato più del prodotto: prodotti ' + FORMAT(s.Prodotta, 'N2', 'it-IT') + ' kg, scaricati '
 						+ FORMAT(s.Scaricata, 'N2', 'it-IT') + ' kg dal magazzino'
 				WHEN l.QuantitaMax IS NULL THEN 'OK'
-				WHEN c.QuantitaAttribuita > l.QuantitaMax
-					THEN 'Capacità superata di ' + FORMAT(c.QuantitaAttribuita - l.QuantitaMax, 'N2', 'it-IT') + ' kg: attribuiti '
-						+ FORMAT(c.QuantitaAttribuita, 'N2', 'it-IT') + ' kg su ' + FORMAT(l.QuantitaMax, 'N2', 'it-IT') + ' kg'
-				WHEN c.QuantitaAttribuita = l.QuantitaMax THEN 'Lotto pieno: capacità esaurita'
-				WHEN l.QuantitaMax - c.QuantitaAttribuita < l.QuantitaMax * 0.3
-					THEN 'Capacità residua sotto il 30%: ' + FORMAT(l.QuantitaMax - c.QuantitaAttribuita, 'N2', 'it-IT') + ' kg su '
+				WHEN c.QuantitaAllocata > l.QuantitaMax
+					THEN 'Capacità superata di ' + FORMAT(c.QuantitaAllocata - l.QuantitaMax, 'N2', 'it-IT') + ' kg: allocati '
+						+ FORMAT(c.QuantitaAllocata, 'N2', 'it-IT') + ' kg su ' + FORMAT(l.QuantitaMax, 'N2', 'it-IT') + ' kg'
+				WHEN c.QuantitaAllocata = l.QuantitaMax THEN 'Lotto pieno: capacità esaurita'
+				WHEN l.QuantitaMax - c.QuantitaAllocata < l.QuantitaMax * 0.3
+					THEN 'Capacità residua sotto il 30%: ' + FORMAT(l.QuantitaMax - c.QuantitaAllocata, 'N2', 'it-IT') + ' kg su '
 						+ FORMAT(l.QuantitaMax, 'N2', 'it-IT') + ' kg'
 				ELSE 'OK'
 			END,
@@ -92,8 +92,8 @@ BEGIN
 			l.DataApertura,
 			l.DataChiusura,
 			l.QuantitaMax,
-			QuantitaAttribuita = ISNULL(q.QuantitaAttribuita, 0),
-			CapacitaResidua = CASE WHEN l.QuantitaMax IS NULL THEN NULL ELSE l.QuantitaMax - ISNULL(q.QuantitaAttribuita, 0) END,
+			QuantitaAllocata = ISNULL(q.QuantitaAllocata, 0),
+			CapacitaResidua = CASE WHEN l.QuantitaMax IS NULL THEN NULL ELSE l.QuantitaMax - ISNULL(q.QuantitaAllocata, 0) END,
 			Disabilitato = ISNULL(l.Disabilitato, 0),
 			RowsCount = COUNT(*) OVER ()
 		FROM
@@ -105,7 +105,7 @@ BEGIN
 				-- Solo quote di registrazioni attive (Lock < 2): una registrazione eliminata (Lock = 4)
 				-- mantiene le sue quote per un eventuale ripristino, ma non conta più
 				SELECT
-					QuantitaAttribuita = SUM(r.Quantita),
+					QuantitaAllocata = SUM(r.Quantita),
 					NumeroRegistrazioni = COUNT(DISTINCT r.IdRegistrazione)
 				FROM
 					dbo.tblEoWLottiRifiutiRegistrazioni r
@@ -114,7 +114,7 @@ BEGIN
 					r.IdLotto = l.Id
 					AND rr.Lock < 2
 			) q
-					CROSS APPLY (SELECT QuantitaAttribuita = ISNULL(q.QuantitaAttribuita, 0)) c
+					CROSS APPLY (SELECT QuantitaAllocata = ISNULL(q.QuantitaAllocata, 0)) c
 					CROSS APPLY dbo.ufnEoWLotti_get_Saldo(l.Id) s
 		WHERE
 			l.Lock = 0

@@ -61,7 +61,7 @@ BEGIN
 			MaterialeNome = ISNULL(r.MaterialeDescrizione, mat.Nome),
 			-- Quantità effettiva (viewRifiutiRegistrazioniEffettive): una rettifica non modifica l'originale
 			QuantitaComplessiva = vo.Quantita,
-			QuantitaAttribuita = lr.Quantita
+			QuantitaAllocata = lr.Quantita
 		FROM
 			dbo.tblEoWLottiRifiutiRegistrazioni lr
 			INNER JOIN dbo.tblRifiutiRegistrazioni r ON lr.IdRegistrazione = r.Id

@@ -78,8 +78,8 @@ BEGIN
 			l.DataApertura,
 			l.DataChiusura,
 			l.QuantitaMax,
-			QuantitaAttribuita = ISNULL(q.QuantitaAttribuita, 0),
-			CapacitaResidua = CASE WHEN l.QuantitaMax IS NULL THEN NULL ELSE l.QuantitaMax - ISNULL(q.QuantitaAttribuita, 0) END,
+			QuantitaAllocata = ISNULL(q.QuantitaAllocata, 0),
+			CapacitaResidua = CASE WHEN l.QuantitaMax IS NULL THEN NULL ELSE l.QuantitaMax - ISNULL(q.QuantitaAllocata, 0) END,
 			Disabilitato = ISNULL(l.Disabilitato, 0),
 			l.Lock
 		FROM
@@ -90,7 +90,7 @@ BEGIN
 			OUTER APPLY (
 				-- Solo quote di registrazioni attive (Lock < 2): una registrazione eliminata (Lock = 4)
 				-- mantiene le sue quote per un eventuale ripristino, ma non conta più
-				SELECT QuantitaAttribuita = SUM(r.Quantita)
+				SELECT QuantitaAllocata = SUM(r.Quantita)
 				FROM
 					dbo.tblEoWLottiRifiutiRegistrazioni r
 					INNER JOIN dbo.tblRifiutiRegistrazioni rr ON r.IdRegistrazione = rr.Id

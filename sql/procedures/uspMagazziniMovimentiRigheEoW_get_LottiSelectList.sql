@@ -55,7 +55,7 @@ BEGIN
 
 		-- Lotti EoW da cui scaricare (criterio Manuale): stessa Sede+Materiale, attivi, non
 		-- disabilitati, con disponibilità (anche se scaduti). Disponibilità = quantità
-		-- prodotta (quote di registrazioni M attive attribuite al lotto, modulo EoW) -
+		-- prodotta (quote di registrazioni M attive allocate al lotto, modulo EoW) -
 		-- scarichi confermati di questo modulo Magazzino
 		SELECT
 			l.Id,

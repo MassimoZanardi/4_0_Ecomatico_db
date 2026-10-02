@@ -105,7 +105,7 @@ BEGIN
 			FROM dbo.tblEoWLotti WITH (UPDLOCK, HOLDLOCK)
 			WHERE Id = @IdLotto;
 
-			DECLARE @quantitaAttribuitaLotto DECIMAL(18, 2) = (
+			DECLARE @quantitaAllocataLotto DECIMAL(18, 2) = (
 				-- Capienza occupata solo dalle quote di registrazioni attive (Lock < 2)
 				SELECT SUM(q.Quantita)
 				FROM dbo.tblEoWLottiRifiutiRegistrazioni q INNER JOIN dbo.tblRifiutiRegistrazioni rr ON q.IdRegistrazione = rr.Id
@@ -114,7 +114,7 @@ BEGIN
 					AND rr.Lock < 2
 					AND q.IdRegistrazione <> @IdRegistrazione
 			);
-			IF @quantitaMaxLotto IS NOT NULL AND ISNULL(@quantitaAttribuitaLotto, 0) + @Quantita > @quantitaMaxLotto
+			IF @quantitaMaxLotto IS NOT NULL AND ISNULL(@quantitaAllocataLotto, 0) + @Quantita > @quantitaMaxLotto
 			BEGIN
 				ROLLBACK TRANSACTION;
 				SET @returnValue = -1;
@@ -130,14 +130,14 @@ BEGIN
 			DECLARE @quantitaMovimento DECIMAL(18, 2) = (SELECT Quantita
 			FROM dbo.viewRifiutiRegistrazioniEffettive
 			WHERE Id = @IdRegistrazione);
-			DECLARE @quantitaAttribuitaRegistrazione DECIMAL(18, 2) = (
+			DECLARE @quantitaAllocataRegistrazione DECIMAL(18, 2) = (
 				SELECT SUM(Quantita)
 				FROM dbo.tblEoWLottiRifiutiRegistrazioni
 				WHERE
 					IdRegistrazione = @IdRegistrazione
 					AND IdLotto <> @IdLotto
 			);
-			IF ISNULL(@quantitaAttribuitaRegistrazione, 0) + @Quantita > ISNULL(@quantitaMovimento, 0)
+			IF ISNULL(@quantitaAllocataRegistrazione, 0) + @Quantita > ISNULL(@quantitaMovimento, 0)
 			BEGIN
 				ROLLBACK TRANSACTION;
 				SET @returnValue = -1;

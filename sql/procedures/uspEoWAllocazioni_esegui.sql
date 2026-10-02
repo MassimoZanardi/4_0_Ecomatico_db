@@ -138,15 +138,15 @@ BEGIN
 			FROM dbo.tblRifiutiMovimenti WITH (UPDLOCK, HOLDLOCK)
 			WHERE Id = @idMovimento;
 
-			-- Righe di configurazione + quantità già attribuita ad ognuno dei lotti coinvolti, lette
+			-- Righe di configurazione + quantità già allocata ad ognuno dei lotti coinvolti, lette
 			-- sotto lock (fonte unica di verità, nessun ricalcolo su dati stimati prima del lock)
-			DECLARE @righe TABLE (IdLotto CHAR(16) PRIMARY KEY, Valore DECIMAL(18, 2) NULL, QuantitaMax DECIMAL(18, 2) NULL, QuantitaAttribuita DECIMAL(18, 2) NOT NULL);
-			INSERT INTO @righe (IdLotto, Valore, QuantitaMax, QuantitaAttribuita)
+			DECLARE @righe TABLE (IdLotto CHAR(16) PRIMARY KEY, Valore DECIMAL(18, 2) NULL, QuantitaMax DECIMAL(18, 2) NULL, QuantitaAllocata DECIMAL(18, 2) NOT NULL);
+			INSERT INTO @righe (IdLotto, Valore, QuantitaMax, QuantitaAllocata)
 			SELECT
 				la.IdLotto,
 				la.Valore,
 				l.QuantitaMax,
-				QuantitaAttribuita = ISNULL((SELECT SUM(r.Quantita)
+				QuantitaAllocata = ISNULL((SELECT SUM(r.Quantita)
 				FROM dbo.tblEoWLottiRifiutiRegistrazioni r INNER JOIN dbo.tblRifiutiRegistrazioni rr ON r.IdRegistrazione = rr.Id
 				WHERE
 					r.IdLotto = la.IdLotto
@@ -213,11 +213,11 @@ BEGIN
 			DECLARE @quantitaMovimento DECIMAL(18, 2) = (SELECT Quantita
 			FROM dbo.viewRifiutiRegistrazioniEffettive
 			WHERE Id = @IdRegistrazione);
-			DECLARE @quantitaAttribuitaRegistrazione DECIMAL(18, 2) = ISNULL((
+			DECLARE @quantitaAllocataRegistrazione DECIMAL(18, 2) = ISNULL((
 				SELECT SUM(Quantita)
 				FROM dbo.tblEoWLottiRifiutiRegistrazioni
 				WHERE IdRegistrazione = @IdRegistrazione), 0);
-			DECLARE @quantitaDaAllocare DECIMAL(18, 2) = ISNULL(@quantitaMovimento, 0) - @quantitaAttribuitaRegistrazione;
+			DECLARE @quantitaDaAllocare DECIMAL(18, 2) = ISNULL(@quantitaMovimento, 0) - @quantitaAllocataRegistrazione;
 
 			IF @quantitaDaAllocare <= 0
 			BEGIN
@@ -284,21 +284,21 @@ BEGIN
 				-- Ripartizione greedy per priorità (Valore crescente = priorità più alta): iterazione
 				-- riga per riga, nessun pattern set-based equivalente per un bin-packing sequenziale.
 				DECLARE @rimanente DECIMAL(18, 2) = @quantitaDaAllocare;
-				DECLARE @curIdLotto CHAR(16), @curQuantitaMax DECIMAL(18, 2), @curQuantitaAttribuita DECIMAL(18, 2);
+				DECLARE @curIdLotto CHAR(16), @curQuantitaMax DECIMAL(18, 2), @curQuantitaAllocata DECIMAL(18, 2);
 
 				DECLARE curRighe CURSOR LOCAL FAST_FORWARD FOR
-					SELECT IdLotto, QuantitaMax, QuantitaAttribuita
+					SELECT IdLotto, QuantitaMax, QuantitaAllocata
 					FROM @righe
 					ORDER BY ISNULL(Valore, 999999999), IdLotto;
 
 				OPEN curRighe;
 				FETCH NEXT
-				FROM curRighe INTO @curIdLotto, @curQuantitaMax, @curQuantitaAttribuita;
+				FROM curRighe INTO @curIdLotto, @curQuantitaMax, @curQuantitaAllocata;
 				WHILE @@FETCH_STATUS = 0 AND @rimanente > 0
 				BEGIN
 					DECLARE @capacitaResidua DECIMAL(18, 2) = CASE
 						WHEN @curQuantitaMax IS NULL THEN @rimanente
-						ELSE @curQuantitaMax - @curQuantitaAttribuita
+						ELSE @curQuantitaMax - @curQuantitaAllocata
 					END;
 					IF @capacitaResidua > 0
 					BEGIN
@@ -307,7 +307,7 @@ BEGIN
 						SET @rimanente -= @presoQui;
 					END
 					FETCH NEXT
-					FROM curRighe INTO @curIdLotto, @curQuantitaMax, @curQuantitaAttribuita;
+					FROM curRighe INTO @curIdLotto, @curQuantitaMax, @curQuantitaAllocata;
 				END
 				CLOSE curRighe;
 				DEALLOCATE curRighe;
@@ -328,7 +328,7 @@ BEGIN
 				FROM @piano p INNER JOIN @righe r ON p.IdLotto = r.IdLotto
 				WHERE
 					r.QuantitaMax IS NOT NULL
-					AND r.QuantitaAttribuita + p.Quantita > r.QuantitaMax
+					AND r.QuantitaAllocata + p.Quantita > r.QuantitaMax
 			)
 			BEGIN
 				ROLLBACK TRANSACTION;

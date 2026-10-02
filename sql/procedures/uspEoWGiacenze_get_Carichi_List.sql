@@ -92,7 +92,7 @@ BEGIN
 			LottoNome = l.Nome,
 			-- Quantità effettiva (viewRifiutiRegistrazioniEffettive): una rettifica non modifica l'originale
 			QuantitaComplessiva = vo.Quantita,
-			QuantitaAttribuita = lr.Quantita,
+			QuantitaAllocata = lr.Quantita,
 			-- Residuo attuale del lotto EoW della quota (gli scarichi di magazzino prelevano dal
 			-- lotto, non dalla singola registrazione): quote di registrazioni attive meno gli
 			-- scarichi dei movimenti di magazzino confermati

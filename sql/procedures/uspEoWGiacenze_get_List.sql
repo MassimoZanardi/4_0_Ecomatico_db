@@ -64,33 +64,33 @@ BEGIN
 		-- l'anomalia "Scaricato più del prodotto" (il magazzino EoW deriva dal registro operativo e
 		-- prevale sul magazzino tradizionale, non viene mai corretto in automatico). GiacenzaGiorni = giorni dalla
 		-- prima registrazione M del lotto. La capacità residua resta riferita alla produzione
-		-- (QuantitaMax - quantità attribuita): il lotto EoW è una partita di produzione, gli
+		-- (QuantitaMax - quantità allocata): il lotto EoW è una partita di produzione, gli
 		-- scarichi non liberano capienza.
 		IF @Vista = 'L'
 		BEGIN
 			SELECT
 				l.Id,
-				-- 2 = anomalia (scaricato più del prodotto), 1 = lotto pieno (la produzione attribuita ha
+				-- 2 = anomalia (scaricato più del prodotto), 1 = lotto pieno (la produzione allocata ha
 				-- raggiunto la quantità massima), 0 = OK
 				StatoValore = CASE
-					WHEN ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0) < 0 THEN 2
-					WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAttribuita, 0) >= l.QuantitaMax THEN 1
+					WHEN ISNULL(q.QuantitaAllocata, 0) - ISNULL(sc.Scaricata, 0) < 0 THEN 2
+					WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAllocata, 0) >= l.QuantitaMax THEN 1
 					ELSE 0
 				END,
 				StatoDescrizione = CASE
-					WHEN ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0) < 0
-						THEN 'Scaricato più del prodotto: prodotti ' + FORMAT(ISNULL(q.QuantitaAttribuita, 0), 'N2', 'it-IT') + ' kg, scaricati '
+					WHEN ISNULL(q.QuantitaAllocata, 0) - ISNULL(sc.Scaricata, 0) < 0
+						THEN 'Scaricato più del prodotto: prodotti ' + FORMAT(ISNULL(q.QuantitaAllocata, 0), 'N2', 'it-IT') + ' kg, scaricati '
 							+ FORMAT(ISNULL(sc.Scaricata, 0), 'N2', 'it-IT') + ' kg dal magazzino'
-					WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAttribuita, 0) >= l.QuantitaMax THEN 'Lotto pieno: capacità esaurita'
+					WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAllocata, 0) >= l.QuantitaMax THEN 'Lotto pieno: capacità esaurita'
 					ELSE 'OK'
 				END,
 				l.Nome,
 				MaterialeNome = m.Nome,
 				l.QuantitaMax,
-				QuantitaAttribuita = ISNULL(q.QuantitaAttribuita, 0),
-				Quantita = ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0),
+				QuantitaAllocata = ISNULL(q.QuantitaAllocata, 0),
+				Quantita = ISNULL(q.QuantitaAllocata, 0) - ISNULL(sc.Scaricata, 0),
 				GiacenzaGiorni = DATEDIFF(DAY, q.PrimaData, CAST(GETDATE() AS DATE)),
-				CapacitaResidua = CASE WHEN l.QuantitaMax IS NULL THEN NULL ELSE l.QuantitaMax - ISNULL(q.QuantitaAttribuita, 0) END,
+				CapacitaResidua = CASE WHEN l.QuantitaMax IS NULL THEN NULL ELSE l.QuantitaMax - ISNULL(q.QuantitaAllocata, 0) END,
 				CarichiNumero = ISNULL(q.CarichiNumero, 0),
 				RowsCount = COUNT(*) OVER ()
 			FROM
@@ -99,7 +99,7 @@ BEGIN
 				LEFT JOIN dbo.tblRifiutiMateriali m ON l.IdMateriale = m.Id
 				OUTER APPLY (
 					SELECT
-						QuantitaAttribuita = SUM(r.Quantita),
+						QuantitaAllocata = SUM(r.Quantita),
 						CarichiNumero = COUNT(*),
 						PrimaData = MIN(rr.[Data])
 					FROM
@@ -128,7 +128,7 @@ BEGIN
 					@Search IS NULL
 					OR l.Nome LIKE '%' + @Search + '%'
 					)
-				AND ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0) <> 0
+				AND ISNULL(q.QuantitaAllocata, 0) - ISNULL(sc.Scaricata, 0) <> 0
 			ORDER BY l.Nome
 			OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
 			FETCH NEXT @RowsPerPage ROWS ONLY
@@ -147,8 +147,8 @@ BEGIN
 				g.Nome,
 				MaterialeNome = CAST(NULL AS VARCHAR(100)),
 				QuantitaMax = CAST(NULL AS DECIMAL(18, 2)),
-				QuantitaAttribuita = ISNULL(q.QuantitaAttribuita, 0),
-				Quantita = ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0),
+				QuantitaAllocata = ISNULL(q.QuantitaAllocata, 0),
+				Quantita = ISNULL(q.QuantitaAllocata, 0) - ISNULL(sc.Scaricata, 0),
 				GiacenzaGiorni = DATEDIFF(DAY, q.PrimaData, CAST(GETDATE() AS DATE)),
 				CapacitaResidua = CAST(NULL AS DECIMAL(18, 2)),
 				CarichiNumero = ISNULL(q.CarichiNumero, 0),
@@ -158,7 +158,7 @@ BEGIN
 				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
 				OUTER APPLY (
 					SELECT
-						QuantitaAttribuita = SUM(r.Quantita),
+						QuantitaAllocata = SUM(r.Quantita),
 						CarichiNumero = COUNT(*),
 						PrimaData = MIN(rr.[Data])
 					FROM
@@ -201,7 +201,7 @@ BEGIN
 					)
 				AND
 					(
-					ISNULL(q.QuantitaAttribuita, 0) - ISNULL(sc.Scaricata, 0) <> 0
+					ISNULL(q.QuantitaAllocata, 0) - ISNULL(sc.Scaricata, 0) <> 0
 					OR ISNULL(an.LottiAnomali, 0) > 0
 					)
 			ORDER BY g.Nome

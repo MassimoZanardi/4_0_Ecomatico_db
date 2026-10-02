@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_LoginByEmail]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspUtenti_get_LoginByEmail]
 	@Email NVARCHAR(255) = NULL
 AS
 BEGIN
@@ -38,9 +42,21 @@ BEGIN
 						 ) > u.PasswordScadenzaGiorni THEN 1
 					ELSE 0
 				END
-			AS BIT)
+			AS BIT),
+			-- Blocco dell'accesso, mostrato solo dopo la verifica della password (lato C#, per non
+			-- rivelare lo stato del dominio a chi non conosce la password). Valgono fino al giorno di
+			-- scadenza compreso. Il dominio Master non viene mai bloccato: i suoi amministratori
+			-- riattivano gli altri domini o ne spostano la scadenza
+			Blocco = CASE
+				WHEN ISNULL(d.[Master], 0) = 1 THEN NULL
+				WHEN d.IdStato = 'SO' THEN 'Dominio sospeso'
+				WHEN d.Scadenza < CAST(GETDATE() AS DATE) THEN 'Dominio scaduto'
+				WHEN u.Scadenza < CAST(GETDATE() AS DATE) THEN 'Utente scaduto'
+				ELSE NULL
+			END
 		FROM
 			dbo.tblUtenti u
+			LEFT JOIN dbo.tblDomini d ON u.IdDominio = d.Id
 			OUTER APPLY (
 				SELECT TOP 1 [Password], [Data], Temporanea
 				FROM dbo.tblUtentiPassword
@@ -68,3 +84,4 @@ BEGIN
 	END
 
 END;
+GO

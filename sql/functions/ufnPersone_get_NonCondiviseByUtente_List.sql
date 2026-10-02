@@ -25,6 +25,10 @@ RETURN
 			FROM
 				dbo.tblAreeOsepe ae
 				INNER JOIN dbo.tblAree a ON ae.Id = a.Id
-			WHERE a.Lock = 0 AND ae.IdOsepe = s.Id -- esclude persone condivise tramite area
+				INNER JOIN dbo.tblAreeSediInterne ai ON a.Id = ai.Id
+				INNER JOIN dbo.ufnSedi_get_AziendeInterneByUtente_List(@IdUtente) x ON ai.IdSede = x.Id
+			-- Esclude solo le persone che l'utente vede gia' come condivise (area di cui fa parte una sua
+			-- azienda interna): l'azienda proprietaria vede sempre le proprie, anche in un'area di cui non fa parte
+			WHERE a.Lock = 0 AND ae.IdOsepe = s.Id
 		)
 );

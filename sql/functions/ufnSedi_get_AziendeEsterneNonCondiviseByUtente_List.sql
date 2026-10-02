@@ -21,5 +21,7 @@ RETURN
 		INNER JOIN dbo.tblSedi s ON se.Id = s.Id
 	WHERE
 		s.Lock = 0
-		AND NOT EXISTS ( SELECT 1 FROM dbo.tblAreeOsepe ae INNER JOIN dbo.tblAree a ON ae.Id = a.Id WHERE a.Lock = 0 AND ae.IdOsepe = s.Id )
+		-- Esclusa solo se l'utente la vede gia' come condivisa (area di cui fa parte una sua azienda interna):
+		-- l'azienda proprietaria vede sempre le proprie anagrafiche, anche in un'area di cui non fa parte
+		AND NOT EXISTS ( SELECT 1 FROM dbo.tblAreeOsepe ae INNER JOIN dbo.tblAree a ON ae.Id = a.Id INNER JOIN dbo.tblAreeSediInterne ai ON a.Id = ai.Id INNER JOIN dbo.ufnSedi_get_AziendeInterneByUtente_List(@IdUtente) x ON ai.IdSede = x.Id WHERE a.Lock = 0 AND ae.IdOsepe = s.Id )
 );

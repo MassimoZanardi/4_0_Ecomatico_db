@@ -15,7 +15,8 @@ CREATE OR ALTER PROCEDURE dbo.uspMagazziniMovimenti_upd
 	@DdtIdDestinatario CHAR(16) = NULL,
 	@DdtIdTrasportatore CHAR(16) = NULL,
 	@DdtDataInizioTrasporto SMALLDATETIME = NULL,
-	@DdtPeso DECIMAL(18, 2) = NULL
+	@DdtPeso DECIMAL(18, 2) = NULL,
+	@DdtNumero INT = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -135,14 +136,15 @@ BEGIN
 			-- DDT: se presente e ancora in bozza, viene confermato insieme al movimento (Lock
 			-- 2->0, Numero assegnato) nello stesso click e nella stessa SP; se i campi
 			-- obbligatori (Causale, Data, Destinatario) non sono completi il salvataggio si
-			-- blocca con un errore (come le Registrazioni Rifiuti). Se il DDT è già confermato
-			-- (Lock = 0) resta immutabile.
+			-- blocca con un errore (come le Registrazioni Rifiuti). Un DDT già confermato
+			-- (Lock = 0) resta modificabile con gli stessi controlli, e in più se ne può
+			-- cambiare il numero (@DdtNumero); la sede interna resta immutabile.
 			DECLARE @idDdt CHAR(16), @idSedeDdt CHAR(16), @lockDdt INT;
 			SELECT @idDdt = Id, @idSedeDdt = IdSede, @lockDdt = Lock
 			FROM dbo.tblMagazziniDdt
 			WHERE IdMovimento = @Id;
 
-			IF @idDdt IS NOT NULL AND @lockDdt = 2
+			IF @idDdt IS NOT NULL AND @lockDdt IN (0, 2)
 			BEGIN
 				SET @DdtIdCausale = NULLIF(LTRIM(RTRIM(@DdtIdCausale)), '');
 				SET @DdtNumeroFornitore = dbo.ufnStringhe_get_SenzaSpazi(@DdtNumeroFornitore, 0, 1);
@@ -228,12 +230,46 @@ BEGIN
 				-- la transazione con lock di riga per evitare duplicati in caso di
 				-- richieste concorrenti sulla stessa sede/sezionale
 				DECLARE @numeroDdt INT;
-				SELECT @numeroDdt = ISNULL(MAX(Numero), 0) + 1
-				FROM dbo.tblMagazziniDdt WITH (UPDLOCK, HOLDLOCK)
-				WHERE
-					IdSede = @idSedeDdt
-					AND (Sezionale = @DdtSezionale OR (Sezionale IS NULL AND @DdtSezionale IS NULL))
-					AND Id <> @idDdt;
+				IF @lockDdt = 2
+				BEGIN
+					-- DDT in bozza: numero assegnato qui, progressivo della serie
+					SELECT @numeroDdt = ISNULL(MAX(Numero), 0) + 1
+					FROM dbo.tblMagazziniDdt WITH (UPDLOCK, HOLDLOCK)
+					WHERE
+						IdSede = @idSedeDdt
+						AND (Sezionale = @DdtSezionale OR (Sezionale IS NULL AND @DdtSezionale IS NULL))
+						AND Id <> @idDdt;
+				END
+				ELSE
+				BEGIN
+					-- DDT già confermato: numero indicato dall'utente, unico nella serie (sede
+					-- interna + sezionale) tra i DDT confermati. Nessuna rinumerazione automatica
+					-- degli altri DDT: sono documenti già emessi.
+					IF @DdtNumero IS NULL OR @DdtNumero < 1
+					BEGIN
+						ROLLBACK TRANSACTION;
+						SET @returnValue = -1;
+						SET @returnMessage = 'Indicare il numero del DDT';
+						GOTO BRANCH_END;
+					END
+					IF EXISTS (
+						SELECT 1
+						FROM dbo.tblMagazziniDdt WITH (UPDLOCK, HOLDLOCK)
+						WHERE
+							IdSede = @idSedeDdt
+							AND (Sezionale = @DdtSezionale OR (Sezionale IS NULL AND @DdtSezionale IS NULL))
+							AND Numero = @DdtNumero
+							AND Lock = 0
+							AND Id <> @idDdt
+					)
+					BEGIN
+						ROLLBACK TRANSACTION;
+						SET @returnValue = -1;
+						SET @returnMessage = 'Un altro DDT della stessa sede e dello stesso sezionale ha già il numero ' + CAST(@DdtNumero AS VARCHAR(10));
+						GOTO BRANCH_END;
+					END
+					SET @numeroDdt = @DdtNumero;
+				END
 
 				UPDATE dbo.tblMagazziniDdt
 				SET

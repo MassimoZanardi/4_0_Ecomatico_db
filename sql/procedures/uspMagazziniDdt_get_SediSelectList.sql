@@ -39,19 +39,51 @@ BEGIN
 
 		-- Destinatario/Trasportatore possono essere qualunque anagrafica (anche esterna:
 		-- clienti, fornitori, trasportatori) gestita dall'azienda interna corrente
-		SELECT TOP (50)
-			s.Id,
-			-- Nome + indirizzo come la select delle sedi interne del contesto (uspSedi_get_SediInterne_SelectList)
-			[Text] = s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, ''),
-			Selected = CAST(IIF(s.Id = @IdSelected, 1, 0) AS BIT)
+		-- Nome + indirizzo come la select delle sedi interne del contesto (uspSedi_get_SediInterne_SelectList).
+		-- L'anagrafica selezionata è sempre presente e per prima, anche se disabilitata, fuori dalla
+		-- ricerca o oltre le prime 50: altrimenti la select perderebbe il valore corrente.
+		SELECT
+			x.Id,
+			x.[Text],
+			x.Selected
 		FROM
-			dbo.tblSedi s
-			INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
-		WHERE
-			e.Id = @IdSessione
-			AND ISNULL(s.Disabilitata, 0) = 0
-			AND (@Search IS NULL OR s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, '') LIKE '%' + @Search + '%')
-		ORDER BY s.NomeCompleto
+			(
+				SELECT
+					s.Id,
+					[Text] = s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, ''),
+					Selected = CAST(1 AS BIT),
+					Pos = 1
+				FROM
+					dbo.tblSedi s
+					INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
+				WHERE
+					e.Id = @IdSessione
+					AND s.Id = @IdSelected
+
+				UNION ALL
+
+				SELECT
+					t.Id,
+					t.[Text],
+					Selected = CAST(0 AS BIT),
+					Pos = 2
+				FROM
+					(
+						SELECT TOP (50)
+							s.Id,
+							[Text] = s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, '')
+						FROM
+							dbo.tblSedi s
+							INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
+						WHERE
+							e.Id = @IdSessione
+							AND ISNULL(s.Disabilitata, 0) = 0
+							AND (@IdSelected IS NULL OR s.Id <> @IdSelected)
+							AND (@Search IS NULL OR s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, '') LIKE '%' + @Search + '%')
+						ORDER BY s.NomeCompleto
+					) t
+			) x
+		ORDER BY x.Pos, x.[Text]
 		OPTION (RECOMPILE);
 
 	END TRY

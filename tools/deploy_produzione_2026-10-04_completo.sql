@@ -16,6 +16,11 @@ A. Magazzino - righe di movimento: imballo, colli, alla rinfusa, righe descritti
       bozza) e se ne può correggere il numero, nuovo parametro @DdtNumero: obbligatorio sul DDT
       confermato, unico per sede interna e sezionale.
 
+   5. uspMagazziniMovimenti_get_List: nuove colonne DdtNumero, DdtSezionale, DdtData, DdtSedeNome
+      per l'elenco movimenti e nuovi filtri di ricerca facoltativi (date, Con DDT, numero DDT, numero
+      fornitore, mittente, destinatario, trasportatore).
+   6. uspMagazziniDdt_get_SediSelectList: l'anagrafica selezionata è sempre presente e per prima.
+
 B. Magazzino ed EoW - terminologia unica Giacenza / Disponibilità
    Giacenza = quanto c'è nel lotto (caricata o allocata, meno scaricata).
    Disponibilità = quantità massima meno caricata o allocata (quanto si può ancora caricare o allocare).
@@ -2250,6 +2255,243 @@ BEGIN
 		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
 		THROW 50001, @returnMessage, 1;
 	END
+END;
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniMovimenti_get_List
+	@PageNumber INT = 1,
+	@RowsPerPage INT = 50,
+	@IdSessione CHAR(16) = NULL,
+	@IdOperazione CHAR(1) = NULL,
+	@DallaData DATE = NULL,
+	@AllaData DATE = NULL,
+	@ConDdt BIT = 0,
+	@DdtNumero INT = NULL,
+	@DdtNumeroFornitore VARCHAR(20) = NULL,
+	@DdtIdMittente CHAR(16) = NULL,
+	@DdtIdDestinatario CHAR(16) = NULL,
+	@DdtIdTrasportatore CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdOperazione = NULLIF(LTRIM(RTRIM(@IdOperazione)), '');
+		-- Ricerca sul DDT: "Con DDT" limita ai movimenti che hanno un DDT e abilita gli altri filtri
+		-- sul DDT, che senza di esso vengono ignorati. Nelle select "(Tutti)" vale come nessun filtro.
+		SET @ConDdt = ISNULL(@ConDdt, 0);
+		SET @DdtNumeroFornitore = NULLIF(LTRIM(RTRIM(@DdtNumeroFornitore)), '');
+		SET @DdtIdMittente = NULLIF(NULLIF(LTRIM(RTRIM(@DdtIdMittente)), ''), REPLICATE('0', 16));
+		SET @DdtIdDestinatario = NULLIF(NULLIF(LTRIM(RTRIM(@DdtIdDestinatario)), ''), REPLICATE('0', 16));
+		SET @DdtIdTrasportatore = NULLIF(NULLIF(LTRIM(RTRIM(@DdtIdTrasportatore)), ''), REPLICATE('0', 16));
+		IF @ConDdt = 0
+		BEGIN
+			SET @DdtNumero = NULL;
+			SET @DdtNumeroFornitore = NULL;
+			SET @DdtIdMittente = NULL;
+			SET @DdtIdDestinatario = NULL;
+			SET @DdtIdTrasportatore = NULL;
+		END
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		SET @PageNumber = ISNULL(@PageNumber, 1);
+		SET @RowsPerPage = ISNULL(@RowsPerPage, 50);
+		IF @PageNumber < 1 SET @PageNumber = 1;
+		IF @RowsPerPage < 1 SET @RowsPerPage = 50;
+
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'MAG',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			m.Id,
+			StatoValore = 0,
+			StatoDescrizione = 'OK',
+			OperazioneNome = o.Nome,
+			m.Data,
+			m.Numero,
+			RigheCount = ISNULL(r.RigheCount, 0) + ISNULL(re.RigheCount, 0),
+			-- DDT del movimento (al massimo uno, garantito in SP: nessun vincolo UNIQUE); NULL se non c'è
+			DdtNumero = d.Numero,
+			DdtSezionale = d.Sezionale,
+			DdtData = d.[Data],
+			DdtSedeNome = d.SedeNome,
+			m.Lock,
+			RowsCount = COUNT(*) OVER ()
+		FROM
+			dbo.tblMagazziniMovimenti m
+			INNER JOIN dbo.tblSessioni e ON m.IdSede = e.IdAzienda
+			LEFT JOIN dbo.tblMagazziniOperazioni o ON m.IdOperazione = o.Id
+			OUTER APPLY (SELECT RigheCount = COUNT(*) FROM dbo.tblMagazziniMovimentiRighe WHERE IdMovimento = m.Id) r
+			OUTER APPLY (SELECT RigheCount = COUNT(*) FROM dbo.tblMagazziniMovimentiRigheEoW WHERE IdMovimento = m.Id) re
+			OUTER APPLY (
+				SELECT TOP (1)
+					dd.Id,
+					dd.Numero,
+					dd.NumeroFornitore,
+					dd.Sezionale,
+					dd.[Data],
+					dd.IdMittente,
+					dd.IdDestinatario,
+					dd.IdTrasportatore,
+					SedeNome = sd.NomeCompleto
+				FROM
+					dbo.tblMagazziniDdt dd
+					LEFT JOIN dbo.tblSedi sd ON dd.IdSede = sd.Id
+				WHERE dd.IdMovimento = m.Id
+				ORDER BY dd.Id
+			) d
+		WHERE
+			e.Id = @IdSessione
+			AND m.Lock = 0
+			AND (@IdOperazione IS NULL OR m.IdOperazione = @IdOperazione)
+			AND (@DallaData IS NULL OR m.[Data] >= @DallaData)
+			AND (@AllaData IS NULL OR m.[Data] <= @AllaData)
+			AND (@ConDdt = 0 OR d.Id IS NOT NULL)
+			AND (@DdtNumero IS NULL OR d.Numero = @DdtNumero)
+			AND (@DdtNumeroFornitore IS NULL OR d.NumeroFornitore LIKE '%' + @DdtNumeroFornitore + '%')
+			AND (@DdtIdMittente IS NULL OR d.IdMittente = @DdtIdMittente)
+			AND (@DdtIdDestinatario IS NULL OR d.IdDestinatario = @DdtIdDestinatario)
+			AND (@DdtIdTrasportatore IS NULL OR d.IdTrasportatore = @DdtIdTrasportatore)
+		ORDER BY m.Data DESC, m.Numero DESC
+		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
+		FETCH NEXT @RowsPerPage ROWS ONLY
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniDdt_get_SediSelectList
+	@IdSelected CHAR(16) = NULL,
+	@Search VARCHAR(50) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSelected = NULLIF(LTRIM(RTRIM(@IdSelected)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'MAG',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Destinatario/Trasportatore possono essere qualunque anagrafica (anche esterna:
+		-- clienti, fornitori, trasportatori) gestita dall'azienda interna corrente
+		-- Nome + indirizzo come la select delle sedi interne del contesto (uspSedi_get_SediInterne_SelectList).
+		-- L'anagrafica selezionata è sempre presente e per prima, anche se disabilitata, fuori dalla
+		-- ricerca o oltre le prime 50: altrimenti la select perderebbe il valore corrente.
+		SELECT
+			x.Id,
+			x.[Text],
+			x.Selected
+		FROM
+			(
+				SELECT
+					s.Id,
+					[Text] = s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, ''),
+					Selected = CAST(1 AS BIT),
+					Pos = 1
+				FROM
+					dbo.tblSedi s
+					INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
+				WHERE
+					e.Id = @IdSessione
+					AND s.Id = @IdSelected
+
+				UNION ALL
+
+				SELECT
+					t.Id,
+					t.[Text],
+					Selected = CAST(0 AS BIT),
+					Pos = 2
+				FROM
+					(
+						SELECT TOP (50)
+							s.Id,
+							[Text] = s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, '')
+						FROM
+							dbo.tblSedi s
+							INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
+						WHERE
+							e.Id = @IdSessione
+							AND ISNULL(s.Disabilitata, 0) = 0
+							AND (@IdSelected IS NULL OR s.Id <> @IdSelected)
+							AND (@Search IS NULL OR s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, '') LIKE '%' + @Search + '%')
+						ORDER BY s.NomeCompleto
+					) t
+			) x
+		ORDER BY x.Pos, x.[Text]
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
 END;
 GO
 SET ANSI_NULLS ON

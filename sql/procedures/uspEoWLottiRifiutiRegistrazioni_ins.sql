@@ -179,7 +179,7 @@ BEGIN
 			BEGIN
 				ROLLBACK TRANSACTION;
 				SET @returnValue = -1;
-				SET @returnMessage = 'La quantità supera la capacità residua del lotto';
+				SET @returnMessage = 'La quantità supera la disponibilità del lotto';
 				GOTO BRANCH_END;
 			END
 

@@ -81,7 +81,7 @@ BEGIN
 					WHEN ISNULL(q.QuantitaAllocata, 0) - ISNULL(sc.Scaricata, 0) < 0
 						THEN 'Scaricato più del prodotto: prodotti ' + FORMAT(ISNULL(q.QuantitaAllocata, 0), 'N2', 'it-IT') + ' kg, scaricati '
 							+ FORMAT(ISNULL(sc.Scaricata, 0), 'N2', 'it-IT') + ' kg dal magazzino'
-					WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAllocata, 0) >= l.QuantitaMax THEN 'Lotto pieno: capacità esaurita'
+					WHEN l.QuantitaMax IS NOT NULL AND ISNULL(q.QuantitaAllocata, 0) >= l.QuantitaMax THEN 'Lotto pieno: disponibilità esaurita'
 					ELSE 'OK'
 				END,
 				l.Nome,

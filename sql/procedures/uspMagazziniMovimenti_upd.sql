@@ -96,7 +96,8 @@ BEGIN
 			SET @returnMessage = 'Indicare la data del movimento';
 			GOTO BRANCH_END;
 		END
-		IF NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRighe WHERE IdMovimento = @Id)
+		-- Le righe descrittive del DDT (senza articolo) non bastano: serve almeno una riga di merce
+		IF NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRighe WHERE IdMovimento = @Id AND IdArticolo IS NOT NULL)
 			AND NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRigheEoW WHERE IdMovimento = @Id)
 		BEGIN
 			SET @returnValue = -1;
@@ -310,6 +311,8 @@ BEGIN
 						OUTER APPLY (SELECT Relazionata = SUM(rel.Quantita) FROM dbo.tblMagazziniMovimentiRigheRelazioni rel WHERE rel.IdParent = r.Id) q
 					WHERE
 						r.IdMovimento = @Id
+						-- Le righe descrittive del DDT (senza articolo) non scaricano nulla
+						AND r.IdArticolo IS NOT NULL
 						AND (@lockMovimento = 2 OR @dataNumeroModificati = 1 OR ISNULL(q.Relazionata, 0) <> r.Quantita)
 					ORDER BY r.Id;
 
@@ -404,7 +407,7 @@ BEGIN
 						ROLLBACK TRANSACTION;
 						SET @returnValue = -1;
 						SET @returnMessage =
-							'Disponibilità insufficiente '
+							'Giacenza insufficiente '
 							+ IIF(@idCriterioRiga = 'M', 'nel lotto ' + ISNULL(@lottoNome, '') + ' ', '')
 							+ 'per l''articolo ' + ISNULL(@articoloNome, '')
 							+ ' (mancano ' + FORMAT(@daRelazionare, IIF(@isNumero = 1, 'N0', 'N2'), 'it-IT') + ')';
@@ -561,7 +564,7 @@ BEGIN
 					ROLLBACK TRANSACTION;
 					SET @returnValue = -1;
 					SET @returnMessage =
-						'Disponibilità insufficiente '
+						'Giacenza insufficiente '
 						+ IIF(@idCriterioRigaEoW = 'M', 'nel lotto EoW ' + ISNULL(@lottoEoWNome, '') + ' ', '')
 						+ 'per il materiale ' + ISNULL(@materialeNome, '')
 						+ ' (mancano ' + FORMAT(@daRelazionareEoW, 'N2', 'it-IT') + ')';

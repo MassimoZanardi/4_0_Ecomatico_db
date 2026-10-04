@@ -316,7 +316,7 @@ BEGIN
 				BEGIN
 					ROLLBACK TRANSACTION;
 					SET @returnValue = -1;
-					SET @returnMessage = 'La capacità configurata nei lotti è insufficiente per la quantità da allocare';
+					SET @returnMessage = 'La disponibilità dei lotti configurati è insufficiente per la quantità da allocare';
 					GOTO BRANCH_END;
 				END
 			END
@@ -333,7 +333,7 @@ BEGIN
 			BEGIN
 				ROLLBACK TRANSACTION;
 				SET @returnValue = -1;
-				SET @returnMessage = 'La quantità calcolata supera la capacità residua di uno o più lotti';
+				SET @returnMessage = 'La quantità calcolata supera la disponibilità di uno o più lotti';
 				GOTO BRANCH_END;
 			END
 

@@ -9,7 +9,10 @@ CREATE OR ALTER PROCEDURE dbo.uspMagazziniMovimentiRigheEoW_ins
 	@IdMateriale CHAR(2) = NULL,
 	@IdCriterio CHAR(1) = NULL,
 	@Quantita DECIMAL(18, 2) = NULL,
-	@IdLotto CHAR(16) = NULL
+	@IdLotto CHAR(16) = NULL,
+	@IdImballo CHAR(2) = NULL,
+	@Colli INT = NULL,
+	@AllaRinfusa BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -24,6 +27,11 @@ BEGIN
 		SET @IdMateriale = NULLIF(LTRIM(RTRIM(@IdMateriale)), '');
 		SET @IdCriterio = NULLIF(LTRIM(RTRIM(@IdCriterio)), '');
 		SET @IdLotto = NULLIF(LTRIM(RTRIM(@IdLotto)), '');
+		-- Imballo: '00' è il segnaposto "(Selezionare)" di uspImballi_get_SelectList; alla
+		-- rinfusa non c'è imballo (come nei Formulari)
+		SET @IdImballo = NULLIF(NULLIF(LTRIM(RTRIM(@IdImballo)), ''), '00');
+		SET @AllaRinfusa = ISNULL(@AllaRinfusa, 0);
+		IF @AllaRinfusa = 1 SET @IdImballo = NULL;
 
 		IF @IdMovimento IS NULL
 		BEGIN
@@ -53,6 +61,18 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Indicare una quantità maggiore di zero';
+			GOTO BRANCH_END;
+		END
+		IF @Colli < 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il numero di colli non può essere negativo';
+			GOTO BRANCH_END;
+		END
+		IF @IdImballo IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.tblImballi WHERE Id = @IdImballo)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'L''imballo indicato non esiste';
 			GOTO BRANCH_END;
 		END
 		-- Criterio obbligatorio: M (Manuale, lotto EoW scelto sulla riga), F/L (data di apertura
@@ -199,8 +219,24 @@ BEGIN
 		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
 
 		BEGIN TRANSACTION;
-			INSERT dbo.tblMagazziniMovimentiRigheEoW (Id, IdMovimento, IdSede, IdMateriale, IdCriterio, Quantita, Lock, IdLotto)
-			VALUES (@returnId, @IdMovimento, @IdSede, @IdMateriale, @IdCriterio, @Quantita, @lockMovimento, @IdLotto);
+			-- Posizione: in coda alle righe del movimento, unica tra righe articolo/descrizione e righe EoW
+			DECLARE @pos INT;
+			SELECT @pos = ISNULL(MAX(x.Pos), 0) + 1
+			FROM
+				(
+					SELECT Pos
+					FROM dbo.tblMagazziniMovimentiRighe
+					WHERE IdMovimento = @IdMovimento
+
+					UNION ALL
+
+					SELECT Pos
+					FROM dbo.tblMagazziniMovimentiRigheEoW
+					WHERE IdMovimento = @IdMovimento
+				) x;
+
+			INSERT dbo.tblMagazziniMovimentiRigheEoW (Id, IdMovimento, IdSede, IdMateriale, IdCriterio, Quantita, Lock, IdLotto, IdImballo, Colli, AllaRinfusa, Pos)
+			VALUES (@returnId, @IdMovimento, @IdSede, @IdMateriale, @IdCriterio, @Quantita, @lockMovimento, @IdLotto, @IdImballo, @Colli, @AllaRinfusa, @pos);
 		COMMIT TRANSACTION;
 
 		SELECT Id = @returnId;

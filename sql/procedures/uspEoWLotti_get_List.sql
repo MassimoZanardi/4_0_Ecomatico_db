@@ -78,11 +78,11 @@ BEGIN
 						+ FORMAT(s.Scaricata, 'N2', 'it-IT') + ' kg dal magazzino'
 				WHEN l.QuantitaMax IS NULL THEN 'OK'
 				WHEN c.QuantitaAllocata > l.QuantitaMax
-					THEN 'Capacità superata di ' + FORMAT(c.QuantitaAllocata - l.QuantitaMax, 'N2', 'it-IT') + ' kg: allocati '
+					THEN 'Quantità massima superata di ' + FORMAT(c.QuantitaAllocata - l.QuantitaMax, 'N2', 'it-IT') + ' kg: allocati '
 						+ FORMAT(c.QuantitaAllocata, 'N2', 'it-IT') + ' kg su ' + FORMAT(l.QuantitaMax, 'N2', 'it-IT') + ' kg'
-				WHEN c.QuantitaAllocata = l.QuantitaMax THEN 'Lotto pieno: capacità esaurita'
+				WHEN c.QuantitaAllocata = l.QuantitaMax THEN 'Lotto pieno: disponibilità esaurita'
 				WHEN l.QuantitaMax - c.QuantitaAllocata < l.QuantitaMax * 0.3
-					THEN 'Capacità residua sotto il 30%: ' + FORMAT(l.QuantitaMax - c.QuantitaAllocata, 'N2', 'it-IT') + ' kg su '
+					THEN 'Disponibilità sotto il 30%: ' + FORMAT(l.QuantitaMax - c.QuantitaAllocata, 'N2', 'it-IT') + ' kg su '
 						+ FORMAT(l.QuantitaMax, 'N2', 'it-IT') + ' kg'
 				ELSE 'OK'
 			END,

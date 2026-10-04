@@ -77,6 +77,11 @@ BEGIN
 			-- giacenza negativa (il registro operativo gli attribuisce meno di quanto già scaricato; il
 			-- magazzino EoW prevale, i movimenti non vengono corretti in automatico)
 			IsScaricatoPiuDelProdotto = CAST(IIF(mv.Lock = 0 AND ISNULL(z.LottiAnomali, 0) > 0, 1, 0) AS BIT),
+			r.IdImballo,
+			ImballoNome = im.Nome,
+			r.Colli,
+			AllaRinfusa = ISNULL(r.AllaRinfusa, 0),
+			r.Pos,
 			r.Lock
 		FROM
 			dbo.tblMagazziniMovimentiRigheEoW r
@@ -85,6 +90,7 @@ BEGIN
 			LEFT JOIN dbo.tblRifiutiMateriali m ON r.IdMateriale = m.Id
 			LEFT JOIN dbo.tblMagazziniCriteriScarichiLotti cr ON r.IdCriterio = cr.Id
 			LEFT JOIN dbo.tblEoWLotti lr ON r.IdLotto = lr.Id
+			LEFT JOIN dbo.tblImballi im ON r.IdImballo = im.Id
 			OUTER APPLY (SELECT Relazionata = SUM(rl.Quantita)
 			FROM dbo.tblMagazziniMovimentiRigheEoWLotti rl
 			WHERE rl.Id = r.Id) q
@@ -124,7 +130,8 @@ BEGIN
 									CROSS APPLY (SELECT Testo = CAST(g.Nome + ': ' + FORMAT(g.Giacenza, 'N2', 'it-IT') AS NVARCHAR(MAX))) t
 				WHERE rl.Id = r.Id) z
 		WHERE r.IdMovimento = @IdMovimento
-		ORDER BY r.Id
+		-- Pos NULL (righe precedenti all'introduzione di Pos) per prime, in ordine di Id
+		ORDER BY ISNULL(r.Pos, 0), r.Id
 		OPTION (RECOMPILE);
 
 	END TRY

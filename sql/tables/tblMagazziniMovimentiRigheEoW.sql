@@ -13,6 +13,10 @@ CREATE TABLE [dbo].[tblMagazziniMovimentiRigheEoW](
 	[Quantita] [decimal](18, 2) NULL,
 	[Lock] [tinyint] NULL,
 	[IdLotto] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdImballo] [char](2) COLLATE Latin1_General_CI_AS NULL,
+	[Colli] [int] NULL,
+	[AllaRinfusa] [bit] NULL,
+	[Pos] [int] NULL,
  CONSTRAINT [PK_tblMagazziniMovimentiRigheEoW] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC
@@ -53,4 +57,14 @@ REFERENCES [dbo].[tblEoWLotti] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblEoWLotti]
+GO
+
+-- IdImballo, Colli, AllaRinfusa: dati "da documento" della riga (stampa DDT), modificabili
+-- anche a movimento confermato (uspMagazziniMovimentiRigheEoW_upd). Pos: ordine delle righe
+-- nel movimento, unico tra questa tabella e tblMagazziniMovimentiRighe.
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblImballi] FOREIGN KEY([IdImballo])
+REFERENCES [dbo].[tblImballi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblImballi]
 GO

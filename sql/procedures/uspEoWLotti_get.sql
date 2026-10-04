@@ -79,6 +79,9 @@ BEGIN
 			l.DataChiusura,
 			l.QuantitaMax,
 			QuantitaAllocata = ISNULL(q.QuantitaAllocata, 0),
+			-- Scaricata dal magazzino e giacenza (allocata - scaricata): gli scarichi non liberano capienza
+			QuantitaScaricata = sl.Scaricata,
+			Giacenza = sl.Giacenza,
 			CapacitaResidua = CASE WHEN l.QuantitaMax IS NULL THEN NULL ELSE l.QuantitaMax - ISNULL(q.QuantitaAllocata, 0) END,
 			Disabilitato = ISNULL(l.Disabilitato, 0),
 			l.Lock
@@ -98,6 +101,7 @@ BEGIN
 					r.IdLotto = l.Id
 					AND rr.Lock < 2
 			) q
+			CROSS APPLY dbo.ufnEoWLotti_get_Saldo(l.Id) sl
 		WHERE
 			l.Id = @Id
 			AND l.Lock <= 2;

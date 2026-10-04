@@ -76,6 +76,13 @@ BEGIN
 			-- (residuo non ancora noto) e sulle righe di carico.
 			ResiduoLotti = IIF(m.Lock = 0, z.ResiduoLotti, NULL),
 			ResiduoLottiDettaglio = IIF(m.Lock = 0, z.ResiduoLottiDettaglio, NULL),
+			r.IdImballo,
+			ImballoNome = im.Nome,
+			r.Colli,
+			AllaRinfusa = ISNULL(r.AllaRinfusa, 0),
+			-- Riga descrittiva del DDT: solo Descrizione, senza articolo, lotto, criterio e quantità
+			r.Descrizione,
+			r.Pos,
 			r.Lock
 		FROM
 			dbo.tblMagazziniMovimentiRighe r
@@ -85,6 +92,7 @@ BEGIN
 			LEFT JOIN dbo.tblUnitaMisura u ON a.IdUnitaMisura = u.Id
 			LEFT JOIN dbo.tblMagazziniCriteriScarichiLotti cr ON r.IdCriterio = cr.Id
 			LEFT JOIN dbo.tblMagazziniLotti l ON r.IdLotto = l.Id
+			LEFT JOIN dbo.tblImballi im ON r.IdImballo = im.Id
 			OUTER APPLY (SELECT Relazionata = SUM(rel.Quantita) FROM dbo.tblMagazziniMovimentiRigheRelazioni rel WHERE rel.IdParent = r.Id) q
 			OUTER APPLY (
 				SELECT
@@ -130,7 +138,8 @@ BEGIN
 					CROSS APPLY (SELECT Testo = CAST(g.Nome + ': ' + FORMAT(g.Giacenza, IIF(a.IdUnitaMisura = 'NR', 'N0', 'N2'), 'it-IT') AS NVARCHAR(MAX))) t
 			) z
 		WHERE r.IdMovimento = @IdMovimento
-		ORDER BY r.Id
+		-- Pos NULL (righe precedenti all'introduzione di Pos) per prime, in ordine di Id
+		ORDER BY ISNULL(r.Pos, 0), r.Id
 		OPTION (RECOMPILE);
 
 	END TRY

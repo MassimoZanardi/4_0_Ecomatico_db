@@ -14,7 +14,8 @@ CREATE OR ALTER PROCEDURE dbo.uspMagazziniMovimenti_get_List
 	@DdtNumeroFornitore VARCHAR(20) = NULL,
 	@DdtMittente VARCHAR(50) = NULL,
 	@DdtDestinatario VARCHAR(50) = NULL,
-	@DdtTrasportatore VARCHAR(50) = NULL
+	@DdtTrasportatore VARCHAR(50) = NULL,
+	@DdtEmessi BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -28,6 +29,10 @@ BEGIN
 		-- sul DDT, che senza di esso vengono ignorati. Mittente, destinatario e trasportatore sono
 		-- testo libero cercato ("contiene") in nome + indirizzo dell'anagrafica, come nelle select del DDT.
 		SET @ConDdt = ISNULL(@ConDdt, 0);
+		-- Elenco DDT (Magazzino > DDT): solo i movimenti con un DDT emesso, cioè non ricevuto da un
+		-- fornitore (sezionale R); le date della ricerca e l'ordinamento sono quelli del DDT
+		SET @DdtEmessi = ISNULL(@DdtEmessi, 0);
+		IF @DdtEmessi = 1 SET @ConDdt = 1;
 		SET @DdtNumeroFornitore = NULLIF(LTRIM(RTRIM(@DdtNumeroFornitore)), '');
 		SET @DdtMittente = NULLIF(LTRIM(RTRIM(@DdtMittente)), '');
 		SET @DdtDestinatario = NULLIF(LTRIM(RTRIM(@DdtDestinatario)), '');
@@ -78,6 +83,8 @@ BEGIN
 			DdtSezionale = d.Sezionale,
 			DdtData = d.[Data],
 			DdtSedeNome = d.SedeNome,
+			DdtCausaleNome = d.CausaleNome,
+			DdtDestinatarioNome = d.DestinatarioNome,
 			m.Lock,
 			RowsCount = COUNT(*) OVER ()
 		FROM
@@ -96,10 +103,14 @@ BEGIN
 					dd.IdMittente,
 					dd.IdDestinatario,
 					dd.IdTrasportatore,
-					SedeNome = sd.NomeCompleto + ISNULL(' ' + sd.IndirizzoCompleto, '')
+					SedeNome = sd.NomeCompleto + ISNULL(' ' + sd.IndirizzoCompleto, ''),
+					CausaleNome = ca.Nome,
+					DestinatarioNome = ds.NomeCompleto + ISNULL(' ' + ds.IndirizzoCompleto, '')
 				FROM
 					dbo.tblMagazziniDdt dd
 					LEFT JOIN dbo.tblSedi sd ON dd.IdSede = sd.Id
+					LEFT JOIN dbo.tblMagazziniCausali ca ON dd.IdCausale = ca.Id
+					LEFT JOIN dbo.tblSedi ds ON dd.IdDestinatario = ds.Id
 				WHERE dd.IdMovimento = m.Id
 				ORDER BY dd.Id
 			) d
@@ -107,15 +118,19 @@ BEGIN
 			e.Id = @IdSessione
 			AND m.Lock = 0
 			AND (@IdOperazione IS NULL OR m.IdOperazione = @IdOperazione)
-			AND (@DallaData IS NULL OR m.[Data] >= @DallaData)
-			AND (@AllaData IS NULL OR m.[Data] <= @AllaData)
+			AND (@DallaData IS NULL OR IIF(@DdtEmessi = 1, d.[Data], m.[Data]) >= @DallaData)
+			AND (@AllaData IS NULL OR IIF(@DdtEmessi = 1, d.[Data], m.[Data]) <= @AllaData)
 			AND (@ConDdt = 0 OR d.Id IS NOT NULL)
+			AND (@DdtEmessi = 0 OR ISNULL(d.Sezionale, '') <> 'R')
 			AND (@DdtNumero IS NULL OR d.Numero = @DdtNumero)
 			AND (@DdtNumeroFornitore IS NULL OR d.NumeroFornitore LIKE '%' + @DdtNumeroFornitore + '%')
 			AND (@DdtMittente IS NULL OR EXISTS (SELECT 1 FROM dbo.tblSedi sm WHERE sm.Id = d.IdMittente AND sm.NomeCompleto + ISNULL(' ' + sm.IndirizzoCompleto, '') LIKE '%' + @DdtMittente + '%'))
 			AND (@DdtDestinatario IS NULL OR EXISTS (SELECT 1 FROM dbo.tblSedi sn WHERE sn.Id = d.IdDestinatario AND sn.NomeCompleto + ISNULL(' ' + sn.IndirizzoCompleto, '') LIKE '%' + @DdtDestinatario + '%'))
 			AND (@DdtTrasportatore IS NULL OR EXISTS (SELECT 1 FROM dbo.tblSedi st WHERE st.Id = d.IdTrasportatore AND st.NomeCompleto + ISNULL(' ' + st.IndirizzoCompleto, '') LIKE '%' + @DdtTrasportatore + '%'))
-		ORDER BY m.Data DESC, m.Numero DESC
+		ORDER BY
+			IIF(@DdtEmessi = 1, d.[Data], m.[Data]) DESC,
+			IIF(@DdtEmessi = 1, d.Numero, m.Numero) DESC,
+			m.Numero DESC
 		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY
 		OPTION (RECOMPILE);

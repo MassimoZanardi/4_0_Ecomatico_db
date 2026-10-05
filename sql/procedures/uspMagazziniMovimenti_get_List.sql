@@ -96,7 +96,7 @@ BEGIN
 					dd.IdMittente,
 					dd.IdDestinatario,
 					dd.IdTrasportatore,
-					SedeNome = sd.NomeCompleto
+					SedeNome = sd.NomeCompleto + ISNULL(' ' + sd.IndirizzoCompleto, '')
 				FROM
 					dbo.tblMagazziniDdt dd
 					LEFT JOIN dbo.tblSedi sd ON dd.IdSede = sd.Id

@@ -45,19 +45,19 @@ BEGIN
 
 		IF @idAzienda IS NULL
 		BEGIN
-			SELECT TOP (0) Id = CAST(NULL AS CHAR(16)), [Text] = CAST(NULL AS VARCHAR(220)), Selected = CAST(0 AS BIT);
+			SELECT TOP (0) Id = CAST(NULL AS CHAR(16)), [Text] = CAST(NULL AS VARCHAR(401)), Selected = CAST(0 AS BIT);
 			GOTO BRANCH_END;
 		END
 
 		SELECT TOP (50)
 			s.Id,
-			[Text] = s.NomeCompleto,
+			[Text] = s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, ''),
 			Selected = CAST(IIF(s.Id = @IdSelected, 1, 0) AS BIT)
 		FROM dbo.tblSedi s
 		WHERE
 			(s.Id = @idAzienda OR s.IdParent = @idAzienda)
 			AND ISNULL(s.Disabilitata, 0) = 0
-			AND (@Search IS NULL OR s.NomeCompleto LIKE '%' + @Search + '%')
+			AND (@Search IS NULL OR s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, '') LIKE '%' + @Search + '%')
 		ORDER BY s.NomeCompleto
 		OPTION (RECOMPILE);
 

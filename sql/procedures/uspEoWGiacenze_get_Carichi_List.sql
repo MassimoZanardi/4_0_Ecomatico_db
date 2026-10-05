@@ -27,9 +27,8 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		-- Senza @Id: tutti i carichi EoW delle sedi interne della sessione (filtrati per
-		-- la sede del contesto della sessione, se impostata); con @Id: i carichi del lotto (@Vista = L)
-		-- o del magazzino EoW (@Vista = M) indicato
+		-- Senza @Id: tutti i carichi EoW della sede del contesto; con @Id: i carichi del lotto
+		-- (@Vista = L) o del magazzino EoW (@Vista = M) indicato, sempre nella sede del contesto
 		IF @Id IS NOT NULL AND ISNULL(@Vista, '') NOT IN ('L', 'M')
 		BEGIN
 			SET @returnValue = -1;
@@ -56,7 +55,7 @@ BEGIN
 		END
 
 		-- La sede è sempre quella del contesto della sessione (tblSessioni.IdSede): il chiamante non
-		-- può indicarne un'altra. Contesto "tutte le sedi" (NULL o sedici zeri) = tutte le sedi interne
+		-- può indicarne un'altra. Contesto "tutte le sedi" (NULL o sedici zeri) = nessuna riga
 		DECLARE @idSede CHAR(16);
 		SELECT @idSede = NULLIF(IdSede, REPLICATE('0', 16))
 		FROM dbo.tblSessioni
@@ -131,8 +130,9 @@ BEGIN
 		-- mantiene le sue quote per un eventuale ripristino, ma non conta più
 		WHERE
 			r.Lock < 2
+			AND l.IdSede = @idSede
 			AND (
-				(@Id IS NULL AND (@idSede IS NULL OR l.IdSede = @idSede))
+				@Id IS NULL
 				OR (@Vista = 'L' AND l.Id = @Id)
 				OR (@Vista = 'M' AND l.IdMagazzino = @Id)
 			)

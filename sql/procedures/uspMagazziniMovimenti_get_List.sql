@@ -12,9 +12,9 @@ CREATE OR ALTER PROCEDURE dbo.uspMagazziniMovimenti_get_List
 	@ConDdt BIT = 0,
 	@DdtNumero INT = NULL,
 	@DdtNumeroFornitore VARCHAR(20) = NULL,
-	@DdtIdMittente CHAR(16) = NULL,
-	@DdtIdDestinatario CHAR(16) = NULL,
-	@DdtIdTrasportatore CHAR(16) = NULL
+	@DdtMittente VARCHAR(50) = NULL,
+	@DdtDestinatario VARCHAR(50) = NULL,
+	@DdtTrasportatore VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -25,19 +25,20 @@ BEGIN
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdOperazione = NULLIF(LTRIM(RTRIM(@IdOperazione)), '');
 		-- Ricerca sul DDT: "Con DDT" limita ai movimenti che hanno un DDT e abilita gli altri filtri
-		-- sul DDT, che senza di esso vengono ignorati. Nelle select "(Tutti)" vale come nessun filtro.
+		-- sul DDT, che senza di esso vengono ignorati. Mittente, destinatario e trasportatore sono
+		-- testo libero cercato ("contiene") in nome + indirizzo dell'anagrafica, come nelle select del DDT.
 		SET @ConDdt = ISNULL(@ConDdt, 0);
 		SET @DdtNumeroFornitore = NULLIF(LTRIM(RTRIM(@DdtNumeroFornitore)), '');
-		SET @DdtIdMittente = NULLIF(NULLIF(LTRIM(RTRIM(@DdtIdMittente)), ''), REPLICATE('0', 16));
-		SET @DdtIdDestinatario = NULLIF(NULLIF(LTRIM(RTRIM(@DdtIdDestinatario)), ''), REPLICATE('0', 16));
-		SET @DdtIdTrasportatore = NULLIF(NULLIF(LTRIM(RTRIM(@DdtIdTrasportatore)), ''), REPLICATE('0', 16));
+		SET @DdtMittente = NULLIF(LTRIM(RTRIM(@DdtMittente)), '');
+		SET @DdtDestinatario = NULLIF(LTRIM(RTRIM(@DdtDestinatario)), '');
+		SET @DdtTrasportatore = NULLIF(LTRIM(RTRIM(@DdtTrasportatore)), '');
 		IF @ConDdt = 0
 		BEGIN
 			SET @DdtNumero = NULL;
 			SET @DdtNumeroFornitore = NULL;
-			SET @DdtIdMittente = NULL;
-			SET @DdtIdDestinatario = NULL;
-			SET @DdtIdTrasportatore = NULL;
+			SET @DdtMittente = NULL;
+			SET @DdtDestinatario = NULL;
+			SET @DdtTrasportatore = NULL;
 		END
 
 		IF @IdSessione IS NULL
@@ -111,9 +112,9 @@ BEGIN
 			AND (@ConDdt = 0 OR d.Id IS NOT NULL)
 			AND (@DdtNumero IS NULL OR d.Numero = @DdtNumero)
 			AND (@DdtNumeroFornitore IS NULL OR d.NumeroFornitore LIKE '%' + @DdtNumeroFornitore + '%')
-			AND (@DdtIdMittente IS NULL OR d.IdMittente = @DdtIdMittente)
-			AND (@DdtIdDestinatario IS NULL OR d.IdDestinatario = @DdtIdDestinatario)
-			AND (@DdtIdTrasportatore IS NULL OR d.IdTrasportatore = @DdtIdTrasportatore)
+			AND (@DdtMittente IS NULL OR EXISTS (SELECT 1 FROM dbo.tblSedi sm WHERE sm.Id = d.IdMittente AND sm.NomeCompleto + ISNULL(' ' + sm.IndirizzoCompleto, '') LIKE '%' + @DdtMittente + '%'))
+			AND (@DdtDestinatario IS NULL OR EXISTS (SELECT 1 FROM dbo.tblSedi sn WHERE sn.Id = d.IdDestinatario AND sn.NomeCompleto + ISNULL(' ' + sn.IndirizzoCompleto, '') LIKE '%' + @DdtDestinatario + '%'))
+			AND (@DdtTrasportatore IS NULL OR EXISTS (SELECT 1 FROM dbo.tblSedi st WHERE st.Id = d.IdTrasportatore AND st.NomeCompleto + ISNULL(' ' + st.IndirizzoCompleto, '') LIKE '%' + @DdtTrasportatore + '%'))
 		ORDER BY m.Data DESC, m.Numero DESC
 		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY

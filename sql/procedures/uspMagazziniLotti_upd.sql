@@ -51,7 +51,7 @@ BEGIN
 		IF @DataApertura IS NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Il parametro @DataApertura non può essere vuoto';
+			SET @returnMessage = 'Indicare la data di apertura';
 			GOTO BRANCH_END;
 		END
 		IF @DataChiusura IS NOT NULL AND @DataChiusura < @DataApertura

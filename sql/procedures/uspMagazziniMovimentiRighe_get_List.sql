@@ -67,6 +67,8 @@ BEGIN
 			-- Riga di scarico: quantità già relazionata alle righe di carico consumate
 			-- (le righe di carico non hanno relazioni proprie, sono esse stesse la giacenza)
 			Relazionata = ISNULL(q.Relazionata, 0),
+			-- Numero di carichi (righe di carico) da cui la riga ha scaricato: le righe della modale "Carichi"
+			CarichiNumero = ISNULL(q.CarichiNumero, 0),
 			r.IdLotto,
 			LottoNome = l.Nome,
 			IsNumero = CAST(IIF(a.IdUnitaMisura = 'NR', 1, 0) AS BIT),
@@ -93,7 +95,7 @@ BEGIN
 			LEFT JOIN dbo.tblMagazziniCriteriScarichiLotti cr ON r.IdCriterio = cr.Id
 			LEFT JOIN dbo.tblMagazziniLotti l ON r.IdLotto = l.Id
 			LEFT JOIN dbo.tblImballi im ON r.IdImballo = im.Id
-			OUTER APPLY (SELECT Relazionata = SUM(rel.Quantita) FROM dbo.tblMagazziniMovimentiRigheRelazioni rel WHERE rel.IdParent = r.Id) q
+			OUTER APPLY (SELECT Relazionata = SUM(rel.Quantita), CarichiNumero = COUNT(*) FROM dbo.tblMagazziniMovimentiRigheRelazioni rel WHERE rel.IdParent = r.Id) q
 			OUTER APPLY (
 				SELECT
 					ResiduoLotti = SUM(g.Giacenza),

@@ -66,6 +66,8 @@ BEGIN
 			r.Quantita,
 			-- Quantità già relazionata ai lotti EoW consumati (costruita in uspMagazziniMovimenti_upd)
 			Relazionata = ISNULL(q.Relazionata, 0),
+			-- Numero di lotti EoW da cui la riga ha scaricato: le righe della modale "Carichi"
+			LottiNumero = ISNULL(q.LottiNumero, 0),
 			r.IdLotto,
 			LottoNome = lr.Nome,
 			-- Movimento confermato: quantità residua (giacenza attuale) del lotto EoW da cui la
@@ -91,7 +93,7 @@ BEGIN
 			LEFT JOIN dbo.tblMagazziniCriteriScarichiLotti cr ON r.IdCriterio = cr.Id
 			LEFT JOIN dbo.tblEoWLotti lr ON r.IdLotto = lr.Id
 			LEFT JOIN dbo.tblImballi im ON r.IdImballo = im.Id
-			OUTER APPLY (SELECT Relazionata = SUM(rl.Quantita)
+			OUTER APPLY (SELECT Relazionata = SUM(rl.Quantita), LottiNumero = COUNT(*)
 			FROM dbo.tblMagazziniMovimentiRigheEoWLotti rl
 			WHERE rl.Id = r.Id) q
 			OUTER APPLY (

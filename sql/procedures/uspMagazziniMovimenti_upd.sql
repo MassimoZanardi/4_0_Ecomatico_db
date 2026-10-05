@@ -218,11 +218,25 @@ BEGIN
 					GOTO BRANCH_END;
 				END
 
-				IF @DdtIdCausale IS NULL OR @DdtData IS NULL OR @DdtIdDestinatario IS NULL
+				IF @DdtIdCausale IS NULL
 				BEGIN
 					ROLLBACK TRANSACTION;
 					SET @returnValue = -1;
-					SET @returnMessage = 'Completare il DDT: causale, data e destinatario';
+					SET @returnMessage = 'Selezionare la causale del DDT';
+					GOTO BRANCH_END;
+				END
+				IF @DdtData IS NULL
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Indicare la data del DDT';
+					GOTO BRANCH_END;
+				END
+				IF @DdtIdDestinatario IS NULL
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Selezionare il destinatario del DDT';
 					GOTO BRANCH_END;
 				END
 
@@ -357,13 +371,22 @@ BEGIN
 
 				WHILE @@FETCH_STATUS = 0
 				BEGIN
-					IF @idCriterioRiga IS NULL OR (@idCriterioRiga = 'M' AND @idLottoRiga IS NULL)
+					IF @idCriterioRiga IS NULL
 					BEGIN
 						CLOSE cRighe;
 						DEALLOCATE cRighe;
 						ROLLBACK TRANSACTION;
 						SET @returnValue = -1;
-						SET @returnMessage = 'Completare il criterio di scarico della riga dell''articolo ' + ISNULL(@articoloNome, '');
+						SET @returnMessage = 'Selezionare il criterio di scarico della riga dell''articolo ' + ISNULL(@articoloNome, '');
+						GOTO BRANCH_END;
+					END
+					IF @idCriterioRiga = 'M' AND @idLottoRiga IS NULL
+					BEGIN
+						CLOSE cRighe;
+						DEALLOCATE cRighe;
+						ROLLBACK TRANSACTION;
+						SET @returnValue = -1;
+						SET @returnMessage = 'Selezionare il lotto da cui scaricare la riga dell''articolo ' + ISNULL(@articoloNome, '');
 						GOTO BRANCH_END;
 					END
 
@@ -515,13 +538,31 @@ BEGIN
 
 			WHILE @@FETCH_STATUS = 0
 			BEGIN
-				IF @idCriterioRigaEoW IS NULL OR @idCriterioRigaEoW NOT IN ('M', 'F', 'L', 'E') OR (@idCriterioRigaEoW = 'M' AND @idLottoRigaEoW IS NULL)
+				IF @idCriterioRigaEoW IS NULL
 				BEGIN
 					CLOSE cRigheEoW;
 					DEALLOCATE cRigheEoW;
 					ROLLBACK TRANSACTION;
 					SET @returnValue = -1;
-					SET @returnMessage = 'Completare il criterio di scarico della riga del materiale ' + ISNULL(@materialeNome, '');
+					SET @returnMessage = 'Selezionare il criterio di scarico della riga del materiale ' + ISNULL(@materialeNome, '');
+					GOTO BRANCH_END;
+				END
+				IF @idCriterioRigaEoW NOT IN ('M', 'F', 'L', 'E')
+				BEGIN
+					CLOSE cRigheEoW;
+					DEALLOCATE cRigheEoW;
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Criterio di scarico non valido per la riga del materiale ' + ISNULL(@materialeNome, '');
+					GOTO BRANCH_END;
+				END
+				IF @idCriterioRigaEoW = 'M' AND @idLottoRigaEoW IS NULL
+				BEGIN
+					CLOSE cRigheEoW;
+					DEALLOCATE cRigheEoW;
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Selezionare il lotto EoW da cui scaricare la riga del materiale ' + ISNULL(@materialeNome, '');
 					GOTO BRANCH_END;
 				END
 

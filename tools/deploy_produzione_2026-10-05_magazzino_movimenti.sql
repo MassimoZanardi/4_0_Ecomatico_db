@@ -1,8 +1,20 @@
 ﻿/*
 Deploy produzione 2026-10-05 - Magazzino > Movimenti (ricerca, anagrafiche del DDT, controlli, carichi per riga)
-e Giacenze (viste Articolo, Lotto, Carichi; sempre la sede del contesto)
+e Giacenze (viste Articolo, Lotto, Carichi; sempre la sede del contesto); EoW e Magazzino: nuova funzione Configurazione
 
-Solo stored procedure (CREATE OR ALTER), nessuna modifica a tabelle o dati. Rieseguibile.
+Stored procedure (CREATE OR ALTER) e registrazione di due nuove funzioni (punto 0). Nessuna modifica alla
+struttura delle tabelle. Rieseguibile.
+
+0. EoW - nuova funzione EWC "Configurazione" (tblFunzioni, tblModuliFunzioni) che governa i permessi
+   su Lotti, Magazzini e Allocazioni: le tre pagine (tblPagine EWL, EWM, EWA) passano da EOW a EWC.
+   NESSUN travaso dei permessi: dopo il deploy gli utenti non amministratori che avevano EOW non vedono
+   Lotti, Magazzini e Allocazioni finche' non gli si assegna EWC in Impostazioni > Utenti.
+   Magazzino - nuova funzione MGC "Configurazione" che governa i permessi su Articoli e Lotti: le due
+   pagine (tblPagine MGA, MGL) passano da MAG a MGC. Anche qui NESSUN travaso: chi aveva MAG non vede
+   Articoli e Lotti finche' non gli si assegna MGC.
+   Le due funzioni esistenti EOW e MAG vengono rinominate in "Gestione" (tblFunzioni) e i due moduli in
+   "EoW" e "Magazzino" (tblModuli). Il messaggio di uspMagazziniMovimentiRigheEoW_ins diventa "Il modulo
+   EoW non e' attivo sul dominio".
 
 1. uspMagazziniMovimenti_get_List
    - Ricerca: i filtri mittente, destinatario e trasportatore sono ora testo libero ("contiene" su
@@ -30,6 +42,18 @@ Solo stored procedure (CREATE OR ALTER), nessuna modifica a tabelle o dati. Ries
    oppure di un articolo o di un lotto.
 10. uspEoWGiacenze_get_Carichi_List: sempre e solo la sede del contesto, anche partendo da un lotto o
     da un magazzino; senza sede nel contesto nessuna riga (prima "Tutti" mostrava tutte le sedi interne).
+11. EoW - le 23 SP di Lotti, Magazzini e Allocazioni controllano il permesso EWC al posto di EOW:
+    uspEoWLotti_ins, _upd, _get, _get_List, _del, _get_MagazziniSelectList, _get_RegistrazioniList,
+    _get_AllocazioniList; uspEoWMagazzini_ins, _upd, _get, _get_List, _del; uspEoWAllocazioni_ins, _upd,
+    _get, _get_List, _del, _get_LottiList, _get_LottiSelectList, _ins_Lotto, _del_Lotto;
+    uspEoWAllocazioniTipi_get_SelectList. Restano su EOW Registrazioni, Giacenze e l'uso dei lotti nelle
+    registrazioni rifiuti (uspEoWLotti_get_LottiSelectList, uspEoWAllocazioni_get_ApplicabiliSelectList,
+    uspEoWAllocazioni_esegui, uspEoWLottiRifiutiRegistrazioni_*).
+12. Magazzino - le 10 SP di Articoli e Lotti controllano il permesso MGC al posto di MAG:
+    uspMagazziniArticoli_ins, _upd, _get_List, _del; uspMagazziniLotti_ins, _upd, _get, _get_List, _del,
+    _get_ArticoliSelectList. uspMagazziniArticoli_get accetta MGC oppure MAG (i movimenti leggono la
+    scheda articolo). Restano su MAG Movimenti, Giacenze e le select di articoli e lotti delle righe
+    (uspMagazziniMovimentiRighe_get_ArticoliSelectList, uspMagazziniLotti_get_SelectList).
 
 ATTENZIONE: va deployato insieme all'app, senza lasciare passare tempo tra script e app. L'app passa
 sempre i tre parametri di ricerca a uspMagazziniMovimenti_get_List, anche vuoti: con app e SP non
@@ -39,6 +63,70 @@ Con l'app nuova e le SP vecchie, inoltre, la colonna Carichi mostrerebbe sempre 
 
 Dopo il deploy eseguire tools\verifica_crlf_accenti.sql: deve dare 0 righe.
 */
+
+PRINT 'Registrazione funzione: eow_configurazione_funzione';
+GO
+SET NOCOUNT ON;
+
+-- Modulo EoW: nuova funzione EWC "Configurazione" che governa i permessi su Lotti, Magazzini e
+-- Allocazioni (elenco, dettaglio, inserimento, modifica, cancellazione). La funzione EOW resta per
+-- Registrazioni, Giacenze e per l'uso dei lotti nelle registrazioni rifiuti (select dei lotti,
+-- allocazione, esecuzione di una regola di allocazione).
+-- Rieseguibile. Nessun travaso dei permessi: chi aveva EOW non riceve EWC in automatico, il permesso
+-- va assegnato in Impostazioni > Utenti (gli amministratori lo hanno già, come per ogni funzione dei
+-- moduli attivi del dominio).
+
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFunzioni WHERE Id = 'EWC')
+	INSERT INTO dbo.tblFunzioni (Id, Nome, Master, Admin, Attiva) VALUES ('EWC', 'Configurazione', 0, 0, 1);
+ELSE
+	UPDATE dbo.tblFunzioni SET Nome = 'Configurazione' WHERE Id = 'EWC' AND Nome <> 'Configurazione';
+
+-- La funzione esistente si chiama solo "Gestione" (il modulo si legge nella colonna Moduli)
+UPDATE dbo.tblFunzioni SET Nome = 'Gestione' WHERE Id = 'EOW' AND Nome <> 'Gestione';
+
+-- Anche il modulo perde "Gestione": si chiama solo "EoW"
+UPDATE dbo.tblModuli SET Nome = 'EoW' WHERE Id = 'EOW' AND Nome <> 'EoW';
+
+IF NOT EXISTS (SELECT 1 FROM dbo.tblModuliFunzioni WHERE Id = 'EOW' AND IdFunzione = 'EWC')
+	INSERT INTO dbo.tblModuliFunzioni (Id, IdFunzione) VALUES ('EOW', 'EWC');
+
+-- Le voci di menu Lotti, Magazzini e Allocazioni seguono la funzione della pagina
+UPDATE dbo.tblPagine SET IdFunzione = 'EWC' WHERE Id IN ('EWL', 'EWM', 'EWA') AND IdFunzione <> 'EWC';
+
+SELECT Id, IdFunzione, Nome FROM dbo.tblPagine WHERE Id LIKE 'EW%' ORDER BY Id;
+GO
+
+PRINT 'Registrazione funzione: magazzino_configurazione_funzione';
+GO
+SET NOCOUNT ON;
+
+-- Modulo Magazzino: nuova funzione MGC "Configurazione" che governa i permessi su Articoli e Lotti
+-- (elenco, dettaglio, inserimento, modifica, cancellazione). La funzione MAG resta per Movimenti,
+-- Giacenze e per l'uso di articoli e lotti nelle righe dei movimenti (select di articoli e lotti,
+-- lettura della scheda articolo).
+-- Rieseguibile. Nessun travaso dei permessi: chi aveva MAG non riceve MGC in automatico, il permesso
+-- va assegnato in Impostazioni > Utenti (gli amministratori lo hanno già, come per ogni funzione dei
+-- moduli attivi del dominio).
+
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFunzioni WHERE Id = 'MGC')
+	INSERT INTO dbo.tblFunzioni (Id, Nome, Master, Admin, Attiva) VALUES ('MGC', 'Configurazione', 0, 0, 1);
+ELSE
+	UPDATE dbo.tblFunzioni SET Nome = 'Configurazione' WHERE Id = 'MGC' AND Nome <> 'Configurazione';
+
+-- La funzione esistente si chiama solo "Gestione" (il modulo si legge nella colonna Moduli)
+UPDATE dbo.tblFunzioni SET Nome = 'Gestione' WHERE Id = 'MAG' AND Nome <> 'Gestione';
+
+-- Anche il modulo perde "Gestione": si chiama solo "Magazzino"
+UPDATE dbo.tblModuli SET Nome = 'Magazzino' WHERE Id = 'MAG' AND Nome <> 'Magazzino';
+
+IF NOT EXISTS (SELECT 1 FROM dbo.tblModuliFunzioni WHERE Id = 'MAG' AND IdFunzione = 'MGC')
+	INSERT INTO dbo.tblModuliFunzioni (Id, IdFunzione) VALUES ('MAG', 'MGC');
+
+-- Le voci di menu Articoli e Lotti seguono la funzione della pagina
+UPDATE dbo.tblPagine SET IdFunzione = 'MGC' WHERE Id IN ('MGA', 'MGL') AND IdFunzione <> 'MGC';
+
+SELECT Id, IdFunzione, Nome FROM dbo.tblPagine WHERE Id LIKE 'MG%' ORDER BY Id;
+GO
 
 PRINT 'uspMagazziniMovimenti_get_List';
 GO
@@ -1240,7 +1328,7 @@ BEGIN
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
-			@IdFunzione = 'MAG',
+			@IdFunzione = 'MGC',
 			@Permesso = @permesso OUTPUT;
 		IF 2 > @permesso
 		BEGIN
@@ -1671,6 +1759,266 @@ BEGIN
 		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
 		THROW 50001, @returnMessage, 1;
 	END
+END;
+GO
+
+PRINT 'uspMagazziniMovimentiRigheEoW_ins';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniMovimentiRigheEoW_ins
+	@IdMovimento CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@IdSede CHAR(16) = NULL,
+	@IdMateriale CHAR(2) = NULL,
+	@IdCriterio CHAR(1) = NULL,
+	@Quantita DECIMAL(18, 2) = NULL,
+	@IdLotto CHAR(16) = NULL,
+	@IdImballo CHAR(2) = NULL,
+	@Colli INT = NULL,
+	@AllaRinfusa BIT = 0
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnId CHAR(16) = NULL;
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdMovimento = NULLIF(LTRIM(RTRIM(@IdMovimento)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
+		SET @IdMateriale = NULLIF(LTRIM(RTRIM(@IdMateriale)), '');
+		SET @IdCriterio = NULLIF(LTRIM(RTRIM(@IdCriterio)), '');
+		SET @IdLotto = NULLIF(LTRIM(RTRIM(@IdLotto)), '');
+		-- Imballo: '00' è il segnaposto "(Selezionare)" di uspImballi_get_SelectList; alla
+		-- rinfusa non c'è imballo (come nei Formulari)
+		SET @IdImballo = NULLIF(NULLIF(LTRIM(RTRIM(@IdImballo)), ''), '00');
+		SET @AllaRinfusa = ISNULL(@AllaRinfusa, 0);
+		IF @AllaRinfusa = 1 SET @IdImballo = NULL;
+
+		IF @IdMovimento IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdMovimento non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSede IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare la sede';
+			GOTO BRANCH_END;
+		END
+		IF @IdMateriale IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare il materiale';
+			GOTO BRANCH_END;
+		END
+		IF @Quantita IS NULL OR @Quantita <= 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare una quantità maggiore di zero';
+			GOTO BRANCH_END;
+		END
+		IF @Colli < 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il numero di colli non può essere negativo';
+			GOTO BRANCH_END;
+		END
+		IF @IdImballo IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.tblImballi WHERE Id = @IdImballo)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'L''imballo indicato non esiste';
+			GOTO BRANCH_END;
+		END
+		-- Criterio obbligatorio: M (Manuale, lotto EoW scelto sulla riga), F/L (data di apertura
+		-- del lotto EoW), E (scadenza del lotto EoW). V/R (per singolo carico) non si applicano
+		-- all'EoW: il "carico" è il lotto EoW stesso.
+		IF @IdCriterio IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare il criterio di scarico';
+			GOTO BRANCH_END;
+		END
+		IF @IdCriterio NOT IN ('M', 'F', 'L', 'E')
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Criterio di scarico non valido per un materiale EoW';
+			GOTO BRANCH_END;
+		END
+		IF @IdCriterio = 'M' AND @IdLotto IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Con il criterio Manuale selezionare il lotto EoW da cui scaricare';
+			GOTO BRANCH_END;
+		END
+		IF @IdCriterio <> 'M' AND @IdLotto IS NOT NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il lotto EoW si indica solo con il criterio Manuale';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'MAG',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- I moduli sono opzionali per dominio: righe di materiale EoW solo con il modulo
+		-- Gestione EoW attivo
+		IF dbo.ufnModuli_get_IsAttivoBySessione('EOW', @IdSessione) = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il modulo EoW non è attivo sul dominio';
+			GOTO BRANCH_END;
+		END
+
+		-- Il movimento deve esistere (bozza o già confermato, non eliminato) e
+		-- appartenere all'azienda interna corrente della sessione. IdMovimento non
+		-- ha FK verso tblMagazziniMovimenti sullo schema reale: la relazione va
+		-- validata qui. La riga eredita il Lock del movimento (vedi Righe_ins).
+		DECLARE @idAzienda CHAR(16), @idOperazione CHAR(1), @lockMovimento INT;
+		SELECT
+			@idAzienda = c.IdSede,
+			@idOperazione = c.IdOperazione,
+			@lockMovimento = c.Lock
+		FROM
+			dbo.tblMagazziniMovimenti c
+			INNER JOIN dbo.tblSessioni e ON c.IdSede = e.IdAzienda
+		WHERE
+			c.Id = @IdMovimento
+			AND e.Id = @IdSessione
+			AND c.Lock IN (0, 2);
+
+		IF @idAzienda IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari, o il movimento non esiste';
+			GOTO BRANCH_END;
+		END
+
+		-- Il magazzino EoW si carica solo dal registro rifiuti (operazione M delle
+		-- Registrazioni): un movimento di carico di magazzino non può avere righe EoW
+		IF @idOperazione = 'C'
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il magazzino EoW si carica solo dal registro rifiuti (operazione M)';
+			GOTO BRANCH_END;
+		END
+
+		-- La sede della riga deve appartenere alla stessa azienda del movimento
+		IF NOT EXISTS (
+			SELECT 1
+			FROM dbo.tblSedi
+			WHERE
+				Id = @IdSede
+				AND (Id = @idAzienda OR IdParent = @idAzienda)
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La sede indicata non appartiene all''azienda del movimento';
+			GOTO BRANCH_END;
+		END
+
+		-- Se il movimento ha un DDT associato, tutte le righe devono appartenere alla
+		-- sola sede interna del DDT (IdSede, non IdMittente: quest'ultimo è un
+		-- campo libero della testata, senza relazione con la sede operativa)
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblMagazziniDdt
+			WHERE
+				IdMovimento = @IdMovimento
+				AND IdSede <> @IdSede
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Con un DDT associato, la riga deve appartenere alla sede interna del DDT';
+			GOTO BRANCH_END;
+		END
+
+		-- Il materiale deve esistere in anagrafica (tblRifiutiMateriali, nessuna anagrafica
+		-- EoW parallela - stessa convenzione già usata dal modulo EoW esistente)
+		IF NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiMateriali WHERE Id = @IdMateriale)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il materiale indicato non esiste';
+			GOTO BRANCH_END;
+		END
+
+		-- Lotto EoW del criterio Manuale: stessa Sede+Materiale della riga, attivo, non
+		-- disabilitato (anche se scaduto: si scarica da ciò che resta)
+		IF @IdLotto IS NOT NULL AND NOT EXISTS (
+			SELECT 1
+			FROM dbo.tblEoWLotti
+			WHERE
+				Id = @IdLotto
+				AND IdSede = @IdSede
+				AND IdMateriale = @IdMateriale
+				AND Lock = 0
+				AND ISNULL(Disabilitato, 0) = 0
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il lotto EoW selezionato non è valido per questa riga';
+			GOTO BRANCH_END;
+		END
+
+		-- uspId_get FUORI dalla transazione
+		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
+
+		BEGIN TRANSACTION;
+			-- Posizione: in coda alle righe del movimento, unica tra righe articolo/descrizione e righe EoW
+			DECLARE @pos INT;
+			SELECT @pos = ISNULL(MAX(x.Pos), 0) + 1
+			FROM
+				(
+					SELECT Pos
+					FROM dbo.tblMagazziniMovimentiRighe
+					WHERE IdMovimento = @IdMovimento
+
+					UNION ALL
+
+					SELECT Pos
+					FROM dbo.tblMagazziniMovimentiRigheEoW
+					WHERE IdMovimento = @IdMovimento
+				) x;
+
+			INSERT dbo.tblMagazziniMovimentiRigheEoW (Id, IdMovimento, IdSede, IdMateriale, IdCriterio, Quantita, Lock, IdLotto, IdImballo, Colli, AllaRinfusa, Pos)
+			VALUES (@returnId, @IdMovimento, @IdSede, @IdMateriale, @IdCriterio, @Quantita, @lockMovimento, @IdLotto, @IdImballo, @Colli, @AllaRinfusa, @pos);
+		COMMIT TRANSACTION;
+
+		SELECT Id = @returnId;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
 END;
 GO
 
@@ -2164,5 +2512,4058 @@ BEGIN
 		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
 		THROW 50001, @returnMessage, 1;
 	END
+END;
+GO
+
+PRINT 'uspEoWLotti_ins';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWLotti_ins
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnId CHAR(16) = NULL;
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = IdSede
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
+		IF @idSede IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare la sede';
+			GOTO BRANCH_END;
+		END
+
+		-- uspId_get FUORI dalla transazione
+		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
+
+		BEGIN TRANSACTION;
+			INSERT dbo.tblEoWLotti (Id, IdSede, Lock)
+			VALUES (@returnId, @idSede, 2);
+		COMMIT TRANSACTION;
+
+		SELECT Id = @returnId;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+PRINT 'uspEoWLotti_upd';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWLotti_upd
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@IdMagazzino CHAR(16) = NULL,
+	@IdMateriale CHAR(2) = NULL,
+	@Nome VARCHAR(50) = NULL,
+	@DataApertura DATE = NULL,
+	@DataChiusura DATE = NULL,
+	@QuantitaMax DECIMAL(18, 2) = NULL,
+	@Disabilitato BIT = 0
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdMagazzino = NULLIF(LTRIM(RTRIM(@IdMagazzino)), '');
+		SET @IdMateriale = NULLIF(LTRIM(RTRIM(@IdMateriale)), '');
+		SET @Nome = dbo.ufnStringhe_get_SenzaSpazi(@Nome, 0, 1);
+		SET @Disabilitato = ISNULL(@Disabilitato, 0);
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdMateriale IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdMateriale non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @Nome IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Nome non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @DataApertura IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @DataApertura non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @DataChiusura IS NOT NULL AND @DataChiusura < @DataApertura
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La data di chiusura non può essere precedente alla data di apertura';
+			GOTO BRANCH_END;
+		END
+		IF @QuantitaMax IS NOT NULL AND @QuantitaMax <= 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La quantità massima deve essere maggiore di zero';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità) e recupera la sede reale del lotto
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = c.IdSede
+		FROM
+			dbo.tblEoWLotti c
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+		WHERE c.Id = @Id;
+
+		IF @idSede IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Il materiale deve esistere in anagrafica (tblRifiutiMateriali, nessuna anagrafica EoW parallela)
+		IF NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiMateriali WHERE Id = @IdMateriale)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il materiale indicato non esiste';
+			GOTO BRANCH_END;
+		END
+
+		-- Il magazzino, se indicato, deve appartenere alla stessa sede del lotto
+		IF @IdMagazzino IS NOT NULL AND NOT EXISTS (
+			SELECT 1
+			FROM dbo.tblEoWMagazzini
+			WHERE
+				Id = @IdMagazzino
+				AND IdSede = @idSede
+				AND Lock = 0
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il magazzino selezionato non appartiene alla sede del lotto';
+			GOTO BRANCH_END;
+		END
+
+		-- Non è possibile cambiare il materiale se il lotto ha già registrazioni M associate
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblEoWLotti
+			WHERE
+				Id = @Id
+				AND Lock = 0
+				AND IdMateriale <> @IdMateriale
+				AND EXISTS (SELECT 1 FROM dbo.tblEoWLottiRifiutiRegistrazioni WHERE IdLotto = @Id)
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non è possibile cambiare il materiale di un lotto con registrazioni associate';
+			GOTO BRANCH_END;
+		END
+
+		-- La quantità massima non può scendere sotto la produzione già allocata al lotto (quote
+		-- di registrazioni M attive): il lotto EoW è una partita di produzione. Aumentarla è
+		-- sempre possibile (riapre capienza, se il lotto non è chiuso).
+		DECLARE @quantitaAllocata DECIMAL(18, 2) = ISNULL((
+			SELECT SUM(q.Quantita)
+			FROM
+				dbo.tblEoWLottiRifiutiRegistrazioni q
+				INNER JOIN dbo.tblRifiutiRegistrazioni rr ON q.IdRegistrazione = rr.Id
+			WHERE
+				q.IdLotto = @Id
+				AND rr.Lock < 2
+		), 0);
+		IF @QuantitaMax IS NOT NULL AND @QuantitaMax < @quantitaAllocata
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La quantità massima non può essere inferiore alla quantità già allocata al lotto (' + FORMAT(@quantitaAllocata, 'N2', 'it-IT') + ')';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla che non esista un altro lotto attivo con lo stesso nome nella stessa sede
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblEoWLotti
+			WHERE
+				Id <> @Id
+				AND IdSede = @idSede
+				AND Lock = 0
+				AND Nome = @Nome
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Un altro lotto con lo stesso nome è già presente';
+			GOTO BRANCH_END;
+		END
+
+		BEGIN TRANSACTION;
+			UPDATE dbo.tblEoWLotti
+			SET
+				Lock = 0,
+				IdMagazzino = @IdMagazzino,
+				IdMateriale = @IdMateriale,
+				Nome = @Nome,
+				DataApertura = @DataApertura,
+				DataChiusura = @DataChiusura,
+				QuantitaMax = @QuantitaMax,
+				Disabilitato = @Disabilitato
+			WHERE
+				Id = @Id
+				AND Lock <= 2;
+
+			IF @@ROWCOUNT = 0
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Lotto non trovato o già eliminato';
+				GOTO BRANCH_END;
+			END
+		COMMIT TRANSACTION;
+
+		-- Log FUORI dalla transazione
+		EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'U';
+
+		SELECT ReturnValue = @returnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspEoWLotti_get';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWLotti_get
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblEoWLotti c
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			WHERE c.Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF NOT EXISTS (SELECT 1
+		FROM dbo.tblEoWLotti
+		WHERE
+			Id = @Id
+			AND Lock <= 2
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Lotto non trovato';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			l.Id,
+			l.IdSede,
+			SedeNome = s.Nome,
+			l.IdMagazzino,
+			MagazzinoNome = g.Nome,
+			l.IdMateriale,
+			MaterialeNome = m.Nome,
+			l.Nome,
+			l.DataApertura,
+			l.DataChiusura,
+			l.QuantitaMax,
+			QuantitaAllocata = ISNULL(q.QuantitaAllocata, 0),
+			-- Scaricata dal magazzino e giacenza (allocata - scaricata): gli scarichi non liberano capienza
+			QuantitaScaricata = sl.Scaricata,
+			Giacenza = sl.Giacenza,
+			CapacitaResidua = CASE WHEN l.QuantitaMax IS NULL THEN NULL ELSE l.QuantitaMax - ISNULL(q.QuantitaAllocata, 0) END,
+			Disabilitato = ISNULL(l.Disabilitato, 0),
+			l.Lock
+		FROM
+			dbo.tblEoWLotti l
+			INNER JOIN dbo.tblSedi s ON l.IdSede = s.Id
+			LEFT JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id
+			LEFT JOIN dbo.tblRifiutiMateriali m ON l.IdMateriale = m.Id
+			OUTER APPLY (
+				-- Solo quote di registrazioni attive (Lock < 2): una registrazione eliminata (Lock = 4)
+				-- mantiene le sue quote per un eventuale ripristino, ma non conta più
+				SELECT QuantitaAllocata = SUM(r.Quantita)
+				FROM
+					dbo.tblEoWLottiRifiutiRegistrazioni r
+					INNER JOIN dbo.tblRifiutiRegistrazioni rr ON r.IdRegistrazione = rr.Id
+				WHERE
+					r.IdLotto = l.Id
+					AND rr.Lock < 2
+			) q
+			CROSS APPLY dbo.ufnEoWLotti_get_Saldo(l.Id) sl
+		WHERE
+			l.Id = @Id
+			AND l.Lock <= 2;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspEoWLotti_get_List';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWLotti_get_List
+	@PageNumber INT = 1,
+	@RowsPerPage INT = 50,
+	@IdSessione CHAR(16) = NULL,
+	@IdMagazzino CHAR(16) = NULL,
+	@IdMateriale CHAR(2) = NULL,
+	@Aperto BIT = NULL,
+	@Disabilitato BIT = NULL,
+	@DataAperturaDa DATE = NULL,
+	@DataAperturaA DATE = NULL,
+	@Search VARCHAR(50) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		-- Le select della ricerca usano gli zeri come "nessuna selezione" ((Nessuno)/(Selezionare))
+		SET @IdMagazzino = NULLIF(NULLIF(LTRIM(RTRIM(@IdMagazzino)), ''), REPLICATE('0', 16));
+		SET @IdMateriale = NULLIF(NULLIF(LTRIM(RTRIM(@IdMateriale)), ''), REPLICATE('0', 2));
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		SET @PageNumber = ISNULL(@PageNumber, 1);
+		SET @RowsPerPage = ISNULL(@RowsPerPage, 50);
+		IF @PageNumber < 1 SET @PageNumber = 1;
+		IF @RowsPerPage < 1 SET @RowsPerPage = 50;
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- La sede è sempre quella del contesto della sessione (tblSessioni.IdSede): il chiamante non
+		-- può indicarne un'altra. Contesto "tutte le sedi" (NULL o sedici zeri) = nessuna riga
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = NULLIF(IdSede, REPLICATE('0', 16))
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
+		SELECT
+			l.Id,
+			-- Stato: prima l'anomalia "Scaricato più del prodotto" (il magazzino tradizionale ha scaricato
+			-- più di quanto il registro operativo alloca al lotto: il magazzino EoW prevale e non viene
+			-- mai corretto in automatico), poi la capacità (solo con quantità massima impostata; il lotto EoW
+			-- è una partita di produzione, gli scarichi non liberano capienza): 2 = anomalia o capacità
+			-- superata, 1 = lotto pieno o capacità residua sotto il 30% della quantità massima, 0 = OK
+			StatoValore = CASE
+				WHEN s.Giacenza < 0 THEN 2
+				WHEN l.QuantitaMax IS NULL THEN 0
+				WHEN c.QuantitaAllocata > l.QuantitaMax THEN 2
+				WHEN l.QuantitaMax - c.QuantitaAllocata < l.QuantitaMax * 0.3 THEN 1
+				ELSE 0
+			END,
+			StatoDescrizione = CASE
+				WHEN s.Giacenza < 0
+					THEN 'Scaricato più del prodotto: prodotti ' + FORMAT(s.Prodotta, 'N2', 'it-IT') + ' kg, scaricati '
+						+ FORMAT(s.Scaricata, 'N2', 'it-IT') + ' kg dal magazzino'
+				WHEN l.QuantitaMax IS NULL THEN 'OK'
+				WHEN c.QuantitaAllocata > l.QuantitaMax
+					THEN 'Quantità massima superata di ' + FORMAT(c.QuantitaAllocata - l.QuantitaMax, 'N2', 'it-IT') + ' kg: allocati '
+						+ FORMAT(c.QuantitaAllocata, 'N2', 'it-IT') + ' kg su ' + FORMAT(l.QuantitaMax, 'N2', 'it-IT') + ' kg'
+				WHEN c.QuantitaAllocata = l.QuantitaMax THEN 'Lotto pieno: disponibilità esaurita'
+				WHEN l.QuantitaMax - c.QuantitaAllocata < l.QuantitaMax * 0.3
+					THEN 'Disponibilità sotto il 30%: ' + FORMAT(l.QuantitaMax - c.QuantitaAllocata, 'N2', 'it-IT') + ' kg su '
+						+ FORMAT(l.QuantitaMax, 'N2', 'it-IT') + ' kg'
+				ELSE 'OK'
+			END,
+			NumeroRegistrazioni = ISNULL(q.NumeroRegistrazioni, 0),
+			l.Nome,
+			MaterialeNome = m.Nome,
+			MagazzinoNome = g.Nome,
+			l.DataApertura,
+			l.DataChiusura,
+			l.QuantitaMax,
+			QuantitaAllocata = ISNULL(q.QuantitaAllocata, 0),
+			CapacitaResidua = CASE WHEN l.QuantitaMax IS NULL THEN NULL ELSE l.QuantitaMax - ISNULL(q.QuantitaAllocata, 0) END,
+			Disabilitato = ISNULL(l.Disabilitato, 0),
+			RowsCount = COUNT(*) OVER ()
+		FROM
+			dbo.tblEoWLotti l
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON l.IdSede = i.Id
+			LEFT JOIN dbo.tblRifiutiMateriali m ON l.IdMateriale = m.Id
+			LEFT JOIN dbo.tblEoWMagazzini g ON l.IdMagazzino = g.Id
+			OUTER APPLY (
+				-- Solo quote di registrazioni attive (Lock < 2): una registrazione eliminata (Lock = 4)
+				-- mantiene le sue quote per un eventuale ripristino, ma non conta più
+				SELECT
+					QuantitaAllocata = SUM(r.Quantita),
+					NumeroRegistrazioni = COUNT(DISTINCT r.IdRegistrazione)
+				FROM
+					dbo.tblEoWLottiRifiutiRegistrazioni r
+					INNER JOIN dbo.tblRifiutiRegistrazioni rr ON r.IdRegistrazione = rr.Id
+				WHERE
+					r.IdLotto = l.Id
+					AND rr.Lock < 2
+			) q
+					CROSS APPLY (SELECT QuantitaAllocata = ISNULL(q.QuantitaAllocata, 0)) c
+					CROSS APPLY dbo.ufnEoWLotti_get_Saldo(l.Id) s
+		WHERE
+			l.Lock = 0
+			AND l.IdSede = @idSede
+			AND
+				(
+				@IdMagazzino IS NULL
+				OR l.IdMagazzino = @IdMagazzino
+				)
+			AND
+				(
+				@IdMateriale IS NULL
+				OR l.IdMateriale = @IdMateriale
+				)
+			AND
+				(
+				@Aperto IS NULL
+				OR
+					(
+					@Aperto = 1
+					AND l.DataChiusura IS NULL
+					)
+				OR
+					(
+					@Aperto = 0
+					AND l.DataChiusura IS NOT NULL
+					)
+				)
+			AND
+				(
+				@Disabilitato IS NULL
+				OR ISNULL(l.Disabilitato, 0) = @Disabilitato
+				)
+			AND
+				(
+				@DataAperturaDa IS NULL
+				OR l.DataApertura >= @DataAperturaDa
+				)
+			AND
+				(
+				@DataAperturaA IS NULL
+				OR l.DataApertura <= @DataAperturaA
+				)
+			AND
+				(
+				@Search IS NULL
+				OR l.Nome LIKE '%' + @Search + '%'
+				)
+		ORDER BY l.Nome
+		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
+		FETCH NEXT @RowsPerPage ROWS ONLY
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspEoWLotti_del';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWLotti_del
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@Reset BIT = 0
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Idempotenza: mai esistito o già cancellato viene trattato come cancellazione già avvenuta
+		IF NOT EXISTS (SELECT 1
+		FROM dbo.tblEoWLotti
+		WHERE Id = @Id)
+		BEGIN
+			SET @returnValue = 0;
+		END
+		ELSE
+		BEGIN
+
+		-- Controlla il permesso sul record (titolarità)
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblEoWLotti c
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			WHERE c.Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @lock INT = (SELECT Lock
+		FROM dbo.tblEoWLotti
+		WHERE Id = @Id);
+
+		-- ── CASO 1: lotto attivo (Lock = 0) → soft delete ────────────────────
+		IF @lock = 0
+		BEGIN
+			IF EXISTS (
+				SELECT 1
+				FROM dbo.tblEoWLottiRifiutiRegistrazioni
+				WHERE IdLotto = @Id
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un lotto con registrazioni associate non può essere cancellato';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (
+				SELECT 1
+				FROM dbo.tblEoWLottiAllocazioni
+				WHERE IdLotto = @Id
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un lotto usato in una configurazione di allocazione non può essere cancellato';
+				GOTO BRANCH_END;
+			END
+
+			BEGIN TRANSACTION;
+				UPDATE dbo.tblEoWLotti
+				SET Lock = 4
+				WHERE
+					Id = @Id
+					AND Lock = 0;
+
+				IF @@ROWCOUNT = 0
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Lotto non trovato o già eliminato';
+					GOTO BRANCH_END;
+				END
+
+				IF @Reset = 1
+					DELETE dbo.tblIdCancellati
+					WHERE IdSessione = @IdSessione;
+				ELSE
+					DELETE dbo.tblIdCancellati
+					WHERE Id = @Id;
+
+				INSERT INTO dbo.tblIdCancellati (Id, IdSessione, [Data])
+				VALUES (@Id, @IdSessione, GETDATE());
+			COMMIT TRANSACTION;
+
+			EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'D';
+		END
+
+		-- ── CASO 2: lotto in bozza (Lock = 2) → hard delete ──────────────────
+		ELSE IF @lock = 2
+		BEGIN
+			BEGIN TRANSACTION;
+				DELETE dbo.tblEoWLottiRifiutiRegistrazioni
+				WHERE IdLotto = @Id;
+				DELETE dbo.tblEoWLottiAllocazioni
+				WHERE IdLotto = @Id;
+				DELETE dbo.tblEoWLotti
+				WHERE Id = @Id;
+				DELETE dbo.tblIdCancellati
+				WHERE Id = @Id;
+				DELETE dbo.tblIdLog
+				WHERE Id = @Id;
+				DELETE dbo.tblId
+				WHERE Id = @Id;
+			COMMIT TRANSACTION;
+		END
+
+		-- ── CASO 3: Lock in stato non gestito ─────────────────────────────────
+		ELSE
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il lotto è già in uno stato non modificabile (Lock = ' + CAST(@lock AS VARCHAR(5)) + ')';
+			GOTO BRANCH_END;
+		END
+
+		END
+
+		SELECT @returnValue AS ReturnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+PRINT 'uspEoWLotti_get_MagazziniSelectList';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWLotti_get_MagazziniSelectList
+	@IdSede CHAR(16) = NULL,
+	@IdSelected CHAR(16) = NULL,
+	@Search VARCHAR(50) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+		DECLARE @idSediciZeri CHAR(16) = REPLICATE('0', 16);
+
+		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
+		SET @IdSelected = NULLIF(LTRIM(RTRIM(@IdSelected)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @IdSede IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSede non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Titolarità sulla sede indicata
+		IF NOT EXISTS (
+			SELECT 1
+			FROM dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i
+			WHERE i.Id = @IdSede)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		SET @IdSelected = ISNULL(@IdSelected, @idSediciZeri);
+
+		;WITH cte AS (
+			SELECT
+				Id = CAST(@idSediciZeri AS CHAR(16)),
+				[Text] = CAST('(Nessuno)' AS VARCHAR(500)),
+				Selected = CAST(IIF(@IdSelected = @idSediciZeri, 1, 0) AS BIT),
+				Pos = 0
+
+			UNION ALL -- magazzino selezionato: sempre presente, anche se non combacia con @Search
+
+			SELECT
+				g.Id,
+				[Text] = g.Nome,
+				Selected = CAST(1 AS BIT),
+				Pos = 1
+			FROM dbo.tblEoWMagazzini g
+			WHERE
+				g.Id = @IdSelected
+				AND g.IdSede = @IdSede
+
+			UNION ALL -- altri magazzini attivi della sede, filtrabili per @Search
+
+			SELECT
+				g.Id,
+				[Text] = g.Nome,
+				Selected = CAST(0 AS BIT),
+				Pos = 2
+			FROM dbo.tblEoWMagazzini g
+			WHERE
+				g.IdSede = @IdSede
+				AND g.Lock = 0
+				AND ISNULL(g.Disabilitato, 0) = 0
+				AND g.Id <> @IdSelected
+				AND
+					(
+					@Search IS NULL
+					OR g.Nome LIKE '%' + @Search + '%'
+					)
+		)
+		SELECT TOP 20 Id, [Text], Selected
+		FROM cte
+		ORDER BY Pos, [Text]
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+PRINT 'uspEoWLotti_get_RegistrazioniList';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWLotti_get_RegistrazioniList
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità)
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblEoWLotti c
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			WHERE c.Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			lr.IdRegistrazione,
+			r.Numero,
+			r.Data,
+			MaterialeNome = ISNULL(r.MaterialeDescrizione, mat.Nome),
+			-- Quantità effettiva (viewRifiutiRegistrazioniEffettive): una rettifica non modifica l'originale
+			QuantitaComplessiva = vo.Quantita,
+			QuantitaAllocata = lr.Quantita
+		FROM
+			dbo.tblEoWLottiRifiutiRegistrazioni lr
+			INNER JOIN dbo.tblRifiutiRegistrazioni r ON lr.IdRegistrazione = r.Id
+			INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vo ON r.Id = vo.Id
+			LEFT JOIN dbo.tblRifiutiMateriali mat ON r.IdMateriale = mat.Id
+		-- Solo quote di registrazioni attive (Lock < 2): una registrazione eliminata (Lock = 4)
+		-- mantiene le sue quote per un eventuale ripristino, ma non conta più
+		WHERE
+			lr.IdLotto = @Id
+			AND r.Lock < 2
+		ORDER BY r.Data DESC, r.Numero DESC;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspEoWLotti_get_AllocazioniList';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWLotti_get_AllocazioniList
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità)
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblEoWLotti c
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			WHERE c.Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			a.Id AS IdAllocazione,
+			a.Nome,
+			TipoNome = t.Nome,
+			la.Valore
+		FROM
+			dbo.tblEoWLottiAllocazioni la
+			INNER JOIN dbo.tblEoWAllocazioni a ON la.IdAllocazione = a.Id
+			INNER JOIN dbo.tblEoWAllocazioniTipi t ON a.IdAllocazioneTipo = t.Id
+		WHERE
+			la.IdLotto = @Id
+			AND a.Lock = 0
+		ORDER BY a.Nome;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspEoWMagazzini_ins';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWMagazzini_ins
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnId CHAR(16) = NULL;
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = IdSede
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
+		IF @idSede IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare la sede';
+			GOTO BRANCH_END;
+		END
+
+		-- uspId_get FUORI dalla transazione
+		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
+
+		BEGIN TRANSACTION;
+			INSERT dbo.tblEoWMagazzini (Id, IdSede, Lock)
+			VALUES (@returnId, @idSede, 2);
+		COMMIT TRANSACTION;
+
+		SELECT Id = @returnId;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+PRINT 'uspEoWMagazzini_upd';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWMagazzini_upd
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@Nome VARCHAR(50) = NULL,
+	@Disabilitato BIT = 0
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Nome = dbo.ufnStringhe_get_SenzaSpazi(@Nome, 0, 1);
+		SET @Disabilitato = ISNULL(@Disabilitato, 0);
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @Nome IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Nome non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità) e recupera la sede reale del magazzino
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = c.IdSede
+		FROM
+			dbo.tblEoWMagazzini c
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+		WHERE c.Id = @Id;
+
+		IF @idSede IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla che non esista un altro magazzino attivo con lo stesso nome nella stessa sede
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblEoWMagazzini
+			WHERE
+				Id <> @Id
+				AND IdSede = @idSede
+				AND Lock = 0
+				AND Nome = @Nome
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Un altro magazzino con lo stesso nome è già presente';
+			GOTO BRANCH_END;
+		END
+
+		BEGIN TRANSACTION;
+			UPDATE dbo.tblEoWMagazzini
+			SET
+				Lock = 0,
+				Nome = @Nome,
+				Disabilitato = @Disabilitato
+			WHERE
+				Id = @Id
+				AND Lock <= 2;
+
+			IF @@ROWCOUNT = 0
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Magazzino non trovato o già eliminato';
+				GOTO BRANCH_END;
+			END
+		COMMIT TRANSACTION;
+
+		-- Log FUORI dalla transazione
+		EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'U';
+
+		SELECT ReturnValue = @returnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspEoWMagazzini_get';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWMagazzini_get
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblEoWMagazzini c
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			WHERE c.Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF NOT EXISTS (SELECT 1
+		FROM dbo.tblEoWMagazzini
+		WHERE
+			Id = @Id
+			AND Lock <= 2
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Magazzino non trovato';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			g.Id,
+			g.IdSede,
+			SedeNome = s.Nome,
+			g.Nome,
+			Disabilitato = ISNULL(g.Disabilitato, 0),
+			g.Lock
+		FROM
+			dbo.tblEoWMagazzini g
+			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
+		WHERE
+			g.Id = @Id
+			AND g.Lock <= 2;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspEoWMagazzini_get_List';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWMagazzini_get_List
+	@PageNumber INT = 1,
+	@RowsPerPage INT = 50,
+	@IdSessione CHAR(16) = NULL,
+	@IdSede CHAR(16) = NULL,
+	@Disabilitato BIT = NULL,
+	@Search VARCHAR(50) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		SET @PageNumber = ISNULL(@PageNumber, 1);
+		SET @RowsPerPage = ISNULL(@RowsPerPage, 50);
+		IF @PageNumber < 1 SET @PageNumber = 1;
+		IF @RowsPerPage < 1 SET @RowsPerPage = 50;
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			g.Id,
+			StatoValore = 0,
+			StatoDescrizione = 'OK',
+			g.Nome,
+			SedeNome = s.Nome,
+			Disabilitato = ISNULL(g.Disabilitato, 0),
+			RowsCount = COUNT(*) OVER ()
+		FROM
+			dbo.tblEoWMagazzini g
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON g.IdSede = i.Id
+			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
+		WHERE
+			g.Lock = 0
+			AND (@IdSede IS NULL OR g.IdSede = @IdSede)
+			AND (@Disabilitato IS NULL OR ISNULL(g.Disabilitato, 0) = @Disabilitato)
+			AND (@Search IS NULL OR g.Nome LIKE '%' + @Search + '%')
+		ORDER BY g.Nome
+		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
+		FETCH NEXT @RowsPerPage ROWS ONLY
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspEoWMagazzini_del';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWMagazzini_del
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@Reset BIT = 0
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Idempotenza: mai esistito o già cancellato viene trattato come cancellazione già avvenuta
+		IF NOT EXISTS (SELECT 1
+		FROM dbo.tblEoWMagazzini
+		WHERE Id = @Id)
+		BEGIN
+			SET @returnValue = 0;
+		END
+		ELSE
+		BEGIN
+
+		-- Controlla il permesso sul record (titolarità)
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblEoWMagazzini c
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			WHERE c.Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @lock INT = (SELECT Lock
+		FROM dbo.tblEoWMagazzini
+		WHERE Id = @Id);
+
+		-- ── CASO 1: magazzino attivo (Lock = 0) → soft delete ────────────────
+		IF @lock = 0
+		BEGIN
+			IF EXISTS (
+				SELECT 1
+				FROM dbo.tblEoWLotti
+				WHERE
+					IdMagazzino = @Id
+					AND Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un magazzino con lotti associati non può essere cancellato';
+				GOTO BRANCH_END;
+			END
+
+			BEGIN TRANSACTION;
+				UPDATE dbo.tblEoWMagazzini
+				SET Lock = 4
+				WHERE
+					Id = @Id
+					AND Lock = 0;
+
+				IF @@ROWCOUNT = 0
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Magazzino non trovato o già eliminato';
+					GOTO BRANCH_END;
+				END
+
+				IF @Reset = 1
+					DELETE dbo.tblIdCancellati
+					WHERE IdSessione = @IdSessione;
+				ELSE
+					DELETE dbo.tblIdCancellati
+					WHERE Id = @Id;
+
+				INSERT INTO dbo.tblIdCancellati (Id, IdSessione, [Data])
+				VALUES (@Id, @IdSessione, GETDATE());
+			COMMIT TRANSACTION;
+
+			EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'D';
+		END
+
+		-- ── CASO 2: magazzino in bozza (Lock = 2) → hard delete ──────────────
+		ELSE IF @lock = 2
+		BEGIN
+			BEGIN TRANSACTION;
+				-- IdMagazzino è nullable su tblEoWLotti: un lotto (di un'altra bozza, di fatto
+				-- irraggiungibile finché il magazzino non è mai stato Lock=0) perde solo il
+				-- collegamento, non viene cancellato.
+				UPDATE dbo.tblEoWLotti
+				SET IdMagazzino = NULL
+				WHERE IdMagazzino = @Id;
+
+				DELETE dbo.tblEoWMagazzini
+				WHERE Id = @Id;
+				DELETE dbo.tblIdCancellati
+				WHERE Id = @Id;
+				DELETE dbo.tblIdLog
+				WHERE Id = @Id;
+				DELETE dbo.tblId
+				WHERE Id = @Id;
+			COMMIT TRANSACTION;
+		END
+
+		-- ── CASO 3: Lock in stato non gestito ─────────────────────────────────
+		ELSE
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il magazzino è già in uno stato non modificabile (Lock = ' + CAST(@lock AS VARCHAR(5)) + ')';
+			GOTO BRANCH_END;
+		END
+
+		END
+
+		SELECT @returnValue AS ReturnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+PRINT 'uspEoWAllocazioni_ins';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWAllocazioni_ins
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnId CHAR(16) = NULL;
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = IdSede
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
+		IF @idSede IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare la sede';
+			GOTO BRANCH_END;
+		END
+
+		-- uspId_get FUORI dalla transazione
+		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
+
+		BEGIN TRANSACTION;
+			INSERT dbo.tblEoWAllocazioni (Id, IdSede, Lock)
+			VALUES (@returnId, @idSede, 2);
+		COMMIT TRANSACTION;
+
+		SELECT Id = @returnId;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+PRINT 'uspEoWAllocazioni_upd';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWAllocazioni_upd
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@IdAllocazioneTipo CHAR(1) = NULL,
+	@Nome VARCHAR(50) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdAllocazioneTipo = NULLIF(LTRIM(RTRIM(@IdAllocazioneTipo)), '');
+		SET @Nome = dbo.ufnStringhe_get_SenzaSpazi(@Nome, 0, 1);
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdAllocazioneTipo IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdAllocazioneTipo non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @Nome IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Nome non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità) e recupera la sede reale dell'allocazione
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = c.IdSede
+		FROM
+			dbo.tblEoWAllocazioni c
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+		WHERE c.Id = @Id;
+
+		IF @idSede IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF NOT EXISTS (SELECT 1 FROM dbo.tblEoWAllocazioniTipi WHERE Id = @IdAllocazioneTipo)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il tipo di allocazione indicato non esiste';
+			GOTO BRANCH_END;
+		END
+
+		-- Non è possibile cambiare il tipo se l'allocazione ha già lotti collegati, anche se non
+		-- ancora salvata (uspEoWAllocazioni_ins_Lotto memorizza il tipo con il primo lotto)
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblEoWAllocazioni
+			WHERE
+				Id = @Id
+				AND IdAllocazioneTipo <> @IdAllocazioneTipo
+				AND EXISTS (SELECT 1 FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id)
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non è possibile cambiare il tipo di un''allocazione con lotti associati';
+			GOTO BRANCH_END;
+		END
+
+		-- I lotti presenti devono rispettare il tipo (stessi vincoli di uspEoWAllocazioni_ins_Lotto):
+		-- intercetta anche lotti aggiunti quando il tipo non era ancora salvato
+		IF @IdAllocazioneTipo = 'U' AND (SELECT COUNT(*) FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id) > 1
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Un''allocazione di tipo Lotto unico può contenere un solo lotto';
+			GOTO BRANCH_END;
+		END
+
+		IF @IdAllocazioneTipo = 'P' AND (
+			EXISTS (
+				SELECT 1
+				FROM dbo.tblEoWLottiAllocazioni
+				WHERE
+					IdAllocazione = @Id
+					AND (Valore IS NULL OR Valore <= 0 OR Valore > 100)
+			)
+			OR (SELECT ISNULL(SUM(Valore), 0) FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id) > 100
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Le percentuali dei lotti devono essere maggiori di zero e la loro somma non può superare 100';
+			GOTO BRANCH_END;
+		END
+
+		IF @IdAllocazioneTipo = 'C' AND (
+			EXISTS (
+				SELECT 1
+				FROM dbo.tblEoWLottiAllocazioni
+				WHERE
+					IdAllocazione = @Id
+					AND (Valore IS NULL OR Valore <= 0)
+			)
+			OR EXISTS (
+				SELECT 1
+				FROM dbo.tblEoWLottiAllocazioni
+				WHERE IdAllocazione = @Id
+				GROUP BY Valore
+				HAVING COUNT(*) > 1
+			)
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Ogni lotto deve avere una priorità diversa: togliere e aggiungere di nuovo i lotti con la stessa priorità';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla che non esista un'altra allocazione attiva con lo stesso nome nella stessa sede
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblEoWAllocazioni
+			WHERE
+				Id <> @Id
+				AND IdSede = @idSede
+				AND Lock = 0
+				AND Nome = @Nome
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Un''altra allocazione con lo stesso nome è già presente';
+			GOTO BRANCH_END;
+		END
+
+		BEGIN TRANSACTION;
+			UPDATE dbo.tblEoWAllocazioni
+			SET
+				Lock = 0,
+				IdAllocazioneTipo = @IdAllocazioneTipo,
+				Nome = @Nome
+			WHERE
+				Id = @Id
+				AND Lock <= 2;
+
+			IF @@ROWCOUNT = 0
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Allocazione non trovata o già eliminata';
+				GOTO BRANCH_END;
+			END
+		COMMIT TRANSACTION;
+
+		-- Log FUORI dalla transazione
+		EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'U';
+
+		SELECT ReturnValue = @returnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspEoWAllocazioni_get';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWAllocazioni_get
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblEoWAllocazioni c
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			WHERE c.Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF NOT EXISTS (SELECT 1
+		FROM dbo.tblEoWAllocazioni
+		WHERE
+			Id = @Id
+			AND Lock <= 2
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Allocazione non trovata';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			a.Id,
+			a.IdSede,
+			SedeNome = s.Nome,
+			a.IdAllocazioneTipo,
+			TipoNome = t.Nome,
+			-- Il materiale non è un campo proprio dell'allocazione: si ricava dai lotti già
+			-- collegati (tutti garantiti dello stesso materiale da uspEoWAllocazioni_ins_Lotto),
+			-- NULL se l'allocazione non ha ancora nessun lotto.
+			mat.IdMateriale,
+			mat.MaterialeNome,
+			a.Nome,
+			a.Lock
+		FROM
+			dbo.tblEoWAllocazioni a
+			INNER JOIN dbo.tblSedi s ON a.IdSede = s.Id
+			LEFT JOIN dbo.tblEoWAllocazioniTipi t ON a.IdAllocazioneTipo = t.Id
+			OUTER APPLY (
+				SELECT TOP 1 IdMateriale = l.IdMateriale, MaterialeNome = m.Nome
+				FROM
+					dbo.tblEoWLottiAllocazioni la
+					INNER JOIN dbo.tblEoWLotti l ON la.IdLotto = l.Id
+					LEFT JOIN dbo.tblRifiutiMateriali m ON l.IdMateriale = m.Id
+				WHERE la.IdAllocazione = a.Id
+			) mat
+		WHERE
+			a.Id = @Id
+			AND a.Lock <= 2;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspEoWAllocazioni_get_List';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWAllocazioni_get_List
+	@PageNumber INT = 1,
+	@RowsPerPage INT = 50,
+	@IdSessione CHAR(16) = NULL,
+	@IdMateriale CHAR(2) = NULL,
+	@Search VARCHAR(50) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdMateriale = NULLIF(LTRIM(RTRIM(@IdMateriale)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		SET @PageNumber = ISNULL(@PageNumber, 1);
+		SET @RowsPerPage = ISNULL(@RowsPerPage, 50);
+		IF @PageNumber < 1 SET @PageNumber = 1;
+		IF @RowsPerPage < 1 SET @RowsPerPage = 50;
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- La sede è sempre quella del contesto della sessione (tblSessioni.IdSede): il chiamante non
+		-- può indicarne un'altra. Contesto "tutte le sedi" (NULL o sedici zeri) = nessuna riga
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = NULLIF(IdSede, REPLICATE('0', 16))
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
+		SELECT
+			a.Id,
+			StatoValore = 0,
+			StatoDescrizione = 'OK',
+			a.Nome,
+			TipoNome = t.Nome,
+			MaterialeNome = mat.MaterialeNome,
+			RowsCount = COUNT(*) OVER ()
+		FROM
+			dbo.tblEoWAllocazioni a
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON a.IdSede = i.Id
+			LEFT JOIN dbo.tblEoWAllocazioniTipi t ON a.IdAllocazioneTipo = t.Id
+			-- Il materiale non è un campo proprio dell'allocazione: si ricava dai lotti già collegati
+			OUTER APPLY (
+				SELECT TOP 1 IdMateriale = l.IdMateriale, MaterialeNome = m.Nome
+				FROM
+					dbo.tblEoWLottiAllocazioni la
+					INNER JOIN dbo.tblEoWLotti l ON la.IdLotto = l.Id
+					LEFT JOIN dbo.tblRifiutiMateriali m ON l.IdMateriale = m.Id
+				WHERE la.IdAllocazione = a.Id
+			) mat
+		WHERE
+			a.Lock = 0
+			AND a.IdSede = @idSede
+			AND (@IdMateriale IS NULL OR mat.IdMateriale = @IdMateriale)
+			AND (@Search IS NULL OR a.Nome LIKE '%' + @Search + '%')
+		ORDER BY a.Nome
+		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
+		FETCH NEXT @RowsPerPage ROWS ONLY
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspEoWAllocazioni_del';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWAllocazioni_del
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@Reset BIT = 0
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Idempotenza: mai esistita o già cancellata viene trattata come cancellazione già avvenuta
+		IF NOT EXISTS (SELECT 1
+		FROM dbo.tblEoWAllocazioni
+		WHERE Id = @Id)
+		BEGIN
+			SET @returnValue = 0;
+		END
+		ELSE
+		BEGIN
+
+		-- Controlla il permesso sul record (titolarità)
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblEoWAllocazioni c
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			WHERE c.Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @lock INT = (SELECT Lock
+		FROM dbo.tblEoWAllocazioni
+		WHERE Id = @Id);
+
+		-- ── CASO 1: allocazione attiva (Lock = 0) → soft delete ──────────────
+		IF @lock = 0
+		BEGIN
+			BEGIN TRANSACTION;
+				-- Le righe tblEoWLottiAllocazioni sono la configurazione, di proprietà esclusiva
+				-- dell'allocazione: cancellate insieme, non azzerate (i lotti referenziati restano intatti).
+				DELETE dbo.tblEoWLottiAllocazioni
+				WHERE IdAllocazione = @Id;
+
+				UPDATE dbo.tblEoWAllocazioni
+				SET Lock = 4
+				WHERE
+					Id = @Id
+					AND Lock = 0;
+
+				IF @@ROWCOUNT = 0
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Allocazione non trovata o già eliminata';
+					GOTO BRANCH_END;
+				END
+
+				IF @Reset = 1
+					DELETE dbo.tblIdCancellati
+					WHERE IdSessione = @IdSessione;
+				ELSE
+					DELETE dbo.tblIdCancellati
+					WHERE Id = @Id;
+
+				INSERT INTO dbo.tblIdCancellati (Id, IdSessione, [Data])
+				VALUES (@Id, @IdSessione, GETDATE());
+			COMMIT TRANSACTION;
+
+			EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'D';
+		END
+
+		-- ── CASO 2: allocazione in bozza (Lock = 2) → hard delete ────────────
+		ELSE IF @lock = 2
+		BEGIN
+			BEGIN TRANSACTION;
+				DELETE dbo.tblEoWLottiAllocazioni
+				WHERE IdAllocazione = @Id;
+				DELETE dbo.tblEoWAllocazioni
+				WHERE Id = @Id;
+				DELETE dbo.tblIdCancellati
+				WHERE Id = @Id;
+				DELETE dbo.tblIdLog
+				WHERE Id = @Id;
+				DELETE dbo.tblId
+				WHERE Id = @Id;
+			COMMIT TRANSACTION;
+		END
+
+		-- ── CASO 3: Lock in stato non gestito ─────────────────────────────────
+		ELSE
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'L''allocazione è già in uno stato non modificabile (Lock = ' + CAST(@lock AS VARCHAR(5)) + ')';
+			GOTO BRANCH_END;
+		END
+
+		END
+
+		SELECT @returnValue AS ReturnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+PRINT 'uspEoWAllocazioniTipi_get_SelectList';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWAllocazioniTipi_get_SelectList
+	@IdSelected CHAR(1) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSelected = NULLIF(LTRIM(RTRIM(@IdSelected)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione (dato di riferimento statico, nessuna titolarità)
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			Id,
+			[Text] = Nome,
+			Selected = CAST(IIF(Id = @IdSelected, 1, 0) AS BIT)
+		FROM dbo.tblEoWAllocazioniTipi
+		ORDER BY Nome
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+PRINT 'uspEoWAllocazioni_get_LottiList';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWAllocazioni_get_LottiList
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità)
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblEoWAllocazioni c
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			WHERE c.Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			la.IdLotto,
+			LottoNome = l.Nome,
+			la.Valore
+		FROM
+			dbo.tblEoWLottiAllocazioni la
+			INNER JOIN dbo.tblEoWLotti l ON la.IdLotto = l.Id
+		WHERE la.IdAllocazione = @Id
+		ORDER BY l.Nome;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspEoWAllocazioni_get_LottiSelectList';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWAllocazioni_get_LottiSelectList
+	@Id CHAR(16) = NULL,
+	@IdSelected CHAR(16) = NULL,
+	@Search VARCHAR(50) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+		DECLARE @idSediciZeri CHAR(16) = REPLICATE('0', 16);
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSelected = NULLIF(LTRIM(RTRIM(@IdSelected)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Titolarità + dati dell'allocazione
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = c.IdSede
+		FROM
+			dbo.tblEoWAllocazioni c
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+		WHERE c.Id = @Id;
+
+		IF @idSede IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Materiale già fissato dai lotti presenti nell'allocazione, NULL se ancora nessuno
+		DECLARE @idMateriale CHAR(2) = (
+			SELECT TOP 1 l.IdMateriale
+			FROM dbo.tblEoWLottiAllocazioni la
+			INNER JOIN dbo.tblEoWLotti l ON la.IdLotto = l.Id
+			WHERE la.IdAllocazione = @Id
+		);
+
+		SET @IdSelected = ISNULL(@IdSelected, @idSediciZeri);
+
+		;WITH cte AS (
+			SELECT
+				Id = CAST(@idSediciZeri AS CHAR(16)),
+				[Text] = CAST('(Selezionare)' AS VARCHAR(500)),
+				Selected = CAST(IIF(@IdSelected = @idSediciZeri, 1, 0) AS BIT),
+				Pos = 0
+
+			UNION ALL -- lotto selezionato: sempre presente, anche se non combacia con @Search
+
+			SELECT
+				l.Id,
+				[Text] = l.Nome,
+				Selected = CAST(1 AS BIT),
+				Pos = 1
+			FROM dbo.tblEoWLotti l
+			WHERE
+				l.Id = @IdSelected
+				AND l.IdSede = @idSede
+
+			UNION ALL -- altri lotti aperti/non disabilitati della sede, stesso materiale degli altri
+			          -- lotti già in allocazione (o qualsiasi se nessuno ancora presente), non già
+			          -- inseriti in questa allocazione, filtrabili per @Search
+
+			SELECT
+				l.Id,
+				[Text] = l.Nome,
+				Selected = CAST(0 AS BIT),
+				Pos = 2
+			FROM dbo.tblEoWLotti l
+			WHERE
+				l.IdSede = @idSede
+				AND l.Lock = 0
+				AND ISNULL(l.Disabilitato, 0) = 0
+				AND l.DataChiusura IS NULL
+				AND (@idMateriale IS NULL OR l.IdMateriale = @idMateriale)
+				AND l.Id <> @IdSelected
+				AND NOT EXISTS (SELECT 1 FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id AND IdLotto = l.Id)
+				AND
+					(
+					@Search IS NULL
+					OR l.Nome LIKE '%' + @Search + '%'
+					)
+		)
+		SELECT TOP 20 Id, [Text], Selected
+		FROM cte
+		ORDER BY Pos, [Text]
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+PRINT 'uspEoWAllocazioni_ins_Lotto';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWAllocazioni_ins_Lotto
+	@Id CHAR(16) = NULL,
+	@IdLotto CHAR(16) = NULL,
+	@Valore DECIMAL(18, 2) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	-- Tipo scelto nella pagina: un'allocazione nuova ha il tipo salvato solo con il primo "Salva",
+	-- quindi senza questo parametro i controlli per tipo verrebbero saltati (tipo NULL)
+	@IdAllocazioneTipo CHAR(1) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdLotto = NULLIF(LTRIM(RTRIM(@IdLotto)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdAllocazioneTipo = NULLIF(LTRIM(RTRIM(@IdAllocazioneTipo)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdLotto IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdLotto non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Titolarità + dati dell'allocazione
+		DECLARE @idSedeAllocazione CHAR(16);
+		DECLARE @tipo CHAR(1);
+		SELECT
+			@idSedeAllocazione = c.IdSede,
+			@tipo = c.IdAllocazioneTipo
+		FROM
+			dbo.tblEoWAllocazioni c
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+		WHERE
+			c.Id = @Id
+			AND c.Lock <= 2;
+
+		IF @idSedeAllocazione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Allocazione non trovata o non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Il materiale dell'allocazione non è un campo proprio: si ricava dal primo lotto aggiunto
+		-- e deve restare coerente con gli altri lotti già presenti (nessuna anagrafica/duplicazione
+		-- separata, "un'Allocazione = un Materiale" è solo un vincolo, non uno stato memorizzato).
+		DECLARE @idMaterialeAllocazione CHAR(2) = (
+			SELECT TOP 1 l.IdMateriale
+			FROM dbo.tblEoWLottiAllocazioni la
+			INNER JOIN dbo.tblEoWLotti l ON la.IdLotto = l.Id
+			WHERE la.IdAllocazione = @Id
+		);
+
+		-- Titolarità + dati del lotto
+		DECLARE @idSedeLotto CHAR(16);
+		DECLARE @idMaterialeLotto CHAR(2);
+		SELECT
+			@idSedeLotto = l.IdSede,
+			@idMaterialeLotto = l.IdMateriale
+		FROM
+			dbo.tblEoWLotti l
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON l.IdSede = i.Id
+		WHERE
+			l.Id = @IdLotto
+			AND l.Lock = 0;
+
+		IF @idSedeLotto IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Lotto non trovato o non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF @idSedeLotto <> @idSedeAllocazione
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il lotto selezionato non appartiene alla sede dell''allocazione';
+			GOTO BRANCH_END;
+		END
+
+		IF @idMaterialeAllocazione IS NOT NULL AND @idMaterialeLotto <> @idMaterialeAllocazione
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il materiale del lotto non coincide con il materiale degli altri lotti già presenti nell''allocazione';
+			GOTO BRANCH_END;
+		END
+
+		IF EXISTS (SELECT 1 FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id AND IdLotto = @IdLotto)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Questo lotto è già presente nell''allocazione';
+			GOTO BRANCH_END;
+		END
+
+		-- Tipo effettivo: con lotti già presenti vale quello salvato (non si può cambiare, come in
+		-- uspEoWAllocazioni_upd); senza lotti vale quello scelto nella pagina, che viene memorizzato
+		-- insieme al lotto cosi' i controlli sotto non vengono mai saltati.
+		DECLARE @isLottiPresenti BIT = IIF(EXISTS (SELECT 1 FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id), 1, 0);
+
+		IF @isLottiPresenti = 1 AND @tipo IS NOT NULL AND @IdAllocazioneTipo IS NOT NULL AND @IdAllocazioneTipo <> @tipo
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non è possibile cambiare il tipo di un''allocazione con lotti associati';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @isTipoDaSalvare BIT = 0;
+		-- (anche con lotti presenti se il tipo non era mai stato salvato: allocazioni create prima di
+		-- questo controllo)
+		IF (@isLottiPresenti = 0 OR @tipo IS NULL) AND @IdAllocazioneTipo IS NOT NULL AND @IdAllocazioneTipo <> ISNULL(@tipo, '')
+		BEGIN
+			SET @tipo = @IdAllocazioneTipo;
+			SET @isTipoDaSalvare = 1;
+		END
+
+		IF @tipo IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.tblEoWAllocazioniTipi WHERE Id = @tipo)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare il tipo di allocazione prima di aggiungere i lotti';
+			GOTO BRANCH_END;
+		END
+
+		-- Validazione specifica per tipo (i valori dei tipi sono in tblEoWAllocazioniTipi: U=Lotto
+		-- unico, P=Percentuale, C=Priorità/Capacità)
+		IF @tipo = 'U' AND EXISTS (SELECT 1 FROM dbo.tblEoWLottiAllocazioni WHERE IdAllocazione = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Un''allocazione di tipo Lotto unico può contenere un solo lotto';
+			GOTO BRANCH_END;
+		END
+
+		IF @tipo = 'P' AND (@Valore IS NULL OR @Valore <= 0 OR @Valore > 100)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La percentuale deve essere maggiore di zero e non superiore a 100';
+			GOTO BRANCH_END;
+		END
+
+		IF @tipo = 'P' AND @Valore + ISNULL((
+				SELECT SUM(la.Valore)
+				FROM dbo.tblEoWLottiAllocazioni la
+				WHERE la.IdAllocazione = @Id
+			), 0) > 100
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La somma delle percentuali dei lotti non può superare 100';
+			GOTO BRANCH_END;
+		END
+
+		IF @tipo = 'C' AND (@Valore IS NULL OR @Valore <= 0)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La priorità deve essere un valore maggiore di zero';
+			GOTO BRANCH_END;
+		END
+
+		IF @tipo = 'C' AND EXISTS (
+				SELECT 1
+				FROM dbo.tblEoWLottiAllocazioni la
+				WHERE la.IdAllocazione = @Id AND la.Valore = @Valore
+			)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Questa priorità è già assegnata a un altro lotto dell''allocazione';
+			GOTO BRANCH_END;
+		END
+
+		IF @tipo = 'U'
+			SET @Valore = NULL;
+
+		BEGIN TRANSACTION;
+			IF @isTipoDaSalvare = 1
+				UPDATE dbo.tblEoWAllocazioni
+				SET IdAllocazioneTipo = @tipo
+				WHERE Id = @Id;
+
+			INSERT dbo.tblEoWLottiAllocazioni (IdLotto, IdAllocazione, Valore)
+			VALUES (@IdLotto, @Id, @Valore);
+		COMMIT TRANSACTION;
+
+		SELECT ReturnValue = @returnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspEoWAllocazioni_del_Lotto';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspEoWAllocazioni_del_Lotto
+	@Id CHAR(16) = NULL,
+	@IdLotto CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdLotto = NULLIF(LTRIM(RTRIM(@IdLotto)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdLotto IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdLotto non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EWC',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Titolarità sull'allocazione
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblEoWAllocazioni c
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			WHERE c.Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		BEGIN TRANSACTION;
+			DELETE dbo.tblEoWLottiAllocazioni
+			WHERE
+				IdAllocazione = @Id
+				AND IdLotto = @IdLotto;
+
+			IF @@ROWCOUNT = 0
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Lotto non presente nell''allocazione o già rimosso';
+				GOTO BRANCH_END;
+			END
+		COMMIT TRANSACTION;
+
+		SELECT ReturnValue = @returnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspMagazziniArticoli_ins';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniArticoli_ins
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnId CHAR(16) = NULL;
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'MGC',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- L'Articolo appartiene all'azienda interna corrente della sessione
+		DECLARE @idAzienda CHAR(16);
+		SELECT @idAzienda = IdAzienda
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
+		IF @idAzienda IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare l''azienda';
+			GOTO BRANCH_END;
+		END
+
+		-- uspId_get FUORI dalla transazione
+		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
+
+		BEGIN TRANSACTION;
+			INSERT dbo.tblMagazziniArticoli (Id, IdSede, Lock)
+			VALUES (@returnId, @idAzienda, 2);
+		COMMIT TRANSACTION;
+
+		SELECT Id = @returnId;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+PRINT 'uspMagazziniArticoli_upd';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniArticoli_upd
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@IdUnitaMisura CHAR(2) = NULL,
+	@Nome VARCHAR(50) = NULL,
+	@Codice VARCHAR(20) = NULL,
+	@Descrizione VARCHAR(1000) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdUnitaMisura = NULLIF(LTRIM(RTRIM(@IdUnitaMisura)), '');
+		SET @Nome = dbo.ufnStringhe_get_SenzaSpazi(@Nome, 0, 1);
+		SET @Codice = dbo.ufnStringhe_get_SenzaSpazi(@Codice, 0, 1);
+		SET @Descrizione = dbo.ufnStringhe_get_SenzaSpazi(@Descrizione, 0, 1);
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @Nome IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare il nome';
+			GOTO BRANCH_END;
+		END
+		IF @IdUnitaMisura IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare l''unità di misura';
+			GOTO BRANCH_END;
+		END
+		IF NOT EXISTS (SELECT 1 FROM dbo.tblUnitaMisura WHERE Id = @IdUnitaMisura)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'L''unità di misura indicata non esiste';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'MGC',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record: scope azienda interna corrente della sessione
+		DECLARE @idAzienda CHAR(16);
+		SELECT @idAzienda = c.IdSede
+		FROM
+			dbo.tblMagazziniArticoli c
+			INNER JOIN dbo.tblSessioni e ON c.IdSede = e.IdAzienda
+		WHERE
+			c.Id = @Id
+			AND e.Id = @IdSessione;
+
+		IF @idAzienda IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla che non esista un altro articolo attivo con lo stesso nome nella stessa azienda
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblMagazziniArticoli
+			WHERE
+				Id <> @Id
+				AND IdSede = @idAzienda
+				AND Lock = 0
+				AND Nome = @Nome
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Un altro articolo con lo stesso nome è già presente';
+			GOTO BRANCH_END;
+		END
+
+		-- Unità di misura NR (a numero): quantità intere, non frazionabili. Un articolo già
+		-- movimentato con quantità decimali non può passare a NR
+		IF @IdUnitaMisura = 'NR' AND EXISTS (
+			SELECT 1
+			FROM dbo.tblMagazziniMovimentiRighe
+			WHERE
+				IdArticolo = @Id
+				AND Quantita <> FLOOR(Quantita)
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'L''articolo ha movimenti con quantità decimali: non può essere gestito a numero';
+			GOTO BRANCH_END;
+		END
+
+		-- Il codice è opzionale, ma se indicato deve essere univoco nella stessa azienda
+		-- (stessa regola del nome)
+		IF @Codice IS NOT NULL AND EXISTS (
+			SELECT 1
+			FROM dbo.tblMagazziniArticoli
+			WHERE
+				Id <> @Id
+				AND IdSede = @idAzienda
+				AND Lock = 0
+				AND Codice = @Codice
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Un altro articolo con lo stesso codice è già presente';
+			GOTO BRANCH_END;
+		END
+
+		BEGIN TRANSACTION;
+			UPDATE dbo.tblMagazziniArticoli
+			SET
+				Lock = 0,
+				IdUnitaMisura = @IdUnitaMisura,
+				Nome = @Nome,
+				Codice = @Codice,
+				Descrizione = @Descrizione
+			WHERE
+				Id = @Id
+				AND Lock <= 2;
+
+			IF @@ROWCOUNT = 0
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Articolo non trovato o già eliminato';
+				GOTO BRANCH_END;
+			END
+		COMMIT TRANSACTION;
+
+		-- Log FUORI dalla transazione
+		EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'U';
+
+		SELECT ReturnValue = @returnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspMagazziniArticoli_get';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniArticoli_get
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione: la scheda dell'articolo si legge con la funzione
+		-- Configurazione (MGC, pagina Articoli) oppure con la funzione Magazzino (MAG): i movimenti
+		-- la leggono per sapere se l'articolo è gestito a numero
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'MGC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			EXEC dbo.uspSessione_get_FunzionePermesso
+				@Id = @IdSessione,
+				@IdFunzione = 'MAG',
+				@Permesso = @permesso OUTPUT;
+		END
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record: scope azienda interna corrente della sessione
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblMagazziniArticoli c
+				INNER JOIN dbo.tblSessioni e ON c.IdSede = e.IdAzienda
+			WHERE
+				c.Id = @Id
+				AND e.Id = @IdSessione)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniArticoli WHERE Id = @Id AND Lock <= 2)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Articolo non trovato';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			a.Id,
+			a.IdSede,
+			a.IdUnitaMisura,
+			UnitaMisuraNome = u.Nome,
+			a.Nome,
+			a.Codice,
+			a.Descrizione,
+			a.Lock
+		FROM
+			dbo.tblMagazziniArticoli a
+			LEFT JOIN dbo.tblUnitaMisura u ON a.IdUnitaMisura = u.Id
+		WHERE
+			a.Id = @Id
+			AND a.Lock <= 2;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspMagazziniArticoli_get_List';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniArticoli_get_List
+	@PageNumber INT = 1,
+	@RowsPerPage INT = 50,
+	@IdSessione CHAR(16) = NULL,
+	@Search VARCHAR(50) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		SET @PageNumber = ISNULL(@PageNumber, 1);
+		SET @RowsPerPage = ISNULL(@RowsPerPage, 50);
+		IF @PageNumber < 1 SET @PageNumber = 1;
+		IF @RowsPerPage < 1 SET @RowsPerPage = 50;
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'MGC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Scope: azienda interna corrente della sessione (tblSessioni.IdAzienda)
+		SELECT
+			a.Id,
+			StatoValore = 0,
+			StatoDescrizione = 'OK',
+			a.Nome,
+			a.Codice,
+			UnitaMisuraNome = u.Nome,
+			RowsCount = COUNT(*) OVER ()
+		FROM
+			dbo.tblMagazziniArticoli a
+			INNER JOIN dbo.tblSessioni e ON a.IdSede = e.IdAzienda
+			LEFT JOIN dbo.tblUnitaMisura u ON a.IdUnitaMisura = u.Id
+		WHERE
+			e.Id = @IdSessione
+			AND a.Lock = 0
+			AND (@Search IS NULL OR a.Nome LIKE '%' + @Search + '%' OR a.Codice LIKE '%' + @Search + '%')
+		ORDER BY a.Nome
+		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
+		FETCH NEXT @RowsPerPage ROWS ONLY
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspMagazziniArticoli_del';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniArticoli_del
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@Reset BIT = 0
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'MGC',
+			@Permesso = @permesso OUTPUT;
+
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Idempotenza: mai esistito o già cancellato viene trattato come cancellazione già avvenuta
+		IF NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniArticoli WHERE Id = @Id)
+		BEGIN
+			SET @returnValue = 0;
+		END
+		ELSE
+		BEGIN
+
+		-- Controlla il permesso sul record (titolarità)
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblMagazziniArticoli c
+				INNER JOIN dbo.tblSessioni e ON c.IdSede = e.IdAzienda
+			WHERE
+				c.Id = @Id
+				AND e.Id = @IdSessione)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @lock INT = (SELECT Lock FROM dbo.tblMagazziniArticoli WHERE Id = @Id);
+
+		-- ── CASO 1: articolo attivo (Lock = 0) → soft delete ─────────────────
+		IF @lock = 0
+		BEGIN
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniLotti WHERE IdArticolo = @Id AND Lock <= 2)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un articolo con lotti associati non può essere cancellato';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRighe WHERE IdArticolo = @Id)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un articolo con movimenti associati non può essere cancellato';
+				GOTO BRANCH_END;
+			END
+
+			BEGIN TRANSACTION;
+				UPDATE dbo.tblMagazziniArticoli
+				SET Lock = 4
+				WHERE
+					Id = @Id
+					AND Lock = 0;
+
+				IF @@ROWCOUNT = 0
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Articolo non trovato o già eliminato';
+					GOTO BRANCH_END;
+				END
+
+				IF @Reset = 1
+					DELETE dbo.tblIdCancellati
+					WHERE IdSessione = @IdSessione;
+				ELSE
+					DELETE dbo.tblIdCancellati
+					WHERE Id = @Id;
+
+				INSERT INTO dbo.tblIdCancellati (Id, IdSessione, [Data])
+				VALUES (@Id, @IdSessione, GETDATE());
+			COMMIT TRANSACTION;
+
+			EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'D';
+		END
+
+		-- ── CASO 2: articolo in bozza (Lock = 2) → hard delete ───────────────
+		ELSE IF @lock = 2
+		BEGIN
+			BEGIN TRANSACTION;
+				DELETE dbo.tblMagazziniArticoli
+				WHERE Id = @Id;
+				DELETE dbo.tblIdCancellati
+				WHERE Id = @Id;
+				DELETE dbo.tblIdLog
+				WHERE Id = @Id;
+				DELETE dbo.tblId
+				WHERE Id = @Id;
+			COMMIT TRANSACTION;
+		END
+
+		-- ── CASO 3: Lock in stato non gestito ─────────────────────────────────
+		ELSE
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'L''articolo è già in uno stato non modificabile (Lock = ' + CAST(@lock AS VARCHAR(5)) + ')';
+			GOTO BRANCH_END;
+		END
+
+		END
+
+		SELECT @returnValue AS ReturnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+PRINT 'uspMagazziniLotti_ins';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniLotti_ins
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnId CHAR(16) = NULL;
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'MGC',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = IdSede
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
+		IF @idSede IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare la sede';
+			GOTO BRANCH_END;
+		END
+
+		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
+
+		BEGIN TRANSACTION;
+			INSERT dbo.tblMagazziniLotti (Id, IdSede, Lock)
+			VALUES (@returnId, @idSede, 2);
+		COMMIT TRANSACTION;
+
+		SELECT Id = @returnId;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+PRINT 'uspMagazziniLotti_get';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniLotti_get
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'MGC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblMagazziniLotti c
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			WHERE c.Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniLotti WHERE Id = @Id AND Lock <= 2)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Lotto non trovato';
+			GOTO BRANCH_END;
+		END
+
+		-- Disponibilità = carichi confermati - scarichi confermati (mai memorizzata)
+		SELECT
+			l.Id,
+			l.IdSede,
+			l.IdArticolo,
+			ArticoloNome = art.Nome,
+			l.Nome,
+			l.DataApertura,
+			l.DataChiusura,
+			l.QuantitaMax,
+			QuantitaCaricata = ISNULL(q.Caricato, 0),
+			QuantitaScaricata = ISNULL(q.Scaricato, 0),
+			Disponibilita = ISNULL(q.Caricato, 0) - ISNULL(q.Scaricato, 0),
+			CapacitaResidua = CASE WHEN l.QuantitaMax IS NULL THEN NULL ELSE l.QuantitaMax - ISNULL(q.Caricato, 0) END,
+			Disabilitato = ISNULL(l.Disabilitato, 0),
+			l.Lock
+		FROM
+			dbo.tblMagazziniLotti l
+			LEFT JOIN dbo.tblMagazziniArticoli art ON l.IdArticolo = art.Id
+			-- Caricato: righe di carico confermate del lotto (le righe di scarico Manuale hanno anch'esse IdLotto: filtro sull'operazione); Scaricato: relazioni di scarichi
+			-- confermati su quelle righe di carico (tblMagazziniMovimentiRigheRelazioni)
+			OUTER APPLY (
+				SELECT
+					Caricato = (
+						SELECT SUM(rc.Quantita)
+						FROM
+							dbo.tblMagazziniMovimentiRighe rc
+							INNER JOIN dbo.tblMagazziniMovimenti mc ON rc.IdMovimento = mc.Id
+						WHERE
+							rc.IdLotto = l.Id
+							AND mc.IdOperazione = 'C'
+							AND rc.Lock = 0
+							AND mc.Lock = 0
+					),
+					Scaricato = (
+						SELECT SUM(rel.Quantita)
+						FROM
+							dbo.tblMagazziniMovimentiRigheRelazioni rel
+							INNER JOIN dbo.tblMagazziniMovimentiRighe rc ON rel.Id = rc.Id
+							INNER JOIN dbo.tblMagazziniMovimentiRighe rp ON rel.IdParent = rp.Id
+							INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+						WHERE
+							rc.IdLotto = l.Id
+							AND rp.Lock = 0
+							AND mp.Lock = 0
+					)
+			) q
+		WHERE
+			l.Id = @Id
+			AND l.Lock <= 2;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspMagazziniLotti_get_List';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniLotti_get_List
+	@PageNumber INT = 1,
+	@RowsPerPage INT = 50,
+	@IdSessione CHAR(16) = NULL,
+	@IdArticolo CHAR(16) = NULL,
+	@Aperto BIT = NULL,
+	@Disabilitato BIT = NULL,
+	@Search VARCHAR(50) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdArticolo = NULLIF(LTRIM(RTRIM(@IdArticolo)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		SET @PageNumber = ISNULL(@PageNumber, 1);
+		SET @RowsPerPage = ISNULL(@RowsPerPage, 50);
+		IF @PageNumber < 1 SET @PageNumber = 1;
+		IF @RowsPerPage < 1 SET @RowsPerPage = 50;
+
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'MGC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- La sede è sempre quella del contesto della sessione (tblSessioni.IdSede): il chiamante non
+		-- può indicarne un'altra. Contesto "tutte le sedi" (NULL o sedici zeri) = nessuna riga
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = NULLIF(IdSede, REPLICATE('0', 16))
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
+		SELECT
+			l.Id,
+			StatoValore = 0,
+			StatoDescrizione = 'OK',
+			l.Nome,
+			ArticoloNome = art.Nome,
+			l.DataApertura,
+			l.DataChiusura,
+			l.QuantitaMax,
+			Disponibilita = ISNULL(q.Caricato, 0) - ISNULL(q.Scaricato, 0),
+			Disabilitato = ISNULL(l.Disabilitato, 0),
+			RowsCount = COUNT(*) OVER ()
+		FROM
+			dbo.tblMagazziniLotti l
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON l.IdSede = i.Id
+			LEFT JOIN dbo.tblMagazziniArticoli art ON l.IdArticolo = art.Id
+			-- Caricato: righe di carico confermate del lotto (le righe di scarico Manuale hanno anch'esse IdLotto: filtro sull'operazione); Scaricato: relazioni di scarichi
+			-- confermati su quelle righe di carico (tblMagazziniMovimentiRigheRelazioni)
+			OUTER APPLY (
+				SELECT
+					Caricato = (
+						SELECT SUM(rc.Quantita)
+						FROM
+							dbo.tblMagazziniMovimentiRighe rc
+							INNER JOIN dbo.tblMagazziniMovimenti mc ON rc.IdMovimento = mc.Id
+						WHERE
+							rc.IdLotto = l.Id
+							AND mc.IdOperazione = 'C'
+							AND rc.Lock = 0
+							AND mc.Lock = 0
+					),
+					Scaricato = (
+						SELECT SUM(rel.Quantita)
+						FROM
+							dbo.tblMagazziniMovimentiRigheRelazioni rel
+							INNER JOIN dbo.tblMagazziniMovimentiRighe rc ON rel.Id = rc.Id
+							INNER JOIN dbo.tblMagazziniMovimentiRighe rp ON rel.IdParent = rp.Id
+							INNER JOIN dbo.tblMagazziniMovimenti mp ON rp.IdMovimento = mp.Id
+						WHERE
+							rc.IdLotto = l.Id
+							AND rp.Lock = 0
+							AND mp.Lock = 0
+					)
+			) q
+		WHERE
+			l.Lock = 0
+			AND l.IdSede = @idSede
+			AND (@IdArticolo IS NULL OR l.IdArticolo = @IdArticolo)
+			AND (@Aperto IS NULL OR (@Aperto = 1 AND l.DataChiusura IS NULL) OR (@Aperto = 0 AND l.DataChiusura IS NOT NULL))
+			AND (@Disabilitato IS NULL OR ISNULL(l.Disabilitato, 0) = @Disabilitato)
+			AND (@Search IS NULL OR l.Nome LIKE '%' + @Search + '%')
+		ORDER BY l.Nome
+		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
+		FETCH NEXT @RowsPerPage ROWS ONLY
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'uspMagazziniLotti_del';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniLotti_del
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@Reset BIT = 0
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'MGC',
+			@Permesso = @permesso OUTPUT;
+
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF NOT EXISTS (SELECT 1 FROM dbo.tblMagazziniLotti WHERE Id = @Id)
+		BEGIN
+			SET @returnValue = 0;
+		END
+		ELSE
+		BEGIN
+
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblMagazziniLotti c
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+			WHERE c.Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @lock INT = (SELECT Lock FROM dbo.tblMagazziniLotti WHERE Id = @Id);
+
+		IF @lock = 0
+		BEGIN
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniMovimentiRighe WHERE IdLotto = @Id)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un lotto con movimenti associati non può essere cancellato';
+				GOTO BRANCH_END;
+			END
+
+			BEGIN TRANSACTION;
+				UPDATE dbo.tblMagazziniLotti
+				SET Lock = 4
+				WHERE
+					Id = @Id
+					AND Lock = 0;
+
+				IF @@ROWCOUNT = 0
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Lotto non trovato o già eliminato';
+					GOTO BRANCH_END;
+				END
+
+				IF @Reset = 1
+					DELETE dbo.tblIdCancellati
+					WHERE IdSessione = @IdSessione;
+				ELSE
+					DELETE dbo.tblIdCancellati
+					WHERE Id = @Id;
+
+				INSERT INTO dbo.tblIdCancellati (Id, IdSessione, [Data])
+				VALUES (@Id, @IdSessione, GETDATE());
+			COMMIT TRANSACTION;
+
+			EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'D';
+		END
+		ELSE IF @lock = 2
+		BEGIN
+			BEGIN TRANSACTION;
+				DELETE dbo.tblMagazziniLotti
+				WHERE Id = @Id;
+				DELETE dbo.tblIdCancellati
+				WHERE Id = @Id;
+				DELETE dbo.tblIdLog
+				WHERE Id = @Id;
+				DELETE dbo.tblId
+				WHERE Id = @Id;
+			COMMIT TRANSACTION;
+		END
+		ELSE
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il lotto è già in uno stato non modificabile (Lock = ' + CAST(@lock AS VARCHAR(5)) + ')';
+			GOTO BRANCH_END;
+		END
+
+		END
+
+		SELECT @returnValue AS ReturnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+PRINT 'uspMagazziniLotti_get_ArticoliSelectList';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE dbo.uspMagazziniLotti_get_ArticoliSelectList
+	@IdSede CHAR(16) = NULL,
+	@IdSelected CHAR(16) = NULL,
+	@Search VARCHAR(50) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSede = NULLIF(LTRIM(RTRIM(@IdSede)), '');
+		SET @IdSelected = NULLIF(LTRIM(RTRIM(@IdSelected)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'MGC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Elenco Articoli filtrato sulla stessa Azienda a cui appartiene la Sede indicata
+		-- (Sede stessa se è l'Azienda, oppure la Sede padre se è una sede figlia), non su
+		-- tblSessioni.IdAzienda: questa pagina lavora nel contesto Contesto.Sede, non Azienda.
+		DECLARE @idAzienda CHAR(16);
+		SELECT @idAzienda = CASE WHEN s.IdParent IS NULL THEN s.Id ELSE s.IdParent END
+		FROM
+			dbo.tblSedi s
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON s.Id = i.Id
+		WHERE s.Id = @IdSede;
+
+		IF @idAzienda IS NULL
+		BEGIN
+			SELECT TOP (0) Id = CAST(NULL AS CHAR(16)), [Text] = CAST(NULL AS VARCHAR(120)), Selected = CAST(0 AS BIT);
+			GOTO BRANCH_END;
+		END
+
+		SELECT TOP (50)
+			a.Id,
+			[Text] = a.Nome + ISNULL(' (' + a.Codice + ')', ''),
+			Selected = CAST(IIF(a.Id = @IdSelected, 1, 0) AS BIT)
+		FROM dbo.tblMagazziniArticoli a
+		WHERE
+			a.IdSede = @idAzienda
+			AND a.Lock = 0
+			AND (@Search IS NULL OR a.Nome LIKE '%' + @Search + '%' OR a.Codice LIKE '%' + @Search + '%')
+		ORDER BY a.Nome
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
 END;
 GO

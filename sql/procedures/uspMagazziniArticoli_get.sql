@@ -28,12 +28,21 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Controlla il permesso sulla funzione
+		-- Controlla il permesso sulla funzione: la scheda dell'articolo si legge con la funzione
+		-- Configurazione (MGC, pagina Articoli) oppure con la funzione Magazzino (MAG): i movimenti
+		-- la leggono per sapere se l'articolo è gestito a numero
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
-			@IdFunzione = 'MAG',
+			@IdFunzione = 'MGC',
 			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			EXEC dbo.uspSessione_get_FunzionePermesso
+				@Id = @IdSessione,
+				@IdFunzione = 'MAG',
+				@Permesso = @permesso OUTPUT;
+		END
 		IF 1 > @permesso
 		BEGIN
 			SET @returnValue = -1;

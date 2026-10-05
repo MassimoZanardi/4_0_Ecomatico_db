@@ -33,7 +33,7 @@ BEGIN
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
-			@IdFunzione = 'MAG',
+			@IdFunzione = 'MGC',
 			@Permesso = @permesso OUTPUT;
 		IF 1 > @permesso
 		BEGIN

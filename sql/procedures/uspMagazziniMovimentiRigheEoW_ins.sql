@@ -121,7 +121,7 @@ BEGIN
 		IF dbo.ufnModuli_get_IsAttivoBySessione('EOW', @IdSessione) = 0
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Il modulo Gestione EoW non è attivo sul dominio';
+			SET @returnMessage = 'Il modulo EoW non è attivo sul dominio';
 			GOTO BRANCH_END;
 		END
 

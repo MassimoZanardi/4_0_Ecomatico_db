@@ -35,7 +35,7 @@ BEGIN
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
-			@IdFunzione = 'EOW',
+			@IdFunzione = 'EWC',
 			@Permesso = @permesso OUTPUT;
 		IF 1 > @permesso
 		BEGIN

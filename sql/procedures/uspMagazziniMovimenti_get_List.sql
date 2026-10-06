@@ -70,6 +70,14 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Elenco DDT (Magazzino > DDT): la sede è sempre quella del contesto della sessione
+		-- (tblSessioni.IdSede), il chiamante non può indicarne un'altra. Contesto "tutte le sedi"
+		-- (NULL o sedici zeri) = nessuna riga. L'elenco dei movimenti resta sull'azienda del contesto
+		DECLARE @idSede CHAR(16);
+		SELECT @idSede = NULLIF(IdSede, REPLICATE('0', 16))
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
 		SELECT
 			m.Id,
 			StatoValore = 0,
@@ -96,6 +104,7 @@ BEGIN
 			OUTER APPLY (
 				SELECT TOP (1)
 					dd.Id,
+					dd.IdSede,
 					dd.Numero,
 					dd.NumeroFornitore,
 					dd.Sezionale,
@@ -122,6 +131,7 @@ BEGIN
 			AND (@AllaData IS NULL OR IIF(@DdtEmessi = 1, d.[Data], m.[Data]) <= @AllaData)
 			AND (@ConDdt = 0 OR d.Id IS NOT NULL)
 			AND (@DdtEmessi = 0 OR ISNULL(d.Sezionale, '') <> 'R')
+			AND (@DdtEmessi = 0 OR d.IdSede = @idSede)
 			AND (@DdtNumero IS NULL OR d.Numero = @DdtNumero)
 			AND (@DdtNumeroFornitore IS NULL OR d.NumeroFornitore LIKE '%' + @DdtNumeroFornitore + '%')
 			AND (@DdtMittente IS NULL OR EXISTS (SELECT 1 FROM dbo.tblSedi sm WHERE sm.Id = d.IdMittente AND sm.NomeCompleto + ISNULL(' ' + sm.IndirizzoCompleto, '') LIKE '%' + @DdtMittente + '%'))

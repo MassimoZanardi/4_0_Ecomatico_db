@@ -15,6 +15,7 @@ CREATE OR ALTER FUNCTION [dbo].[ufnRifiutiRegistrazioni_get_IsQuantitaSuperiore]
 	@NoParametri BIT = 0
 )
 RETURNS INT
+WITH SCHEMABINDING
 AS
 BEGIN
 	-- FIX: Quantita e IdUnitaMisura spostate da tblRifiutiRegistrazioni (r/p2) a tblRifiutiMovimenti (m/mp2)
@@ -89,3 +90,4 @@ BEGIN
 		ELSE 0
 	END;
 END;
+GO

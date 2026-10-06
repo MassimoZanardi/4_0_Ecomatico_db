@@ -8,7 +8,6 @@ CREATE TABLE [dbo].[tblRifiutiMovimenti](
 	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdRegistro] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdOperazione] [char](1) COLLATE Latin1_General_CI_AS NULL,
-	[IdModello] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdEer] [char](6) COLLATE Latin1_General_CI_AS NULL,
 	[IdStatoFisico] [char](1) COLLATE Latin1_General_CI_AS NULL,
 	[IdAttivita] [char](2) COLLATE Latin1_General_CI_AS NULL,
@@ -29,6 +28,8 @@ CREATE TABLE [dbo].[tblRifiutiMovimenti](
 	[RentriFormularioDataPresaVisione] [smalldatetime] NULL,
 	[RentriFormularioDataConservazione] [smalldatetime] NULL,
 	[RentriFormularioInviiConservazione] [int] NULL,
+	[RentriFormularioCartaceo] [bit] NULL,
+	[IdModello] [char](16) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblRifiutiMovimenti] PRIMARY KEY CLUSTERED
 (
 	[Id] ASC
@@ -45,7 +46,7 @@ CREATE NONCLUSTERED INDEX [IX_RifiutiMovimenti_IdRegistro] ON [dbo].[tblRifiutiM
 (
 	[IdRegistro] ASC
 )
-INCLUDE([IdOperazione],[IdEer],[IdStatoFisico],[IdUnitaMisura],[Quantita],[IdSedeDestinatario],[IdSedeIntermediario1],[FormularioNumero],[IdAttivita],[IdSedeProduttoreDetentore],[IdSedeTrasportatore1],[IdProvenienza]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+INCLUDE([IdOperazione],[IdEer],[IdStatoFisico],[IdUnitaMisura],[Quantita],[IdSedeDestinatario],[IdSedeIntermediario1],[FormularioNumero],[IdAttivita],[IdSedeProduttoreDetentore],[IdSedeTrasportatore1],[IdProvenienza],[RentriFormularioStato],[RentriFormularioDataCopia],[RentriFormularioDataPresaVisione],[RentriFormularioDataTrasmissione],[RentriFormularioDataConservazione],[RentriFormularioInviiConservazione]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 
 ALTER TABLE [dbo].[tblRifiutiMovimenti]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiMovimenti_tblRifiutiAttivitaRecuperoSmaltimento] FOREIGN KEY([IdAttivita])

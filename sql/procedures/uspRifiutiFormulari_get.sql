@@ -100,6 +100,9 @@ BEGIN
 			FormularioNumero = ISNULL(m.FormularioNumero, ''),
 			FormularioDataEmissione = ISNULL(f.DataEmissione, GETDATE()),
 			RentriFormularioStato = m.RentriFormularioStato,
+			-- Numero vidimato su RENTRI con "RENTRI - Crea formulario cartaceo": blocca il numero e non
+			-- fa più proporre la creazione del formulario (cartaceo o digitale)
+			RentriFormularioCartaceo = ISNULL(m.RentriFormularioCartaceo, 0),
 			IdAdr = ISNULL(f.IdAdr, '00'),
 			NumeroOnu = ISNULL(f.NumeroOnu, ''),
 			TrasportoAdr = ISNULL(f.TrasportoAdr, 0),
@@ -192,3 +195,4 @@ BEGIN
 	END
 
 END;
+GO

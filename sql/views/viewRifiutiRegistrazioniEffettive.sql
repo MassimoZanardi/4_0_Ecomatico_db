@@ -19,6 +19,7 @@ GO
 -- relazioni restano (stampa/payload RENTRI) ma non contano piu' ne' come carico ne' come scarico. Un
 -- annullamento non operativo lascia la registrazione pienamente valida per Ecomatico (IsAnnullata = 0).
 CREATE OR ALTER VIEW [dbo].[viewRifiutiRegistrazioniEffettive]
+WITH SCHEMABINDING
 AS
 SELECT
 	r.Id,

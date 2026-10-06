@@ -95,6 +95,7 @@ BEGIN
                 r.RentriIdentificativo,
                 r.RentriData,
                 RentriFormularioStato   = m.RentriFormularioStato,
+                RentriFormularioCartaceo = ISNULL(m.RentriFormularioCartaceo, 0),
                 RowsCount               = COUNT(*) OVER ()
             FROM
                 dbo.tblRifiutiFormulari                      f
@@ -189,7 +190,7 @@ BEGIN
             tbl.ProduttoreDetentoreSede, tbl.Trasportatore1Sede,
             tbl.DestinatarioSede, tbl.Intermediario1Sede,
             tbl.Etichette,
-            tbl.IsRentriCollegato, tbl.RentriIdentificativo, tbl.RentriData, tbl.RentriFormularioStato,
+            tbl.IsRentriCollegato, tbl.RentriIdentificativo, tbl.RentriData, tbl.RentriFormularioStato, tbl.RentriFormularioCartaceo,
             tbl.RowsCount
         FROM tbl
         ORDER BY tbl.FormularioDataEmissione DESC, tbl.FormularioNumero DESC

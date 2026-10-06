@@ -104,7 +104,8 @@ BEGIN
                 IsAnnullamento           = CAST(ISNULL(rett.Annullata, 0) AS BIT),
                 RettificaRegistrazioneNumero = ro.Numero,
                 RettificaRegistrazioneData   = ro.Data,
-                RentriFormularioStato    = m.RentriFormularioStato
+                RentriFormularioStato    = m.RentriFormularioStato,
+                RentriFormularioCartaceo = ISNULL(m.RentriFormularioCartaceo, 0)
             FROM
                 dbo.tblRifiutiRegistrazioni                  r
                 INNER JOIN dbo.tblRifiutiMovimenti           m  ON r.IdMovimento               = m.Id
@@ -220,7 +221,7 @@ BEGIN
             tbl.Etichette,
             tbl.IsRentriCollegato, tbl.RentriIdentificativo, tbl.RentriData,
             tbl.IsRettifica, tbl.IsAnnullamento, tbl.RettificaRegistrazioneNumero, tbl.RettificaRegistrazioneData,
-            tbl.RentriFormularioStato,
+            tbl.RentriFormularioStato, tbl.RentriFormularioCartaceo,
             RowsCount = COUNT(*) OVER ()
         FROM tbl
         ORDER BY tbl.RegistrazioneData DESC, tbl.RegistrazioneNumero DESC

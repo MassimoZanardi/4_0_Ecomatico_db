@@ -150,6 +150,7 @@ BEGIN
 		DECLARE @rentriIdentificativo VARCHAR(20);
 		DECLARE @rentriData DATETIME2(0);
 		DECLARE @formularioRentriStato VARCHAR(40);
+		DECLARE @rentriFormularioCartaceo BIT;
 
 		-- Recupero dati formulario dalle tabelle base
 		SELECT
@@ -164,6 +165,7 @@ BEGIN
 			@rentriIdentificativo = r.RentriIdentificativo,
 			@rentriData = r.RentriData,
 			@formularioRentriStato = m.RentriFormularioStato,
+			@rentriFormularioCartaceo = ISNULL(m.RentriFormularioCartaceo, 0),
 			@nessunaRegistrazioneAssociata = CASE
 				WHEN EXISTS(
 					SELECT 1
@@ -782,7 +784,8 @@ BEGIN
 				-- non puo' piu' essere modificato dall'utente - mantiene il valore gia' a DB
 				-- indipendentemente da @FormularioNumero (non blocca l'intero update, solo questo campo:
 				-- gli altri dati restano modificabili e sincronizzabili su RENTRI via "Modifica").
-				FormularioNumero = CASE WHEN @formularioRentriStato IS NOT NULL THEN m.FormularioNumero ELSE @FormularioNumero END,
+				-- Lo stesso vale per il numero vidimato con "RENTRI - Crea formulario cartaceo".
+				FormularioNumero = CASE WHEN @formularioRentriStato IS NOT NULL OR @rentriFormularioCartaceo = 1 THEN m.FormularioNumero ELSE @FormularioNumero END,
 				DataInizioTrasporto = @DataInizioTrasporto,
 				Note = @UtenteNote
 			FROM
@@ -825,3 +828,4 @@ BEGIN
 
 	SELECT ReturnValue = @returnValue;
 END;
+GO

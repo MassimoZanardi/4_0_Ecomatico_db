@@ -4,7 +4,8 @@ Deploy produzione 2026-10-06 - Modulo Anagrafica estesa (clienti e fornitori) e 
 Rieseguibile. Da eseguire con sqlcmd -I (QUOTED_IDENTIFIER ON) e -f 65001, oppure da SSMS.
 
 0. Tabelle di base, create solo se mancano: tblPagamentiModalita, tblPagamentiRate, tblPagamentiRateInizi,
-   tblPagamentiValute, tblAliquoteIvaTipi, tblAliquoteIvaNatura, tblBancheCasse, tblAliquoteIva; relativi
+   tblPagamentiValute, tblAliquoteIvaTipi, tblAliquoteIvaNatura, tblBancheCasse, tblAliquoteIva e le tabelle di
+   codici delle fatture tblFattureRaggruppamenti, tblFattureStati, tblFattureTipi, tblFattureTipiDocumenti; relativi
    dati di base (inseriti solo se mancano); registrazione del modulo ANX "Anagrafica estesa" con le funzioni
    ANC e ANF, le pagine Clienti e Fornitori e le voci di menu sotto Anagrafica.
 1. tblClientiFornitori nella struttura definitiva: Id proprio della scheda, IdAziendaInterna, IdSede = soggetto,
@@ -33,7 +34,8 @@ PRINT 'Tabelle di base, dati di base e registrazione modulo ANX';
 GO
 SET NOCOUNT ON;
 
--- Modulo Anagrafica estesa / Fatturazione: tabelle di base (create solo se mancano), dati di base e
+-- Modulo Anagrafica estesa / Fatturazione: tabelle di base (create solo se mancano, comprese le tabelle di
+-- codici delle fatture tblFattureRaggruppamenti, tblFattureStati, tblFattureTipi, tblFattureTipiDocumenti), dati di base e
 -- registrazione del modulo ANX. tblClientiFornitori è creata da anagrafica_estesa_struttura.sql.
 -- Rieseguibile.
 GO
@@ -219,6 +221,79 @@ GO
 SET NOEXEC OFF;
 GO
 
+IF OBJECT_ID('dbo.tblFattureRaggruppamenti') IS NOT NULL SET NOEXEC ON;
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[tblFattureRaggruppamenti](
+	[Id] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Nome] [varchar](100) COLLATE Latin1_General_CI_AS NULL,
+ CONSTRAINT [PK_tblFattureRaggruppamenti] PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+SET NOEXEC OFF;
+GO
+
+IF OBJECT_ID('dbo.tblFattureStati') IS NOT NULL SET NOEXEC ON;
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[tblFattureStati](
+	[Id] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+ CONSTRAINT [PK_tblFattureStati] PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+SET NOEXEC OFF;
+GO
+
+IF OBJECT_ID('dbo.tblFattureTipi') IS NOT NULL SET NOEXEC ON;
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[tblFattureTipi](
+	[Id] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+ CONSTRAINT [PK_tblFattureTipi] PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+SET NOEXEC OFF;
+GO
+
+IF OBJECT_ID('dbo.tblFattureTipiDocumenti') IS NOT NULL SET NOEXEC ON;
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[tblFattureTipiDocumenti](
+	[Id] [char](4) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdTipo] [char](1) COLLATE Latin1_General_CI_AS NULL,
+	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+ CONSTRAINT [PK_tblFattureTipiDocumenti] PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+SET NOEXEC OFF;
+GO
+
 -- Dati di base
 IF NOT EXISTS (SELECT 1 FROM dbo.tblPagamentiModalita WHERE Id = 'MP01') INSERT INTO dbo.tblPagamentiModalita (Id, Nome) VALUES ('MP01', 'Contanti');
 IF NOT EXISTS (SELECT 1 FROM dbo.tblPagamentiModalita WHERE Id = 'MP02') INSERT INTO dbo.tblPagamentiModalita (Id, Nome) VALUES ('MP02', 'Assegno');
@@ -292,6 +367,22 @@ IF NOT EXISTS (SELECT 1 FROM dbo.tblAliquoteIvaNatura WHERE Id = 'N6.7') INSERT 
 IF NOT EXISTS (SELECT 1 FROM dbo.tblAliquoteIvaNatura WHERE Id = 'N6.8') INSERT INTO dbo.tblAliquoteIvaNatura (Id, Nome) VALUES ('N6.8', 'Inversione contabile – operazioni settore energetico');
 IF NOT EXISTS (SELECT 1 FROM dbo.tblAliquoteIvaNatura WHERE Id = 'N6.9') INSERT INTO dbo.tblAliquoteIvaNatura (Id, Nome) VALUES ('N6.9', 'Inversione contabile – altri casi');
 IF NOT EXISTS (SELECT 1 FROM dbo.tblAliquoteIvaNatura WHERE Id = 'N7') INSERT INTO dbo.tblAliquoteIvaNatura (Id, Nome) VALUES ('N7', 'IVA assolta in altro stato UE');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureRaggruppamenti WHERE Id = 'C') INSERT INTO dbo.tblFattureRaggruppamenti (Id, Nome) VALUES ('C', 'Cliente (una fattura per ciascun cliente)');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureRaggruppamenti WHERE Id = 'S') INSERT INTO dbo.tblFattureRaggruppamenti (Id, Nome) VALUES ('S', 'Sede (una fattura per ciascuna sede del cliente)');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureRaggruppamenti WHERE Id = 'T') INSERT INTO dbo.tblFattureRaggruppamenti (Id, Nome) VALUES ('T', 'Contratto (una fattura per ciascun contratto del cliente)');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureStati WHERE Id = 'G') INSERT INTO dbo.tblFattureStati (Id, Nome) VALUES ('G', 'Generata');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureStati WHERE Id = 'S') INSERT INTO dbo.tblFattureStati (Id, Nome) VALUES ('S', 'Spedita');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureTipi WHERE Id = 'F') INSERT INTO dbo.tblFattureTipi (Id, Nome) VALUES ('F', 'Fattura');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureTipi WHERE Id = 'N') INSERT INTO dbo.tblFattureTipi (Id, Nome) VALUES ('N', 'Nota accredito');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureTipi WHERE Id = 'P') INSERT INTO dbo.tblFattureTipi (Id, Nome) VALUES ('P', 'Pre-fattura');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureTipiDocumenti WHERE Id = 'TD00') INSERT INTO dbo.tblFattureTipiDocumenti (Id, IdTipo, Nome) VALUES ('TD00', 'P', 'Pre-fattura');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureTipiDocumenti WHERE Id = 'TD01') INSERT INTO dbo.tblFattureTipiDocumenti (Id, IdTipo, Nome) VALUES ('TD01', 'F', 'Fattura');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureTipiDocumenti WHERE Id = 'TD02') INSERT INTO dbo.tblFattureTipiDocumenti (Id, IdTipo, Nome) VALUES ('TD02', 'F', 'Fattura acconto/anticipo');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureTipiDocumenti WHERE Id = 'TD04') INSERT INTO dbo.tblFattureTipiDocumenti (Id, IdTipo, Nome) VALUES ('TD04', 'N', 'Nota accredito');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureTipiDocumenti WHERE Id = 'TD17') INSERT INTO dbo.tblFattureTipiDocumenti (Id, IdTipo, Nome) VALUES ('TD17', 'F', 'Autofattura per acquisto di servizi');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureTipiDocumenti WHERE Id = 'TD18') INSERT INTO dbo.tblFattureTipiDocumenti (Id, IdTipo, Nome) VALUES ('TD18', 'F', 'Autofattura per acquisto beni');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureTipiDocumenti WHERE Id = 'TD19') INSERT INTO dbo.tblFattureTipiDocumenti (Id, IdTipo, Nome) VALUES ('TD19', 'F', 'Autofattura per acquisto beni art. 17');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureTipiDocumenti WHERE Id = 'TD24') INSERT INTO dbo.tblFattureTipiDocumenti (Id, IdTipo, Nome) VALUES ('TD24', 'F', 'Fattura differita');
 GO
 
 -- Modulo Anagrafica estesa (ANX): funzioni ANC (clienti) e ANF (fornitori), pagine e voci di menu sotto

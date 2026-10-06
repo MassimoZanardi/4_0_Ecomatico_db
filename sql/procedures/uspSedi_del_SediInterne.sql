@@ -192,6 +192,29 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Moduli Anagrafica estesa e Fatturazione: schede clienti/fornitori, banche e casse,
+			-- aliquote IVA proprie appartengono all'azienda interna
+			IF EXISTS (SELECT 1 FROM dbo.tblClientiFornitori WHERE IdAziendaInterna = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con clienti o fornitori associati non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (SELECT 1 FROM dbo.tblBancheCasse WHERE IdSede = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con banche o casse associate non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (SELECT 1 FROM dbo.tblAliquoteIva WHERE IdSede = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con aliquote IVA associate non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
 			-- Gestione EoW: stesso controllo del magazzino tradizionale, su lotti/allocazioni EoW
 			-- proprie della sede (IdSede è sempre la Sede Interna, non quella esterna condivisa)
 			IF EXISTS (SELECT 1
@@ -484,6 +507,17 @@ BEGIN
 				WHERE IdSede = @Id;
 
 				DELETE dbo.tblMagazziniArticoli
+				WHERE IdSede = @Id;
+
+				-- Anagrafica estesa e Fatturazione: in bozza l'azienda non dovrebbe averne, mantenuto
+				-- per difesa dalle FK (prima le schede, che referenziano banche/casse e aliquote)
+				DELETE dbo.tblClientiFornitori
+				WHERE IdAziendaInterna = @Id;
+
+				DELETE dbo.tblBancheCasse
+				WHERE IdSede = @Id;
+
+				DELETE dbo.tblAliquoteIva
 				WHERE IdSede = @Id;
 
 				-- Gestione EoW: lotti/allocazioni EoW di proprietà esclusiva della sede (IdSede sempre

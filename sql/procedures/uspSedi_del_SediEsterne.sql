@@ -172,6 +172,14 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Modulo Anagrafica estesa: un soggetto con una scheda cliente o fornitore attiva
+			IF EXISTS (SELECT 1 FROM dbo.tblClientiFornitori WHERE IdSede = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede presente tra i clienti o i fornitori non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblSedi
 				SET Lock = 4

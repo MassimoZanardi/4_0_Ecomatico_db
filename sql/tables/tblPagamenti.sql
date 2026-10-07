@@ -4,15 +4,15 @@ SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[tblPagamenti](
 	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdBancaCassa] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdModalita] [char](4) COLLATE Latin1_General_CI_AS NULL,
+	[Tipo] [char](1) COLLATE Latin1_General_CI_AS NULL,
 	[Causale] [varchar](100) COLLATE Latin1_General_CI_AS NULL,
 	[DataRegistrazione] [date] NULL,
 	[DataContabile] [date] NULL,
 	[Importo] [decimal](18, 2) NULL,
 	[Lock] [tinyint] NULL,
-	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NULL,
-	[Tipo] [char](1) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblPagamenti] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

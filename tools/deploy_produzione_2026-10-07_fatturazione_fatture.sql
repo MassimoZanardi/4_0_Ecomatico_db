@@ -302,8 +302,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 -- Totali di una fattura, calcolati dalle righe e mai memorizzati. Importo della riga = prezzo unitario:
 -- imponibile della riga = Quantita x Importo, arrotondato al centesimo. L'IVA si calcola sull'imponibile
--- complessivo di ciascuna aliquota (come nel riepilogo della fattura elettronica), la ritenuta d'acconto
--- riga per riga. Totale = imponibile + IVA + bollo. Netto a pagare = totale - ritenuta e, con lo split
+-- complessivo di ciascuna aliquota (come nel riepilogo della fattura elettronica), la ritenuta d'acconto allo
+-- stesso modo sull'imponibile complessivo di ciascuna percentuale: l'arrotondamento al centesimo si fa una
+-- volta sola, non riga per riga. Totale = imponibile + IVA + bollo. Netto a pagare = totale - ritenuta e, con lo split
 -- payment, - IVA (la versa il cliente all'erario).
 CREATE OR ALTER FUNCTION dbo.ufnFatture_get_Totali (@IdFattura CHAR(16))
 RETURNS TABLE
@@ -332,7 +333,7 @@ RETURN
 		SELECT
 			Imponibile = ISNULL((SELECT SUM(Imponibile) FROM aliquote), 0),
 			Iva = ISNULL((SELECT SUM(Iva) FROM aliquote), 0),
-			Ritenuta = ISNULL((SELECT SUM(CAST(ROUND(Imponibile * RitenutaAcconto / 100.0, 2) AS DECIMAL(18, 2))) FROM righe), 0)
+			Ritenuta = ISNULL((SELECT SUM(x.Ritenuta) FROM (SELECT Ritenuta = CAST(ROUND(SUM(Imponibile) * RitenutaAcconto / 100.0, 2) AS DECIMAL(18, 2)) FROM righe GROUP BY RitenutaAcconto) x), 0)
 	)
 	SELECT
 		Imponibile = CAST(t.Imponibile AS DECIMAL(18, 2)),
@@ -1108,6 +1109,121 @@ BEGIN
 END;
 GO
 
+PRINT 'uspFatture_get_ProssimoNumero';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Numero che la fattura riceverebbe al salvataggio con il tipo di documento, il sezionale e le date
+-- scelti nella scheda (anche se non ancora salvati). È solo un suggerimento: il numero definitivo lo
+-- assegna uspFatture_upd, con la stessa regola. 0 = nessun numero (pre-fattura).
+CREATE OR ALTER PROCEDURE dbo.uspFatture_get_ProssimoNumero
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@IdTipo CHAR(4) = NULL,
+	@Sezionale CHAR(1) = NULL,
+	@DataEmissione DATE = NULL,
+	@DataRegistrazione DATE = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdTipo = UPPER(NULLIF(NULLIF(LTRIM(RTRIM(@IdTipo)), ''), REPLICATE('0', 4)));
+		SET @Sezionale = NULLIF(UPPER(LTRIM(RTRIM(@Sezionale))), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'FTT',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record: scope azienda interna corrente della sessione
+		DECLARE @idAzienda CHAR(16);
+		DECLARE @tipo CHAR(1);
+		SELECT
+			@idAzienda = f.IdSede,
+			@tipo = f.Tipo
+		FROM
+			dbo.tblFatture f
+			INNER JOIN dbo.tblSessioni e ON f.IdSede = e.IdAzienda
+		WHERE
+			f.Id = @Id
+			AND e.Id = @IdSessione
+			AND f.Lock <= 2;
+
+		IF @idAzienda IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari, o la fattura non esiste';
+			GOTO BRANCH_END;
+		END
+
+		-- Stessa regola di uspFatture_upd: progressivo per azienda, tipo (clienti / fornitori), anno e
+		-- sezionale tra le fatture attive. L'anno è quello della data di emissione per le fatture cliente,
+		-- della data di registrazione per le fatture fornitore; senza data vale oggi
+		DECLARE @dataNumero DATE = ISNULL(IIF(@tipo = 'C', @DataEmissione, @DataRegistrazione), CAST(GETDATE() AS DATE));
+		DECLARE @annoInizio DATE = DATEFROMPARTS(YEAR(@dataNumero), 1, 1);
+		DECLARE @annoFine DATE = DATEADD(YEAR, 1, @annoInizio);
+		DECLARE @numero INT = 0;
+
+		-- La pre-fattura non ha numero
+		IF ISNULL(@IdTipo, '') <> 'TD00'
+		BEGIN
+			SELECT @numero = ISNULL(MAX(Numero), 0) + 1
+			FROM dbo.tblFatture
+			WHERE
+				IdSede = @idAzienda
+				AND Tipo = @tipo
+				AND Lock = 0
+				AND Id <> @Id
+				AND ISNULL(Sezionale, '') = ISNULL(@Sezionale, '')
+				AND IIF(@tipo = 'C', DataEmissione, DataRegistrazione) >= @annoInizio
+				AND IIF(@tipo = 'C', DataEmissione, DataRegistrazione) < @annoFine;
+		END
+
+		SELECT Numero = @numero;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
 PRINT 'uspFatture_get_Riferimenti_SelectList';
 GO
 SET ANSI_NULLS ON
@@ -1670,11 +1786,11 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Sezionale: una lettera o una cifra, facoltativo
-		IF @Sezionale IS NOT NULL AND (LEN(@Sezionale) > 1 OR @Sezionale NOT LIKE '[A-Z0-9]')
+		-- Sezionale: una lettera, facoltativo (nella scheda si sceglie da una select)
+		IF @Sezionale IS NOT NULL AND (LEN(@Sezionale) > 1 OR @Sezionale NOT LIKE '[A-Z]')
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Il sezionale è una sola lettera o cifra';
+			SET @returnMessage = 'Il sezionale è una sola lettera';
 			GOTO BRANCH_END;
 		END
 		IF @Numero < 0

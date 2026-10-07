@@ -254,11 +254,11 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Sezionale: una lettera o una cifra, facoltativo
-		IF @Sezionale IS NOT NULL AND (LEN(@Sezionale) > 1 OR @Sezionale NOT LIKE '[A-Z0-9]')
+		-- Sezionale: una lettera, facoltativo (nella scheda si sceglie da una select)
+		IF @Sezionale IS NOT NULL AND (LEN(@Sezionale) > 1 OR @Sezionale NOT LIKE '[A-Z]')
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Il sezionale è una sola lettera o cifra';
+			SET @returnMessage = 'Il sezionale è una sola lettera';
 			GOTO BRANCH_END;
 		END
 		IF @Numero < 0

@@ -4,8 +4,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 -- Totali di una fattura, calcolati dalle righe e mai memorizzati. Importo della riga = prezzo unitario:
 -- imponibile della riga = Quantita x Importo, arrotondato al centesimo. L'IVA si calcola sull'imponibile
--- complessivo di ciascuna aliquota (come nel riepilogo della fattura elettronica), la ritenuta d'acconto
--- riga per riga. Totale = imponibile + IVA + bollo. Netto a pagare = totale - ritenuta e, con lo split
+-- complessivo di ciascuna aliquota (come nel riepilogo della fattura elettronica), la ritenuta d'acconto allo
+-- stesso modo sull'imponibile complessivo di ciascuna percentuale: l'arrotondamento al centesimo si fa una
+-- volta sola, non riga per riga. Totale = imponibile + IVA + bollo. Netto a pagare = totale - ritenuta e, con lo split
 -- payment, - IVA (la versa il cliente all'erario).
 CREATE OR ALTER FUNCTION dbo.ufnFatture_get_Totali (@IdFattura CHAR(16))
 RETURNS TABLE
@@ -34,7 +35,7 @@ RETURN
 		SELECT
 			Imponibile = ISNULL((SELECT SUM(Imponibile) FROM aliquote), 0),
 			Iva = ISNULL((SELECT SUM(Iva) FROM aliquote), 0),
-			Ritenuta = ISNULL((SELECT SUM(CAST(ROUND(Imponibile * RitenutaAcconto / 100.0, 2) AS DECIMAL(18, 2))) FROM righe), 0)
+			Ritenuta = ISNULL((SELECT SUM(x.Ritenuta) FROM (SELECT Ritenuta = CAST(ROUND(SUM(Imponibile) * RitenutaAcconto / 100.0, 2) AS DECIMAL(18, 2)) FROM righe GROUP BY RitenutaAcconto) x), 0)
 	)
 	SELECT
 		Imponibile = CAST(t.Imponibile AS DECIMAL(18, 2)),

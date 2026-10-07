@@ -196,6 +196,30 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Modulo Anagrafica estesa: un soggetto con una scheda amministratore attiva, o
+			-- amministrato da un amministratore attivo
+			IF EXISTS (SELECT 1 FROM dbo.tblAmministratori WHERE IdSede = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede presente tra gli amministratori non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblAmministratoriSedi x
+					INNER JOIN dbo.tblAmministratori a ON x.Id = a.Id
+				WHERE
+					x.IdSede = @Id
+					AND a.Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede amministrata da un amministratore non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblSedi
 				SET Lock = 4
@@ -298,6 +322,15 @@ BEGIN
 				-- Anagrafica estesa: schede cliente/fornitore del soggetto (una bozza di norma non
 				-- ne ha), per difesa dalla FK NO_ACTION
 				DELETE dbo.tblClientiFornitori
+				WHERE IdSede = @Id;
+
+				-- Anagrafica estesa: schede amministratore del soggetto con i loro amministrati, e
+				-- il soggetto stesso tra gli amministrati di altre schede (stessa difesa dalla FK)
+				DELETE dbo.tblAmministratoriSedi
+				WHERE
+					IdSede = @Id
+					OR Id IN (SELECT Id FROM dbo.tblAmministratori WHERE IdSede = @Id);
+				DELETE dbo.tblAmministratori
 				WHERE IdSede = @Id;
 
 				-- Tabelle 1:1 sulla sede (FK NO_ACTION): una bozza di norma non ne ha

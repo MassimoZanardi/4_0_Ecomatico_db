@@ -201,6 +201,13 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			IF EXISTS (SELECT 1 FROM dbo.tblAmministratori WHERE IdAziendaInterna = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con amministratori associati non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
 			IF EXISTS (SELECT 1 FROM dbo.tblBancheCasse WHERE IdSede = @Id AND Lock = 0)
 			BEGIN
 				SET @returnValue = -1;
@@ -580,6 +587,11 @@ BEGIN
 				-- Anagrafica estesa e Fatturazione: in bozza l'azienda non dovrebbe averne, mantenuto
 				-- per difesa dalle FK (prima le schede, che referenziano banche/casse e aliquote)
 				DELETE dbo.tblClientiFornitori
+				WHERE IdAziendaInterna = @Id;
+
+				DELETE dbo.tblAmministratoriSedi
+				WHERE Id IN (SELECT Id FROM dbo.tblAmministratori WHERE IdAziendaInterna = @Id);
+				DELETE dbo.tblAmministratori
 				WHERE IdAziendaInterna = @Id;
 
 				DELETE dbo.tblBancheCasse

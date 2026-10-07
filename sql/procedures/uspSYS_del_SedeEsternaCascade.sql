@@ -78,6 +78,7 @@ BEGIN
 
         -- Anagrafica estesa: schede cliente/fornitore sul soggetto
         SELECT Id INTO #ClientiFornitori FROM dbo.tblClientiFornitori WHERE IdSede IN (SELECT Id FROM #Sedi);
+        SELECT Id INTO #Amministratori FROM dbo.tblAmministratori WHERE IdSede IN (SELECT Id FROM #Sedi);
 
         -- tblSedi/tblPersone/tblOggetti sono sottotipi a chiave condivisa di tblOsepe (stesso Id)
         SELECT Id INTO #OsepeIds FROM (
@@ -270,6 +271,12 @@ BEGIN
             -- Anagrafica estesa: schede cliente/fornitore sul soggetto
             DELETE FROM dbo.tblClientiFornitori WHERE Id IN (SELECT Id FROM #ClientiFornitori);
 
+            -- Anagrafica estesa: schede amministratore del soggetto con i loro amministrati, e il
+            -- soggetto tolto dagli amministrati delle altre schede
+            DELETE FROM dbo.tblAmministratoriSedi
+            WHERE Id IN (SELECT Id FROM #Amministratori) OR IdSede IN (SELECT Id FROM #Sedi);
+            DELETE FROM dbo.tblAmministratori WHERE Id IN (SELECT Id FROM #Amministratori);
+
             -- Giunzioni a chiave composita verso risorse condivise (tblAree non toccata)
             DELETE asi FROM dbo.tblAreeSediInterne asi INNER JOIN #AreeSediInterne t ON t.Id = asi.Id AND t.IdSede  = asi.IdSede;
             DELETE ao  FROM dbo.tblAreeOsepe       ao  INNER JOIN #AreeOsepe       t ON t.Id = ao.Id  AND t.IdOsepe = ao.IdOsepe;
@@ -302,6 +309,7 @@ BEGIN
                 UNION SELECT Id FROM #Etichette
                 UNION SELECT Id FROM #Eventi
                 UNION SELECT Id FROM #ClientiFornitori
+                UNION SELECT Id FROM #Amministratori
                 UNION SELECT Id FROM #RifiutiAutorizzazioni
                 UNION SELECT Id FROM #RifiutiFormulari
                 UNION SELECT Id FROM #RifiutiModelli

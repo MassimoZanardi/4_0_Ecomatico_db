@@ -1,11 +1,16 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspSedi_get_AziendeEsterne_List]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspSedi_get_AziendeEsterne_List]
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
 	@IdSessione CHAR(16) = NULL,
 	@Nome VARCHAR(50) = NULL,
 	@Indirizzo VARCHAR(50) = NULL,
 	@CodiceFiscale VARCHAR(50) = NULL,
-	@Note VARCHAR(50) = NULL
+	@Note VARCHAR(50) = NULL,
+	@Amministratore VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -40,6 +45,7 @@ BEGIN
 		SET @Indirizzo = dbo.ufnStringhe_get_SenzaSpazi(@Indirizzo, 0, 1);
 		SET @CodiceFiscale = dbo.ufnStringhe_get_SenzaSpazi(@CodiceFiscale, 0, 1);
 		SET @Note = dbo.ufnStringhe_get_SenzaSpazi(@Note, 0, 1);
+		SET @Amministratore = dbo.ufnStringhe_get_SenzaSpazi(@Amministratore, 0, 1);
 
 		DECLARE @Offset INT = (@PageNumber - 1) * @RowsPerPage;
 
@@ -132,6 +138,23 @@ BEGIN
 				@Note IS NULL
 				OR tbl.Note LIKE '%' + @Note + '%'
 				)
+			-- Amministratore (modulo Anagrafica estesa): solo i soggetti amministrati da un
+			-- amministratore attivo il cui nome contiene il testo cercato
+			AND
+				(
+				@Amministratore IS NULL
+				OR EXISTS (
+					SELECT 1
+					FROM
+						dbo.tblAmministratoriSedi x
+						INNER JOIN dbo.tblAmministratori a ON x.Id = a.Id
+						INNER JOIN dbo.tblSedi sa ON a.IdSede = sa.Id
+					WHERE
+						x.IdSede = tbl.Id
+						AND a.Lock = 0
+						AND sa.NomeCompleto LIKE '%' + @Amministratore + '%'
+				)
+				)
 		ORDER BY tbl.NomeCompleto
 		OFFSET @Offset ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY
@@ -150,3 +173,4 @@ BEGIN
 	END
 
 END;
+GO

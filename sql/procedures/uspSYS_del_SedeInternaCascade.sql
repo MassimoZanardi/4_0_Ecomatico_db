@@ -93,6 +93,9 @@ BEGIN
         -- banche/casse e aliquote IVA proprie dell'azienda
         SELECT Id INTO #ClientiFornitori FROM dbo.tblClientiFornitori
         WHERE IdAziendaInterna IN (SELECT Id FROM #Sedi) OR IdSede IN (SELECT Id FROM #Sedi);
+        -- Schede amministratore dell'azienda (o su un soggetto della cascata)
+        SELECT Id INTO #Amministratori FROM dbo.tblAmministratori
+        WHERE IdAziendaInterna IN (SELECT Id FROM #Sedi) OR IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #BancheCasse FROM dbo.tblBancheCasse WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #AliquoteIva FROM dbo.tblAliquoteIva WHERE IdSede IN (SELECT Id FROM #Sedi);
 
@@ -351,6 +354,9 @@ BEGIN
             -- aliquote; le schede di ALTRE aziende che usano un'aliquota o una banca di questa
             -- (non previsto dalle regole) perdono solo il collegamento
             DELETE FROM dbo.tblClientiFornitori WHERE Id IN (SELECT Id FROM #ClientiFornitori);
+            DELETE FROM dbo.tblAmministratoriSedi
+            WHERE Id IN (SELECT Id FROM #Amministratori) OR IdSede IN (SELECT Id FROM #Sedi);
+            DELETE FROM dbo.tblAmministratori WHERE Id IN (SELECT Id FROM #Amministratori);
             UPDATE dbo.tblClientiFornitori SET IdBancaCassa = NULL WHERE IdBancaCassa IN (SELECT Id FROM #BancheCasse);
             UPDATE dbo.tblClientiFornitori SET IdAliquotaIva = NULL WHERE IdAliquotaIva IN (SELECT Id FROM #AliquoteIva);
             DELETE FROM dbo.tblBancheCasse WHERE Id IN (SELECT Id FROM #BancheCasse);
@@ -390,6 +396,7 @@ BEGIN
                 UNION SELECT Id FROM #MagLotti
                 UNION SELECT Id FROM #MagMovimenti
                 UNION SELECT Id FROM #ClientiFornitori
+                UNION SELECT Id FROM #Amministratori
                 UNION SELECT Id FROM #BancheCasse
                 UNION SELECT Id FROM #AliquoteIva
                 UNION SELECT Id FROM #RifiutiMud

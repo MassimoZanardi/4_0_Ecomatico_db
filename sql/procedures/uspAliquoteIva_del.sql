@@ -84,6 +84,20 @@ BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Un''aliquota associata a clienti o fornitori non può essere cancellata';
 				GOTO BRANCH_END;
+			END			IF EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblFattureRigheImporti i
+					INNER JOIN dbo.tblFattureRighe r ON i.Id = r.Id
+					INNER JOIN dbo.tblFatture f ON r.IdFattura = f.Id
+				WHERE
+					i.IdAliquotaIva = @Id
+					AND f.Lock IN (0, 2)
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un''aliquota usata nelle righe di una fattura non può essere cancellata';
+				GOTO BRANCH_END;
 			END
 
 			BEGIN TRANSACTION;

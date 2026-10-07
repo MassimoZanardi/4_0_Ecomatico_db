@@ -221,6 +221,19 @@ BEGIN
 				SET @returnMessage = 'Una sede con aliquote IVA associate non può essere cancellata';
 				GOTO BRANCH_END;
 			END
+			IF EXISTS (SELECT 1 FROM dbo.tblFatture WHERE IdSede = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con fatture associate non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (SELECT 1 FROM dbo.tblFattureConti WHERE IdSede = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con conti di fatturazione associati non può essere cancellata';
+				GOTO BRANCH_END;
+			END
 
 			-- Gestione EoW: stesso controllo del magazzino tradizionale, su lotti/allocazioni EoW
 			-- proprie della sede (IdSede è sempre la Sede Interna, non quella esterna condivisa)
@@ -586,6 +599,27 @@ BEGIN
 
 				-- Anagrafica estesa e Fatturazione: in bozza l'azienda non dovrebbe averne, mantenuto
 				-- per difesa dalle FK (prima le schede, che referenziano banche/casse e aliquote)
+				-- Fatture dell'azienda con righe e rate, poi i conti (prima delle schede e delle banche,
+				-- che le fatture referenziano)
+				DELETE dbo.tblFattureRigheImporti
+				WHERE Id IN (SELECT r.Id FROM dbo.tblFattureRighe r INNER JOIN dbo.tblFatture f ON r.IdFattura = f.Id WHERE f.IdSede = @Id);
+				DELETE dbo.tblFattureRighe
+				WHERE IdFattura IN (SELECT Id FROM dbo.tblFatture WHERE IdSede = @Id);
+				DELETE dbo.tblFattureRatePagamenti
+				WHERE IdRata IN (SELECT r.Id FROM dbo.tblFattureRate r INNER JOIN dbo.tblFatture f ON r.IdFattura = f.Id WHERE f.IdSede = @Id);
+				DELETE dbo.tblFattureRate
+				WHERE IdFattura IN (SELECT Id FROM dbo.tblFatture WHERE IdSede = @Id);
+				UPDATE dbo.tblFatture
+				SET IdFatturaRiferimento = NULL
+				WHERE IdSede = @Id;
+				DELETE dbo.tblFatture
+				WHERE IdSede = @Id;
+				DELETE dbo.tblPagamenti
+				WHERE
+					IdSede = @Id
+					OR IdBancaCassa IN (SELECT Id FROM dbo.tblBancheCasse WHERE IdSede = @Id);
+				DELETE dbo.tblFattureConti
+				WHERE IdSede = @Id;
 				DELETE dbo.tblClientiFornitori
 				WHERE IdAziendaInterna = @Id;
 

@@ -76,6 +76,17 @@ BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Una banca o cassa associata a clienti o fornitori non può essere cancellata';
 				GOTO BRANCH_END;
+			END			IF EXISTS (SELECT 1 FROM dbo.tblFatture WHERE IdBancaCassa = @Id AND Lock IN (0, 2))
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una banca o cassa indicata in una fattura non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+			IF EXISTS (SELECT 1 FROM dbo.tblPagamenti WHERE IdBancaCassa = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una banca o cassa con pagamenti registrati non può essere cancellata';
+				GOTO BRANCH_END;
 			END
 
 			BEGIN TRANSACTION;

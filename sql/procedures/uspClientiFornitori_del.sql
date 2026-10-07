@@ -76,6 +76,13 @@ BEGIN
 		-- ── CASO 1: scheda attiva (Lock = 0) → soft delete ───────────────────
 		IF @lock = 0
 		BEGIN
+			-- Una scheda con fatture non cancellate resta
+			IF EXISTS (SELECT 1 FROM dbo.tblFatture WHERE IdClienteFornitore = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = IIF(@tipo = 'C', 'Un cliente con fatture non può essere cancellato', 'Un fornitore con fatture non può essere cancellato');
+				GOTO BRANCH_END;
+			END
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblClientiFornitori
 				SET Lock = 4

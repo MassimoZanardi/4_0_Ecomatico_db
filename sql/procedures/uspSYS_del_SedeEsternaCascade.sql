@@ -78,7 +78,8 @@ BEGIN
 
         -- Anagrafica estesa: schede cliente/fornitore sul soggetto
         SELECT Id INTO #ClientiFornitori FROM dbo.tblClientiFornitori WHERE IdSede IN (SELECT Id FROM #Sedi);
-        SELECT Id INTO #Amministratori FROM dbo.tblAmministratori WHERE IdSede IN (SELECT Id FROM #Sedi);
+        -- Fatture delle schede cliente/fornitore del soggetto
+        SELECT Id INTO #Fatture FROM dbo.tblFatture WHERE IdClienteFornitore IN (SELECT Id FROM #ClientiFornitori);        SELECT Id INTO #Amministratori FROM dbo.tblAmministratori WHERE IdSede IN (SELECT Id FROM #Sedi);
 
         -- tblSedi/tblPersone/tblOggetti sono sottotipi a chiave condivisa di tblOsepe (stesso Id)
         SELECT Id INTO #OsepeIds FROM (
@@ -269,6 +270,19 @@ BEGIN
                 OR IdTrasportatore IN (SELECT Id FROM #Sedi);
 
             -- Anagrafica estesa: schede cliente/fornitore sul soggetto
+            -- Fatturazione: fatture con righe, rate e pagamenti (prima delle schede, delle banche e
+            -- delle aliquote, che le fatture referenziano)
+            DELETE FROM dbo.tblFattureRigheImporti WHERE Id IN (SELECT Id FROM dbo.tblFattureRighe WHERE IdFattura IN (SELECT Id FROM #Fatture));
+            DELETE FROM dbo.tblFattureRighe WHERE IdFattura IN (SELECT Id FROM #Fatture);
+            SELECT DISTINCT rp.IdPagamento AS Id INTO #Pagamenti
+            FROM dbo.tblFattureRatePagamenti rp INNER JOIN dbo.tblFattureRate r ON rp.IdRata = r.Id
+            WHERE r.IdFattura IN (SELECT Id FROM #Fatture);
+            DELETE FROM dbo.tblFattureRatePagamenti WHERE IdRata IN (SELECT Id FROM dbo.tblFattureRate WHERE IdFattura IN (SELECT Id FROM #Fatture));
+            DELETE FROM dbo.tblPagamenti
+            WHERE Id IN (SELECT Id FROM #Pagamenti) AND Id NOT IN (SELECT IdPagamento FROM dbo.tblFattureRatePagamenti);
+            DELETE FROM dbo.tblFattureRate WHERE IdFattura IN (SELECT Id FROM #Fatture);
+            UPDATE dbo.tblFatture SET IdFatturaRiferimento = NULL WHERE IdFatturaRiferimento IN (SELECT Id FROM #Fatture);
+            DELETE FROM dbo.tblFatture WHERE Id IN (SELECT Id FROM #Fatture);
             DELETE FROM dbo.tblClientiFornitori WHERE Id IN (SELECT Id FROM #ClientiFornitori);
 
             -- Anagrafica estesa: schede amministratore del soggetto con i loro amministrati, e il

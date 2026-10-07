@@ -45,7 +45,14 @@ BEGIN
 				@IdFunzione = 'FTC',
 				@Permesso = @permesso OUTPUT;
 		END
+		-- Le fatture (FTT) usano la stessa select
 		IF 1 > @permesso
+		BEGIN
+			EXEC dbo.uspSessione_get_FunzionePermesso
+				@Id = @IdSessione,
+				@IdFunzione = 'FTT',
+				@Permesso = @permesso OUTPUT;
+		END		IF 1 > @permesso
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';

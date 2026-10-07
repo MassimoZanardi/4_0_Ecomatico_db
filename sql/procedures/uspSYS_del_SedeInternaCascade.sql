@@ -96,7 +96,10 @@ BEGIN
         -- Schede amministratore dell'azienda (o su un soggetto della cascata)
         SELECT Id INTO #Amministratori FROM dbo.tblAmministratori
         WHERE IdAziendaInterna IN (SELECT Id FROM #Sedi) OR IdSede IN (SELECT Id FROM #Sedi);
-        SELECT Id INTO #BancheCasse FROM dbo.tblBancheCasse WHERE IdSede IN (SELECT Id FROM #Sedi);
+        -- Fatture dell'azienda (o di una scheda della cascata) e conti dell'azienda
+        SELECT Id INTO #Fatture FROM dbo.tblFatture
+        WHERE IdSede IN (SELECT Id FROM #Sedi) OR IdClienteFornitore IN (SELECT Id FROM #ClientiFornitori);
+        SELECT Id INTO #FattureConti FROM dbo.tblFattureConti WHERE IdSede IN (SELECT Id FROM #Sedi);        SELECT Id INTO #BancheCasse FROM dbo.tblBancheCasse WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #AliquoteIva FROM dbo.tblAliquoteIva WHERE IdSede IN (SELECT Id FROM #Sedi);
 
         -- Dichiarazioni MUD dell'azienda o che citano una sede della cascata
@@ -353,13 +356,34 @@ BEGIN
             -- Anagrafica estesa e Fatturazione: prima le schede, che referenziano banche/casse e
             -- aliquote; le schede di ALTRE aziende che usano un'aliquota o una banca di questa
             -- (non previsto dalle regole) perdono solo il collegamento
+            -- Fatturazione: fatture con righe, rate e pagamenti (prima delle schede, delle banche e
+            -- delle aliquote, che le fatture referenziano)
+            DELETE FROM dbo.tblFattureRigheImporti WHERE Id IN (SELECT Id FROM dbo.tblFattureRighe WHERE IdFattura IN (SELECT Id FROM #Fatture));
+            DELETE FROM dbo.tblFattureRighe WHERE IdFattura IN (SELECT Id FROM #Fatture);
+            SELECT DISTINCT rp.IdPagamento AS Id INTO #Pagamenti
+            FROM dbo.tblFattureRatePagamenti rp INNER JOIN dbo.tblFattureRate r ON rp.IdRata = r.Id
+            WHERE r.IdFattura IN (SELECT Id FROM #Fatture);
+            DELETE FROM dbo.tblFattureRatePagamenti WHERE IdRata IN (SELECT Id FROM dbo.tblFattureRate WHERE IdFattura IN (SELECT Id FROM #Fatture));
+            DELETE FROM dbo.tblPagamenti
+            WHERE Id IN (SELECT Id FROM #Pagamenti) AND Id NOT IN (SELECT IdPagamento FROM dbo.tblFattureRatePagamenti);
+            DELETE FROM dbo.tblFattureRate WHERE IdFattura IN (SELECT Id FROM #Fatture);
+            UPDATE dbo.tblFatture SET IdFatturaRiferimento = NULL WHERE IdFatturaRiferimento IN (SELECT Id FROM #Fatture);
+            DELETE FROM dbo.tblFatture WHERE Id IN (SELECT Id FROM #Fatture);
             DELETE FROM dbo.tblClientiFornitori WHERE Id IN (SELECT Id FROM #ClientiFornitori);
             DELETE FROM dbo.tblAmministratoriSedi
             WHERE Id IN (SELECT Id FROM #Amministratori) OR IdSede IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblAmministratori WHERE Id IN (SELECT Id FROM #Amministratori);
             UPDATE dbo.tblClientiFornitori SET IdBancaCassa = NULL WHERE IdBancaCassa IN (SELECT Id FROM #BancheCasse);
             UPDATE dbo.tblClientiFornitori SET IdAliquotaIva = NULL WHERE IdAliquotaIva IN (SELECT Id FROM #AliquoteIva);
-            DELETE FROM dbo.tblBancheCasse WHERE Id IN (SELECT Id FROM #BancheCasse);
+            -- Conti: le righe di ALTRE aziende che li usano (non previsto dalle regole) perdono solo il
+            -- collegamento, come per banche/casse e aliquote
+            UPDATE dbo.tblFattureRigheImporti SET IdConto = NULL WHERE IdConto IN (SELECT Id FROM #FattureConti);
+            DELETE FROM dbo.tblFattureConti WHERE Id IN (SELECT Id FROM #FattureConti);
+            UPDATE dbo.tblFattureRigheImporti SET IdAliquotaIva = NULL WHERE IdAliquotaIva IN (SELECT Id FROM #AliquoteIva);
+            UPDATE dbo.tblFatture SET IdBancaCassa = NULL WHERE IdBancaCassa IN (SELECT Id FROM #BancheCasse);
+            DELETE FROM dbo.tblFattureRatePagamenti
+            WHERE IdPagamento IN (SELECT Id FROM dbo.tblPagamenti WHERE IdBancaCassa IN (SELECT Id FROM #BancheCasse) OR IdSede IN (SELECT Id FROM #Sedi));
+            DELETE FROM dbo.tblPagamenti WHERE IdBancaCassa IN (SELECT Id FROM #BancheCasse) OR IdSede IN (SELECT Id FROM #Sedi);            DELETE FROM dbo.tblBancheCasse WHERE Id IN (SELECT Id FROM #BancheCasse);
             DELETE FROM dbo.tblAliquoteIva WHERE Id IN (SELECT Id FROM #AliquoteIva);
 
             -- Giunzioni a chiave composita verso risorse condivise (tblAree/tblUtenti non toccate)

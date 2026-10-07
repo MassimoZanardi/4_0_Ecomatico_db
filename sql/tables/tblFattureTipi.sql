@@ -1,9 +1,9 @@
-﻿SET ANSI_NULLS ON
+SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[tblFattureTipi](
-	[Id] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Id] [char](4) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblFattureTipi] PRIMARY KEY CLUSTERED 
 (

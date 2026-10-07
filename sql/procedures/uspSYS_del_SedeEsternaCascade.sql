@@ -76,6 +76,9 @@ BEGIN
         SELECT Id INTO #Persone FROM dbo.tblPersone WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #Oggetti FROM dbo.tblOggetti WHERE IdSede IN (SELECT Id FROM #Sedi);
 
+        -- Anagrafica estesa: schede cliente/fornitore sul soggetto
+        SELECT Id INTO #ClientiFornitori FROM dbo.tblClientiFornitori WHERE IdSede IN (SELECT Id FROM #Sedi);
+
         -- tblSedi/tblPersone/tblOggetti sono sottotipi a chiave condivisa di tblOsepe (stesso Id)
         SELECT Id INTO #OsepeIds FROM (
             SELECT Id FROM #Sedi
@@ -134,6 +137,15 @@ BEGIN
 
             DELETE FROM dbo.tblRifiutiModelliClassiPericolo WHERE Id IN (SELECT Id FROM #RifiutiModelli);
             DELETE FROM dbo.tblRifiutiModelliEtichette       WHERE Id IN (SELECT Id FROM #RifiutiModelli);
+            -- FK NO_ACTION verso tblRifiutiModelli: righe della generazione automatica dei carichi
+            -- (IdModello NOT NULL, si cancellano) e movimenti creati dal modello (IdModello nullable,
+            -- perdono solo il collegamento)
+            DELETE ae
+            FROM dbo.tblRifiutiModelliRegistrazioniAutoEtichette ae
+            INNER JOIN dbo.tblRifiutiModelliRegistrazioniAuto a ON ae.Id = a.Id
+            WHERE a.IdModello IN (SELECT Id FROM #RifiutiModelli);
+            DELETE FROM dbo.tblRifiutiModelliRegistrazioniAuto WHERE IdModello IN (SELECT Id FROM #RifiutiModelli);
+            UPDATE dbo.tblRifiutiMovimenti SET IdModello = NULL WHERE IdModello IN (SELECT Id FROM #RifiutiModelli);
             DELETE FROM dbo.tblRifiutiModelli                WHERE Id IN (SELECT Id FROM #RifiutiModelli);
 
             DELETE FROM dbo.tblRifiutiMovimentiClassiPericolo WHERE Id IN (SELECT Id FROM #RifiutiMovimenti);
@@ -232,6 +244,8 @@ BEGIN
             SET @rifEsterniRimossi += @@ROWCOUNT;
             DELETE FROM dbo.tblRifiutiModelliEtichette       WHERE IdEtichetta IN (SELECT Id FROM #Etichette);
             SET @rifEsterniRimossi += @@ROWCOUNT;
+            DELETE FROM dbo.tblRifiutiModelliRegistrazioniAutoEtichette WHERE IdEtichetta IN (SELECT Id FROM #Etichette);
+            SET @rifEsterniRimossi += @@ROWCOUNT;
             DELETE FROM dbo.tblRifiutiRegistrazioniEtichette WHERE IdEtichetta IN (SELECT Id FROM #Etichette);
             SET @rifEsterniRimossi += @@ROWCOUNT;
 
@@ -242,10 +256,19 @@ BEGIN
             DELETE FROM dbo.tblPersone      WHERE Id IN (SELECT Id FROM #Persone);
             DELETE FROM dbo.tblOggetti      WHERE Id IN (SELECT Id FROM #Oggetti);
 
-            -- Modulo Magazzino: una sede esterna può comparire solo come destinatario o
-            -- trasportatore di un DDT (Articoli/Lotti/Movimenti/Righe sono sempre su sedi interne).
+            -- Modulo Magazzino: una sede esterna può comparire su un DDT come mittente (es. il
+            -- fornitore di un DDT ricevuto), destinatario, destinazione o trasportatore
+            -- (Articoli/Lotti/Movimenti/Righe sono sempre su sedi interne). Il DDT viene rimosso,
+            -- il movimento di magazzino della sede interna resta.
             DELETE FROM dbo.tblMagazziniDdt
-            WHERE IdDestinatario IN (SELECT Id FROM #Sedi) OR IdTrasportatore IN (SELECT Id FROM #Sedi);
+            WHERE
+                IdMittente IN (SELECT Id FROM #Sedi)
+                OR IdDestinatario IN (SELECT Id FROM #Sedi)
+                OR IdDestinazione IN (SELECT Id FROM #Sedi)
+                OR IdTrasportatore IN (SELECT Id FROM #Sedi);
+
+            -- Anagrafica estesa: schede cliente/fornitore sul soggetto
+            DELETE FROM dbo.tblClientiFornitori WHERE Id IN (SELECT Id FROM #ClientiFornitori);
 
             -- Giunzioni a chiave composita verso risorse condivise (tblAree non toccata)
             DELETE asi FROM dbo.tblAreeSediInterne asi INNER JOIN #AreeSediInterne t ON t.Id = asi.Id AND t.IdSede  = asi.IdSede;
@@ -257,6 +280,7 @@ BEGIN
             -- per lo stesso motivo della raccolta #RifiutiRegistri sopra.
             DELETE FROM dbo.tblRentriCredenzialiSedi WHERE IdSede IN (SELECT Id FROM #Sedi);
 
+            DELETE FROM dbo.tblSediDatiEstesi WHERE Id IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediIndirizzi WHERE Id IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediRecapiti  WHERE Id IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediEsterne   WHERE Id IN (SELECT Id FROM #Sedi);
@@ -277,7 +301,7 @@ BEGIN
                 UNION SELECT Id FROM #Calendari
                 UNION SELECT Id FROM #Etichette
                 UNION SELECT Id FROM #Eventi
-                UNION SELECT Id FROM #Magazzini
+                UNION SELECT Id FROM #ClientiFornitori
                 UNION SELECT Id FROM #RifiutiAutorizzazioni
                 UNION SELECT Id FROM #RifiutiFormulari
                 UNION SELECT Id FROM #RifiutiModelli

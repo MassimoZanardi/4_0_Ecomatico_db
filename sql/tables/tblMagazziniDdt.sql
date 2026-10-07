@@ -15,6 +15,7 @@ CREATE TABLE [dbo].[tblMagazziniDdt](
 	[Data] [date] NULL,
 	[IdMittente] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdDestinatario] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdDestinazione] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdTrasportatore] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[DataInizioTrasporto] [smalldatetime] NULL,
 	[Peso] [decimal](18, 2) NULL,
@@ -69,6 +70,15 @@ REFERENCES [dbo].[tblSedi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblMagazziniDdt] CHECK CONSTRAINT [FK_tblMagazziniDdt_tblSedi_IdDestinatario]
+GO
+
+-- IdDestinazione: destinazione finale della merce, facoltativa; se manca vale la sede del
+-- destinatario (regola applicata in stampa)
+ALTER TABLE [dbo].[tblMagazziniDdt]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniDdt_tblSedi_IdDestinazione] FOREIGN KEY([IdDestinazione])
+REFERENCES [dbo].[tblSedi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblMagazziniDdt] CHECK CONSTRAINT [FK_tblMagazziniDdt_tblSedi_IdDestinazione]
 GO
 
 ALTER TABLE [dbo].[tblMagazziniDdt]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniDdt_tblSedi_IdTrasportatore] FOREIGN KEY([IdTrasportatore])

@@ -89,6 +89,17 @@ BEGIN
         SELECT Id INTO #MagLotti FROM dbo.tblMagazziniLotti WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id INTO #MagMovimenti FROM dbo.tblMagazziniMovimenti WHERE IdSede IN (SELECT Id FROM #Sedi);
 
+        -- Anagrafica estesa e Fatturazione: schede dell'azienda (o sul soggetto, se nella cascata),
+        -- banche/casse e aliquote IVA proprie dell'azienda
+        SELECT Id INTO #ClientiFornitori FROM dbo.tblClientiFornitori
+        WHERE IdAziendaInterna IN (SELECT Id FROM #Sedi) OR IdSede IN (SELECT Id FROM #Sedi);
+        SELECT Id INTO #BancheCasse FROM dbo.tblBancheCasse WHERE IdSede IN (SELECT Id FROM #Sedi);
+        SELECT Id INTO #AliquoteIva FROM dbo.tblAliquoteIva WHERE IdSede IN (SELECT Id FROM #Sedi);
+
+        -- Dichiarazioni MUD dell'azienda o che citano una sede della cascata
+        SELECT Id INTO #RifiutiMud FROM dbo.tblRifiutiMud
+        WHERE IdSede IN (SELECT Id FROM #Sedi) OR IdSedeLegale IN (SELECT Id FROM #Sedi) OR IdSedeUnitaLocale IN (SELECT Id FROM #Sedi);
+
         -- tblSedi/tblPersone/tblOggetti sono sottotipi a chiave condivisa di tblOsepe (stesso Id)
         SELECT Id INTO #OsepeIds FROM (
             SELECT Id FROM #Sedi
@@ -148,6 +159,15 @@ BEGIN
 
             DELETE FROM dbo.tblRifiutiModelliClassiPericolo WHERE Id IN (SELECT Id FROM #RifiutiModelli);
             DELETE FROM dbo.tblRifiutiModelliEtichette       WHERE Id IN (SELECT Id FROM #RifiutiModelli);
+            -- FK NO_ACTION verso tblRifiutiModelli: righe della generazione automatica dei carichi
+            -- (IdModello NOT NULL, si cancellano) e movimenti creati dal modello (IdModello nullable,
+            -- perdono solo il collegamento)
+            DELETE ae
+            FROM dbo.tblRifiutiModelliRegistrazioniAutoEtichette ae
+            INNER JOIN dbo.tblRifiutiModelliRegistrazioniAuto a ON ae.Id = a.Id
+            WHERE a.IdModello IN (SELECT Id FROM #RifiutiModelli);
+            DELETE FROM dbo.tblRifiutiModelliRegistrazioniAuto WHERE IdModello IN (SELECT Id FROM #RifiutiModelli);
+            UPDATE dbo.tblRifiutiMovimenti SET IdModello = NULL WHERE IdModello IN (SELECT Id FROM #RifiutiModelli);
             DELETE FROM dbo.tblRifiutiModelli                WHERE Id IN (SELECT Id FROM #RifiutiModelli);
 
             DELETE FROM dbo.tblRifiutiMovimentiClassiPericolo WHERE Id IN (SELECT Id FROM #RifiutiMovimenti);
@@ -162,6 +182,42 @@ BEGIN
             DELETE FROM dbo.tblRifiutiFormulariTrasportiMarittimi    WHERE Id IN (SELECT Id FROM #RifiutiFormulari);
             DELETE FROM dbo.tblRifiutiFormulariTrasportiTerresti     WHERE Id IN (SELECT Id FROM #RifiutiFormulari);
             DELETE FROM dbo.tblRifiutiFormulari                      WHERE Id IN (SELECT Id FROM #RifiutiFormulari);
+
+            -- Modulo Magazzino: cascata figlio->genitore (FK NO_ACTION, nessun ON DELETE CASCADE).
+            -- Va fatta prima della Gestione EoW: le righe EoW di scarico referenziano tblEoWLotti.
+            -- Relazioni carico/scarico in entrambi i versi (righe della sede, dei suoi movimenti o
+            -- dei suoi lotti): FK NO_ACTION su Id e IdParent verso tblMagazziniMovimentiRighe.
+            DELETE rel
+            FROM dbo.tblMagazziniMovimentiRigheRelazioni rel
+            INNER JOIN dbo.tblMagazziniMovimentiRighe r ON rel.Id = r.Id OR rel.IdParent = r.Id
+            WHERE r.IdSede IN (SELECT Id FROM #Sedi) OR r.IdMovimento IN (SELECT Id FROM #MagMovimenti) OR r.IdLotto IN (SELECT Id FROM #MagLotti);
+
+            DELETE rel
+            FROM dbo.tblMagazziniMovimentiRigheEoWLotti rel
+            INNER JOIN dbo.tblMagazziniMovimentiRigheEoW re ON rel.Id = re.Id
+            WHERE
+                re.IdSede IN (SELECT Id FROM #Sedi)
+                OR re.IdMovimento IN (SELECT Id FROM #MagMovimenti)
+                OR re.IdLotto IN (SELECT Id FROM #EoWLotti)
+                OR rel.IdLotto IN (SELECT Id FROM #EoWLotti);
+
+            DELETE FROM dbo.tblMagazziniDdt
+            WHERE
+                IdSede IN (SELECT Id FROM #Sedi)
+                OR IdMittente IN (SELECT Id FROM #Sedi)
+                OR IdDestinatario IN (SELECT Id FROM #Sedi)
+                OR IdDestinazione IN (SELECT Id FROM #Sedi)
+                OR IdTrasportatore IN (SELECT Id FROM #Sedi)
+                OR IdMovimento IN (SELECT Id FROM #MagMovimenti);
+
+            DELETE FROM dbo.tblMagazziniMovimentiRighe
+            WHERE IdSede IN (SELECT Id FROM #Sedi) OR IdMovimento IN (SELECT Id FROM #MagMovimenti) OR IdLotto IN (SELECT Id FROM #MagLotti);
+            DELETE FROM dbo.tblMagazziniMovimentiRigheEoW
+            WHERE IdSede IN (SELECT Id FROM #Sedi) OR IdMovimento IN (SELECT Id FROM #MagMovimenti) OR IdLotto IN (SELECT Id FROM #EoWLotti);
+
+            DELETE FROM dbo.tblMagazziniMovimenti WHERE Id IN (SELECT Id FROM #MagMovimenti);
+            DELETE FROM dbo.tblMagazziniLotti WHERE Id IN (SELECT Id FROM #MagLotti);
+            DELETE FROM dbo.tblMagazziniArticoli WHERE Id IN (SELECT Id FROM #MagArticoli);
 
             -- Gestione EoW: va fatta prima di cancellare Registrazioni sottostanti, per rispettare
             -- la FK di tblEoWLottiRifiutiRegistrazioni.IdRegistrazione (NOT NULL, parte della PK
@@ -215,6 +271,13 @@ BEGIN
             -- tblRentriRegistri è 1:1 a chiave condivisa su tblRifiutiRegistri.Id (NOT NULL, nessun
             -- ON DELETE CASCADE): va rimosso prima, altrimenti la DELETE sottostante fallisce per FK.
             DELETE FROM dbo.tblRentriRegistri  WHERE Id IN (SELECT Id FROM #RifiutiRegistri);
+
+            -- Dichiarazioni MUD: registri della dichiarazione (FK su tblRifiutiMud e su
+            -- tblRifiutiRegistri), poi la dichiarazione
+            DELETE FROM dbo.tblRifiutiMudRegistri
+            WHERE Id IN (SELECT Id FROM #RifiutiMud) OR IdRegistro IN (SELECT Id FROM #RifiutiRegistri);
+            DELETE FROM dbo.tblRifiutiMud WHERE Id IN (SELECT Id FROM #RifiutiMud);
+
             DELETE FROM dbo.tblRifiutiRegistri WHERE Id IN (SELECT Id FROM #RifiutiRegistri);
 
             DELETE FROM dbo.tblScadenzeOsepe
@@ -272,6 +335,8 @@ BEGIN
             SET @rifEsterniRimossi += @@ROWCOUNT;
             DELETE FROM dbo.tblRifiutiModelliEtichette       WHERE IdEtichetta IN (SELECT Id FROM #Etichette);
             SET @rifEsterniRimossi += @@ROWCOUNT;
+            DELETE FROM dbo.tblRifiutiModelliRegistrazioniAutoEtichette WHERE IdEtichetta IN (SELECT Id FROM #Etichette);
+            SET @rifEsterniRimossi += @@ROWCOUNT;
             DELETE FROM dbo.tblRifiutiRegistrazioniEtichette WHERE IdEtichetta IN (SELECT Id FROM #Etichette);
             SET @rifEsterniRimossi += @@ROWCOUNT;
 
@@ -282,35 +347,14 @@ BEGIN
             DELETE FROM dbo.tblPersone      WHERE Id IN (SELECT Id FROM #Persone);
             DELETE FROM dbo.tblOggetti      WHERE Id IN (SELECT Id FROM #Oggetti);
 
-            -- Modulo Magazzino: cascata figlio->genitore (FK NO_ACTION, nessun ON DELETE CASCADE).
-            -- Relazioni carico/scarico in entrambi i versi (righe della sede, dei suoi movimenti o
-            -- dei suoi lotti): FK NO_ACTION su Id e IdParent verso tblMagazziniMovimentiRighe.
-            DELETE rel
-            FROM dbo.tblMagazziniMovimentiRigheRelazioni rel
-            INNER JOIN dbo.tblMagazziniMovimentiRighe r ON rel.Id = r.Id OR rel.IdParent = r.Id
-            WHERE r.IdSede IN (SELECT Id FROM #Sedi) OR r.IdMovimento IN (SELECT Id FROM #MagMovimenti) OR r.IdLotto IN (SELECT Id FROM #MagLotti);
-
-            DELETE rel
-            FROM dbo.tblMagazziniMovimentiRigheEoWLotti rel
-            INNER JOIN dbo.tblMagazziniMovimentiRigheEoW re ON rel.Id = re.Id
-            WHERE re.IdSede IN (SELECT Id FROM #Sedi) OR re.IdMovimento IN (SELECT Id FROM #MagMovimenti);
-
-            DELETE FROM dbo.tblMagazziniDdt
-            WHERE
-                IdSede IN (SELECT Id FROM #Sedi)
-                OR IdMittente IN (SELECT Id FROM #Sedi)
-                OR IdDestinatario IN (SELECT Id FROM #Sedi)
-                OR IdTrasportatore IN (SELECT Id FROM #Sedi)
-                OR IdMovimento IN (SELECT Id FROM #MagMovimenti);
-
-            DELETE FROM dbo.tblMagazziniMovimentiRighe
-            WHERE IdSede IN (SELECT Id FROM #Sedi) OR IdMovimento IN (SELECT Id FROM #MagMovimenti);
-            DELETE FROM dbo.tblMagazziniMovimentiRigheEoW
-            WHERE IdSede IN (SELECT Id FROM #Sedi) OR IdMovimento IN (SELECT Id FROM #MagMovimenti);
-
-            DELETE FROM dbo.tblMagazziniMovimenti WHERE Id IN (SELECT Id FROM #MagMovimenti);
-            DELETE FROM dbo.tblMagazziniLotti WHERE Id IN (SELECT Id FROM #MagLotti);
-            DELETE FROM dbo.tblMagazziniArticoli WHERE Id IN (SELECT Id FROM #MagArticoli);
+            -- Anagrafica estesa e Fatturazione: prima le schede, che referenziano banche/casse e
+            -- aliquote; le schede di ALTRE aziende che usano un'aliquota o una banca di questa
+            -- (non previsto dalle regole) perdono solo il collegamento
+            DELETE FROM dbo.tblClientiFornitori WHERE Id IN (SELECT Id FROM #ClientiFornitori);
+            UPDATE dbo.tblClientiFornitori SET IdBancaCassa = NULL WHERE IdBancaCassa IN (SELECT Id FROM #BancheCasse);
+            UPDATE dbo.tblClientiFornitori SET IdAliquotaIva = NULL WHERE IdAliquotaIva IN (SELECT Id FROM #AliquoteIva);
+            DELETE FROM dbo.tblBancheCasse WHERE Id IN (SELECT Id FROM #BancheCasse);
+            DELETE FROM dbo.tblAliquoteIva WHERE Id IN (SELECT Id FROM #AliquoteIva);
 
             -- Giunzioni a chiave composita verso risorse condivise (tblAree/tblUtenti non toccate)
             DELETE asi FROM dbo.tblAreeSediInterne asi INNER JOIN #AreeSediInterne t ON t.Id = asi.Id AND t.IdSede  = asi.IdSede;
@@ -321,6 +365,7 @@ BEGIN
             -- colonna da azzerare) - si cancella la riga di associazione, mai tblRentriCredenziali stessa.
             DELETE FROM dbo.tblRentriCredenzialiSedi WHERE IdSede IN (SELECT Id FROM #Sedi);
 
+            DELETE FROM dbo.tblSediDatiEstesi WHERE Id IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediIndirizzi WHERE Id IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediRecapiti  WHERE Id IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediEsterne   WHERE Id IN (SELECT Id FROM #Sedi);
@@ -341,7 +386,13 @@ BEGIN
                 UNION SELECT Id FROM #Calendari
                 UNION SELECT Id FROM #Etichette
                 UNION SELECT Id FROM #Eventi
-                UNION SELECT Id FROM #Magazzini
+                UNION SELECT Id FROM #MagArticoli
+                UNION SELECT Id FROM #MagLotti
+                UNION SELECT Id FROM #MagMovimenti
+                UNION SELECT Id FROM #ClientiFornitori
+                UNION SELECT Id FROM #BancheCasse
+                UNION SELECT Id FROM #AliquoteIva
+                UNION SELECT Id FROM #RifiutiMud
                 UNION SELECT Id FROM #EoWLotti
                 UNION SELECT Id FROM #EoWAllocazioni
                 UNION SELECT Id FROM #EoWMagazzini

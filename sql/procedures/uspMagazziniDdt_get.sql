@@ -70,6 +70,8 @@ BEGIN
 			MittenteNome = sm.NomeCompleto + ISNULL(' ' + sm.IndirizzoCompleto, ''),
 			d.IdDestinatario,
 			DestinatarioNome = sd.NomeCompleto + ISNULL(' ' + sd.IndirizzoCompleto, ''),
+			d.IdDestinazione,
+			DestinazioneNome = sz.NomeCompleto + ISNULL(' ' + sz.IndirizzoCompleto, ''),
 			d.IdTrasportatore,
 			TrasportatoreNome = st.NomeCompleto + ISNULL(' ' + st.IndirizzoCompleto, ''),
 			d.DataInizioTrasporto,
@@ -81,6 +83,7 @@ BEGIN
 			LEFT JOIN dbo.tblMagazziniCausali c ON d.IdCausale = c.Id
 			LEFT JOIN dbo.tblSedi sm ON d.IdMittente = sm.Id
 			LEFT JOIN dbo.tblSedi sd ON d.IdDestinatario = sd.Id
+			LEFT JOIN dbo.tblSedi sz ON d.IdDestinazione = sz.Id
 			LEFT JOIN dbo.tblSedi st ON d.IdTrasportatore = st.Id
 		WHERE
 			d.IdMovimento = @IdMovimento

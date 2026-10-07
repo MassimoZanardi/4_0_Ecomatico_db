@@ -113,6 +113,21 @@ BEGIN
 
 			IF EXISTS (
 				SELECT 1
+				FROM dbo.tblServiziOsepe o
+				INNER JOIN dbo.tblServizi s ON o.Id = s.Id
+				INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
+				WHERE
+					o.IdOsepe = @Id
+					AND e.Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede associata ad un servizio non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (
+				SELECT 1
 				FROM dbo.tblScadenzeOsepe o
 				INNER JOIN dbo.tblScadenze s ON o.Id = s.Id
 				INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
@@ -163,12 +178,13 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			-- Modulo Magazzino: una sede esterna può comparire solo come destinatario o
-			-- trasportatore di un DDT (Articoli/Lotti/Movimenti/Righe sono sempre su sedi interne)
-			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniDdt WHERE IdDestinatario = @Id OR IdTrasportatore = @Id)
+			-- Modulo Magazzino: una sede esterna può comparire su un DDT come mittente (es. il
+			-- fornitore di un DDT ricevuto), destinatario, destinazione o trasportatore
+			-- (Articoli/Lotti/Movimenti/Righe sono sempre su sedi interne)
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniDdt WHERE IdMittente = @Id OR IdDestinatario = @Id OR IdDestinazione = @Id OR IdTrasportatore = @Id)
 			BEGIN
 				SET @returnValue = -1;
-				SET @returnMessage = 'Una sede associata a un DDT di magazzino (destinatario/trasportatore) non può essere cancellata';
+				SET @returnMessage = 'Una sede associata a un DDT di magazzino non può essere cancellata';
 				GOTO BRANCH_END;
 			END
 
@@ -186,6 +202,17 @@ BEGIN
 				WHERE
 					Id = @Id
 					AND Lock = 0;
+
+				-- Unità locale: se la sede cancellata è una sede figlia con il flag, lo eredita
+				-- il soggetto, così il gruppo non resta mai senza un'unità locale attiva
+				UPDATE p
+				SET p.UnitaLocale = 1
+				FROM dbo.tblSedi p
+				INNER JOIN dbo.tblSedi s ON s.IdParent = p.Id
+				WHERE
+					s.Id = @Id
+					AND s.UnitaLocale = 1
+					AND p.Lock = 0;
 
 				IF @Reset = 1
 					DELETE dbo.tblIdCancellati
@@ -233,6 +260,21 @@ BEGIN
 
 			IF EXISTS (
 				SELECT 1
+				FROM dbo.tblServiziOsepe o
+				INNER JOIN dbo.tblServizi s ON o.Id = s.Id
+				INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
+				WHERE
+					o.IdOsepe = @Id
+					AND e.Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede associata ad un servizio non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (
+				SELECT 1
 				FROM dbo.tblScadenzeOsepe o
 				INNER JOIN dbo.tblScadenze s ON o.Id = s.Id
 				INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
@@ -247,11 +289,24 @@ BEGIN
 			END
 
 			BEGIN TRANSACTION;
-				-- Modulo Magazzino: DDT dove questa sede esterna compare come destinatario o
-				-- trasportatore. Ramo di fatto irraggiungibile in pratica (blocco sopra su
-				-- Lock=0), mantenuto per difesa dalla FK.
+				-- Modulo Magazzino: DDT dove questa sede esterna compare come mittente,
+				-- destinatario, destinazione o trasportatore. Ramo di fatto irraggiungibile in
+				-- pratica (blocco sopra su Lock=0), mantenuto per difesa dalla FK.
 				DELETE dbo.tblMagazziniDdt
-				WHERE IdDestinatario = @Id OR IdTrasportatore = @Id;
+				WHERE IdMittente = @Id OR IdDestinatario = @Id OR IdDestinazione = @Id OR IdTrasportatore = @Id;
+
+				-- Anagrafica estesa: schede cliente/fornitore del soggetto (una bozza di norma non
+				-- ne ha), per difesa dalla FK NO_ACTION
+				DELETE dbo.tblClientiFornitori
+				WHERE IdSede = @Id;
+
+				-- Tabelle 1:1 sulla sede (FK NO_ACTION): una bozza di norma non ne ha
+				DELETE dbo.tblSediDatiEstesi
+				WHERE Id = @Id;
+				DELETE dbo.tblSediRecapiti
+				WHERE Id = @Id;
+				DELETE dbo.tblSediIndirizzi
+				WHERE Id = @Id;
 
 				DELETE dbo.tblAreeOsepe
 				WHERE IdOsepe = @Id;

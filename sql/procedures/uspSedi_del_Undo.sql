@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspSedi_del_Undo]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspSedi_del_Undo]
 	@IdSessione CHAR(16) = NULL
 AS
 BEGIN
@@ -18,11 +22,28 @@ BEGIN
 
 		BEGIN TRANSACTION;
 
+			-- Unità locale: una sede figlia cancellata con il flag lo aveva ceduto all'azienda
+			-- (uspSedi_del_SediInterne/_SediEsterne). Ripristinandola lo riprende: va tolto alle
+			-- altre sedi attive del gruppo, che deve averne sempre una sola.
+			UPDATE o
+			SET o.UnitaLocale = 0
+			FROM dbo.tblSedi o
+			INNER JOIN dbo.tblSedi i ON o.Id = i.IdParent OR o.IdParent = i.IdParent
+			INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id
+			WHERE
+				c.IdSessione = @IdSessione
+				AND i.Lock = 4
+				AND i.UnitaLocale = 1
+				AND o.Id <> i.Id
+				AND o.Lock = 0;
+
 			UPDATE i
 			SET Lock = 0
 			FROM dbo.tblSedi i
 			INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id
-			WHERE c.IdSessione = @IdSessione;
+			WHERE
+				c.IdSessione = @IdSessione
+				AND i.Lock = 4;
 
 			DELETE i
 			FROM dbo.tblIdLog i

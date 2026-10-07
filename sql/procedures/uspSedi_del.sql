@@ -180,7 +180,7 @@ BEGIN
 
 			-- DDT: mittente/destinatario/trasportatore sono campi liberi della testata,
 			-- possono essere sedi esterne o interne
-			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniDdt WHERE IdMittente = @Id OR IdDestinatario = @Id OR IdTrasportatore = @Id)
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniDdt WHERE IdMittente = @Id OR IdDestinatario = @Id OR IdDestinazione = @Id OR IdTrasportatore = @Id)
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Una sede associata a un DDT di magazzino (mittente/destinatario/trasportatore) non può essere cancellata';
@@ -264,6 +264,7 @@ BEGIN
 				WHERE
 					IdMittente = @Id
 					OR IdDestinatario = @Id
+					OR IdDestinazione = @Id
 					OR IdTrasportatore = @Id
 					OR IdMovimento IN (SELECT Id FROM dbo.tblMagazziniMovimenti WHERE IdSede = @Id);
 

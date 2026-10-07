@@ -16,7 +16,8 @@ CREATE OR ALTER PROCEDURE dbo.uspMagazziniMovimenti_upd
 	@DdtIdTrasportatore CHAR(16) = NULL,
 	@DdtDataInizioTrasporto SMALLDATETIME = NULL,
 	@DdtPeso DECIMAL(18, 2) = NULL,
-	@DdtNumero INT = NULL
+	@DdtNumero INT = NULL,
+	@DdtIdDestinazione CHAR(16) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -151,6 +152,7 @@ BEGIN
 				SET @DdtSezionale = NULLIF(LTRIM(RTRIM(@DdtSezionale)), '');
 				SET @DdtIdMittente = NULLIF(LTRIM(RTRIM(@DdtIdMittente)), '');
 				SET @DdtIdDestinatario = NULLIF(LTRIM(RTRIM(@DdtIdDestinatario)), '');
+				SET @DdtIdDestinazione = NULLIF(LTRIM(RTRIM(@DdtIdDestinazione)), '');
 				SET @DdtIdTrasportatore = NULLIF(LTRIM(RTRIM(@DdtIdTrasportatore)), '');
 
 				-- DDT ricevuto (emesso da un fornitore esterno) = sezionale R, riservato: ammesso
@@ -208,6 +210,14 @@ BEGIN
 					ROLLBACK TRANSACTION;
 					SET @returnValue = -1;
 					SET @returnMessage = 'Il destinatario del DDT indicato non esiste';
+					GOTO BRANCH_END;
+				END
+				-- Destinazione (finale della merce): facoltativa; se manca, vale la sede del destinatario
+				IF @DdtIdDestinazione IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.tblSedi WHERE Id = @DdtIdDestinazione)
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'La destinazione del DDT indicata non esiste';
 					GOTO BRANCH_END;
 				END
 				IF @DdtIdTrasportatore IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.tblSedi WHERE Id = @DdtIdTrasportatore)
@@ -295,6 +305,7 @@ BEGIN
 					Data = @DdtData,
 					IdMittente = @DdtIdMittente,
 					IdDestinatario = @DdtIdDestinatario,
+					IdDestinazione = @DdtIdDestinazione,
 					IdTrasportatore = @DdtIdTrasportatore,
 					DataInizioTrasporto = @DdtDataInizioTrasporto,
 					Peso = @DdtPeso

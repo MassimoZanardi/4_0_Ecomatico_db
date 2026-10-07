@@ -185,7 +185,7 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniDdt WHERE IdSede = @Id OR IdMittente = @Id OR IdDestinatario = @Id OR IdTrasportatore = @Id)
+			IF EXISTS (SELECT 1 FROM dbo.tblMagazziniDdt WHERE IdSede = @Id OR IdMittente = @Id OR IdDestinatario = @Id OR IdDestinazione = @Id OR IdTrasportatore = @Id)
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Una sede associata a un DDT di magazzino non può essere cancellata';
@@ -319,6 +319,21 @@ BEGIN
 
 			IF EXISTS (
 				SELECT 1
+				FROM dbo.tblServiziOsepe o
+				INNER JOIN dbo.tblServizi s ON o.Id = s.Id
+				INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
+				WHERE
+					o.IdOsepe = @Id
+					AND e.Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede associata ad un servizio non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (
+				SELECT 1
 				FROM dbo.tblScadenzeOsepe o
 				INNER JOIN dbo.tblScadenze s ON o.Id = s.Id
 				INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
@@ -344,6 +359,19 @@ BEGIN
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Una sede associata a movimenti rifiuti non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			-- Dichiarazione MUD: azienda dichiarante (IdSede), sede legale e unità locale
+			IF EXISTS (SELECT 1
+			FROM dbo.tblRifiutiMud
+			WHERE
+				(IdSede = @Id OR IdSedeLegale = @Id OR IdSedeUnitaLocale = @Id)
+				AND Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con dichiarazioni MUD associate non può essere cancellata';
 				GOTO BRANCH_END;
 			END
 
@@ -400,6 +428,17 @@ BEGIN
 					Id = @Id
 					AND Lock = 0;
 
+				-- Unità locale: se la sede cancellata è una sede figlia con il flag, lo eredita
+				-- l'azienda, così il gruppo non resta mai senza un'unità locale attiva
+				UPDATE p
+				SET p.UnitaLocale = 1
+				FROM dbo.tblSedi p
+				INNER JOIN dbo.tblSedi s ON s.IdParent = p.Id
+				WHERE
+					s.Id = @Id
+					AND s.UnitaLocale = 1
+					AND p.Lock = 0;
+
 				IF @Reset = 1
 					DELETE dbo.tblIdCancellati
 					WHERE IdSessione = @IdSessione;
@@ -446,6 +485,21 @@ BEGIN
 
 			IF EXISTS (
 				SELECT 1
+				FROM dbo.tblServiziOsepe o
+				INNER JOIN dbo.tblServizi s ON o.Id = s.Id
+				INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
+				WHERE
+					o.IdOsepe = @Id
+					AND e.Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede associata ad un servizio non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			IF EXISTS (
+				SELECT 1
 				FROM dbo.tblScadenzeOsepe o
 				INNER JOIN dbo.tblScadenze s ON o.Id = s.Id
 				INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
@@ -456,6 +510,18 @@ BEGIN
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Una sede associata ad una scadenza non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
+			-- Dichiarazione MUD: una dichiarazione non si elimina mai insieme alla sede, quindi qui
+			-- blocca in qualunque stato (la FK NO_ACTION fermerebbe comunque la cancellazione fisica)
+			IF EXISTS (SELECT 1
+			FROM dbo.tblRifiutiMud
+			WHERE IdSede = @Id OR IdSedeLegale = @Id OR IdSedeUnitaLocale = @Id
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con dichiarazioni MUD associate non può essere cancellata';
 				GOTO BRANCH_END;
 			END
 
@@ -485,8 +551,10 @@ BEGIN
 
 				DELETE dbo.tblMagazziniDdt
 				WHERE
-					IdMittente = @Id
+					IdSede = @Id
+					OR IdMittente = @Id
 					OR IdDestinatario = @Id
+					OR IdDestinazione = @Id
 					OR IdTrasportatore = @Id
 					OR IdMovimento IN (SELECT Id FROM dbo.tblMagazziniMovimenti WHERE IdSede = @Id);
 
@@ -587,6 +655,14 @@ BEGIN
 				-- sopra su Lock=0), mantenuto per difesa dalla FK NO_ACTION.
 				DELETE dbo.tblRentriCredenzialiSedi
 				WHERE IdSede = @Id;
+
+				-- Tabelle 1:1 sulla sede (FK NO_ACTION): una bozza di norma non ne ha
+				DELETE dbo.tblSediDatiEstesi
+				WHERE Id = @Id;
+				DELETE dbo.tblSediRecapiti
+				WHERE Id = @Id;
+				DELETE dbo.tblSediIndirizzi
+				WHERE Id = @Id;
 
 				DELETE dbo.tblSediInterne
 				WHERE Id = @Id;

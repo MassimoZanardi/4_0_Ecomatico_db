@@ -111,6 +111,13 @@ BEGIN
 			SET @returnMessage = 'La modalità di pagamento indicata non esiste';
 			GOTO BRANCH_END;
 		END
+		-- La causale è la descrizione del movimento in prima nota: sempre richiesta
+		IF @Causale IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare la causale del pagamento';
+			GOTO BRANCH_END;
+		END
 		IF LEN(@Causale) > 100
 		BEGIN
 			SET @returnValue = -1;

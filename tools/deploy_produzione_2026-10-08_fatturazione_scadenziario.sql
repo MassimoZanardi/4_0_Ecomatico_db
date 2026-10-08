@@ -15,7 +15,7 @@ Eseguire con sqlcmd -f 65001 -I.
 Va deployato insieme all'app: le pagine Fatturazione > Scadenziario clienti e Scadenziario fornitori usano
 le nuove SP.
 
-Dopo il deploy: eseguire toolsverifica_crlf_accenti.sql, che deve dare 0 righe.
+Dopo il deploy: eseguire tools\verifica_crlf_accenti.sql, che deve dare 0 righe.
 */
 
 PRINT 'Pagine e menu dello scadenziario';
@@ -348,6 +348,13 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'La modalità di pagamento indicata non esiste';
+			GOTO BRANCH_END;
+		END
+		-- La causale è la descrizione del movimento in prima nota: sempre richiesta
+		IF @Causale IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare la causale del pagamento';
 			GOTO BRANCH_END;
 		END
 		IF LEN(@Causale) > 100

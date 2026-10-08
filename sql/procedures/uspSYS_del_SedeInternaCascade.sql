@@ -379,6 +379,7 @@ BEGIN
             -- collegamento, come per banche/casse e aliquote
             UPDATE dbo.tblFattureRigheImporti SET IdConto = NULL WHERE IdConto IN (SELECT Id FROM #FattureConti);
             DELETE FROM dbo.tblFattureConti WHERE Id IN (SELECT Id FROM #FattureConti);
+            DELETE FROM dbo.tblFattureDatiFiscali WHERE Id IN (SELECT Id FROM #Sedi);
             UPDATE dbo.tblFattureRigheImporti SET IdAliquotaIva = NULL WHERE IdAliquotaIva IN (SELECT Id FROM #AliquoteIva);
             UPDATE dbo.tblFatture SET IdBancaCassa = NULL WHERE IdBancaCassa IN (SELECT Id FROM #BancheCasse);
             DELETE FROM dbo.tblFattureRatePagamenti

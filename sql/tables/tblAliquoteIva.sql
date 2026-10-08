@@ -11,6 +11,7 @@ CREATE TABLE [dbo].[tblAliquoteIva](
 	[Codice] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
 	[Valore] [decimal](9, 2) NULL,
 	[Lock] [tinyint] NULL,
+	[RiferimentoNormativo] [varchar](100) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblAliquoteIva] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

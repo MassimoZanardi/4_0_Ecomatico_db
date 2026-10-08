@@ -69,6 +69,7 @@ BEGIN
 			a.IdSede,
 			a.IdTipo,
 			a.IdNatura,
+			a.RiferimentoNormativo,
 			a.Nome,
 			a.Codice,
 			a.Valore,

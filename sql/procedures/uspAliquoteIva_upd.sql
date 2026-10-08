@@ -7,6 +7,7 @@ CREATE OR ALTER PROCEDURE dbo.uspAliquoteIva_upd
 	@IdSessione CHAR(16) = NULL,
 	@IdTipo CHAR(2) = NULL,
 	@IdNatura VARCHAR(4) = NULL,
+	@RiferimentoNormativo VARCHAR(150) = NULL,
 	@Nome VARCHAR(50) = NULL,
 	@Codice VARCHAR(20) = NULL,
 	@Valore DECIMAL(9, 2) = NULL
@@ -22,6 +23,7 @@ BEGIN
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdTipo = UPPER(NULLIF(NULLIF(LTRIM(RTRIM(@IdTipo)), ''), REPLICATE('0', 2)));
 		SET @IdNatura = UPPER(NULLIF(NULLIF(LTRIM(RTRIM(@IdNatura)), ''), REPLICATE('0', 4)));
+		SET @RiferimentoNormativo = dbo.ufnStringhe_get_SenzaSpazi(@RiferimentoNormativo, 0, 1);
 		SET @Nome = dbo.ufnStringhe_get_SenzaSpazi(@Nome, 0, 1);
 		SET @Codice = dbo.ufnStringhe_get_SenzaSpazi(@Codice, 0, 1);
 
@@ -107,6 +109,7 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 			SET @IdNatura = NULL;
+			SET @RiferimentoNormativo = NULL;
 		END
 		ELSE
 		BEGIN
@@ -162,12 +165,21 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Il riferimento normativo accompagna la natura nel file della fattura elettronica: facoltativo
+		IF LEN(@RiferimentoNormativo) > 100
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il riferimento normativo non può superare i 100 caratteri';
+			GOTO BRANCH_END;
+		END
+
 		BEGIN TRANSACTION;
 			UPDATE dbo.tblAliquoteIva
 			SET
 				Lock = 0,
 				IdTipo = @IdTipo,
 				IdNatura = @IdNatura,
+				RiferimentoNormativo = @RiferimentoNormativo,
 				Nome = @Nome,
 				Codice = @Codice,
 				Valore = @Valore

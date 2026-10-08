@@ -620,6 +620,8 @@ BEGIN
 					OR IdBancaCassa IN (SELECT Id FROM dbo.tblBancheCasse WHERE IdSede = @Id);
 				DELETE dbo.tblFattureConti
 				WHERE IdSede = @Id;
+				DELETE dbo.tblFattureDatiFiscali
+				WHERE Id = @Id;
 				DELETE dbo.tblClientiFornitori
 				WHERE IdAziendaInterna = @Id;
 

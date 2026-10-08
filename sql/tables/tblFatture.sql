@@ -31,6 +31,8 @@ CREATE TABLE [dbo].[tblFatture](
 	[CodiceCup] [varchar](15) COLLATE Latin1_General_CI_AS NULL,
 	[SolaLettura] [bit] NULL,
 	[Lock] [tinyint] NULL,
+	[DataXml] [smalldatetime] NULL,
+	[ProgressivoXml] [varchar](5) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblFatture] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

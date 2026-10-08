@@ -12,6 +12,7 @@ CREATE TABLE [dbo].[tblFattureDatiFiscali](
 	[CapitaleSociale] [decimal](18, 2) NULL,
 	[SocioUnico] [char](2) COLLATE Latin1_General_CI_AS NULL,
 	[StatoLiquidazione] [char](2) COLLATE Latin1_General_CI_AS NULL,
+	[ProgressivoInvio] [int] NULL,
  CONSTRAINT [PK_tblFattureDatiFiscali] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

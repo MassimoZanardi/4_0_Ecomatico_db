@@ -69,6 +69,7 @@ BEGIN
 		NumeroFornitore VARCHAR(30) NULL,
 		DataRegistrazione DATE NULL,
 		DataEmissione DATE NULL,
+		Causale VARCHAR(200) NULL,
 		Iban VARCHAR(34) NULL,
 		RataGiorniInizio INT NULL,
 		Ordine VARCHAR(30) NULL,
@@ -77,8 +78,6 @@ BEGIN
 		Bollo DECIMAL(9, 2) NULL,
 		CodiceCig VARCHAR(10) NULL,
 		CodiceCup VARCHAR(15) NULL,
-		Causale VARCHAR(200) NULL,
-		Note VARCHAR(1000) NULL,
 		SolaLettura BIT NULL,
 		Lock TINYINT NULL,
 		CONSTRAINT PK_tblFatture PRIMARY KEY CLUSTERED (Id)
@@ -165,7 +164,7 @@ BEGIN
 		Importo DECIMAL(18, 2) NULL,
 		Abbuono DECIMAL(18, 2) NULL,
 		DataScadenza DATE NULL,
-		Note VARCHAR(1000) NULL,
+		Note VARCHAR(200) NULL,
 		CONSTRAINT PK_tblFattureRate PRIMARY KEY CLUSTERED (Id)
 	);
 
@@ -191,10 +190,14 @@ IF COL_LENGTH('dbo.tblFatture', 'IdFatturaRiferimento') IS NULL
 	ALTER TABLE dbo.tblFatture ADD IdFatturaRiferimento CHAR(16) NULL;
 IF COL_LENGTH('dbo.tblFatture', 'Causale') IS NULL
 	ALTER TABLE dbo.tblFatture ADD Causale VARCHAR(200) NULL;
+IF COL_LENGTH('dbo.tblFatture', 'Note') IS NOT NULL
+	ALTER TABLE dbo.tblFatture DROP COLUMN Note;
 IF COL_LENGTH('dbo.tblFattureRighe', 'Lock') IS NOT NULL
 	ALTER TABLE dbo.tblFattureRighe DROP COLUMN Lock;
 IF COL_LENGTH('dbo.tblFattureRate', 'Lock') IS NOT NULL
 	ALTER TABLE dbo.tblFattureRate DROP COLUMN Lock;
+IF COL_LENGTH('dbo.tblFattureRate', 'Note') > 200
+	ALTER TABLE dbo.tblFattureRate ALTER COLUMN Note VARCHAR(200) NULL;
 IF COL_LENGTH('dbo.tblPagamenti', 'IdSede') IS NULL
 	ALTER TABLE dbo.tblPagamenti ADD IdSede CHAR(16) NULL;
 IF COL_LENGTH('dbo.tblPagamenti', 'Tipo') IS NULL

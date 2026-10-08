@@ -100,6 +100,7 @@ BEGIN
 		NumeroFornitore VARCHAR(30) NULL,
 		DataRegistrazione DATE NULL,
 		DataEmissione DATE NULL,
+		Causale VARCHAR(200) NULL,
 		Iban VARCHAR(34) NULL,
 		RataGiorniInizio INT NULL,
 		Ordine VARCHAR(30) NULL,
@@ -108,8 +109,6 @@ BEGIN
 		Bollo DECIMAL(9, 2) NULL,
 		CodiceCig VARCHAR(10) NULL,
 		CodiceCup VARCHAR(15) NULL,
-		Causale VARCHAR(200) NULL,
-		Note VARCHAR(1000) NULL,
 		SolaLettura BIT NULL,
 		Lock TINYINT NULL,
 		CONSTRAINT PK_tblFatture PRIMARY KEY CLUSTERED (Id)
@@ -196,7 +195,7 @@ BEGIN
 		Importo DECIMAL(18, 2) NULL,
 		Abbuono DECIMAL(18, 2) NULL,
 		DataScadenza DATE NULL,
-		Note VARCHAR(1000) NULL,
+		Note VARCHAR(200) NULL,
 		CONSTRAINT PK_tblFattureRate PRIMARY KEY CLUSTERED (Id)
 	);
 
@@ -222,10 +221,14 @@ IF COL_LENGTH('dbo.tblFatture', 'IdFatturaRiferimento') IS NULL
 	ALTER TABLE dbo.tblFatture ADD IdFatturaRiferimento CHAR(16) NULL;
 IF COL_LENGTH('dbo.tblFatture', 'Causale') IS NULL
 	ALTER TABLE dbo.tblFatture ADD Causale VARCHAR(200) NULL;
+IF COL_LENGTH('dbo.tblFatture', 'Note') IS NOT NULL
+	ALTER TABLE dbo.tblFatture DROP COLUMN Note;
 IF COL_LENGTH('dbo.tblFattureRighe', 'Lock') IS NOT NULL
 	ALTER TABLE dbo.tblFattureRighe DROP COLUMN Lock;
 IF COL_LENGTH('dbo.tblFattureRate', 'Lock') IS NOT NULL
 	ALTER TABLE dbo.tblFattureRate DROP COLUMN Lock;
+IF COL_LENGTH('dbo.tblFattureRate', 'Note') > 200
+	ALTER TABLE dbo.tblFattureRate ALTER COLUMN Note VARCHAR(200) NULL;
 IF COL_LENGTH('dbo.tblPagamenti', 'IdSede') IS NULL
 	ALTER TABLE dbo.tblPagamenti ADD IdSede CHAR(16) NULL;
 IF COL_LENGTH('dbo.tblPagamenti', 'Tipo') IS NULL
@@ -742,7 +745,6 @@ BEGIN
 			f.CodiceCig,
 			f.CodiceCup,
 			f.Causale,
-			f.Note,
 			SolaLettura = ISNULL(f.SolaLettura, 0),
 			f.Lock,
 			NomeCompleto = s.NomeCompleto,
@@ -990,8 +992,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_get_List
 	@DataDa DATE = NULL,
 	@DataA DATE = NULL,
 	@IdTipo CHAR(4) = NULL,
-	@IdStato CHAR(1) = NULL,
-	@Note VARCHAR(50) = NULL
+	@IdStato CHAR(1) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -1005,7 +1006,6 @@ BEGIN
 		SET @Numero = NULLIF(LTRIM(RTRIM(@Numero)), '');
 		SET @IdTipo = NULLIF(NULLIF(LTRIM(RTRIM(@IdTipo)), ''), REPLICATE('0', 4));
 		SET @IdStato = NULLIF(NULLIF(LTRIM(RTRIM(@IdStato)), ''), '0');
-		SET @Note = dbo.ufnStringhe_get_SenzaSpazi(@Note, 0, 1);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -1060,7 +1060,6 @@ BEGIN
 			t.Totale,
 			t.NettoAPagare,
 			SolaLettura = ISNULL(f.SolaLettura, 0),
-			f.Note,
 			RowsCount = COUNT(*) OVER ()
 		FROM
 			dbo.tblFatture f
@@ -1085,7 +1084,6 @@ BEGIN
 			AND (@DataA IS NULL OR f.DataEmissione <= @DataA)
 			AND (@IdTipo IS NULL OR f.IdTipo = @IdTipo)
 			AND (@IdStato IS NULL OR f.IdStato = @IdStato)
-			AND (@Note IS NULL OR f.Note LIKE '%' + @Note + '%')
 		ORDER BY
 			f.DataEmissione DESC,
 			f.Numero DESC,
@@ -1563,7 +1561,6 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_upd
 	@CodiceCig VARCHAR(20) = NULL,
 	@CodiceCup VARCHAR(20) = NULL,
 	@Causale VARCHAR(250) = NULL,
-	@Note VARCHAR(1000) = NULL,
 	@SolaLettura BIT = 0,
 	@Conferma BIT = 1
 AS
@@ -1599,7 +1596,6 @@ BEGIN
 		SET @Bollo = ISNULL(@Bollo, 0);
 		SET @SolaLettura = ISNULL(@SolaLettura, 0);
 		SET @Conferma = ISNULL(@Conferma, 1);
-		SET @Note = dbo.ufnStringhe_get_SenzaSpazi(@Note, 0, 1);
 
 		IF @Id IS NULL
 		BEGIN
@@ -1970,7 +1966,6 @@ BEGIN
 				CodiceCig = @CodiceCig,
 				CodiceCup = @CodiceCup,
 				Causale = @Causale,
-				Note = @Note,
 				SolaLettura = @SolaLettura
 			WHERE
 				Id = @Id
@@ -3174,7 +3169,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFattureRate_upd
 	@DataScadenza DATE = NULL,
 	@Importo DECIMAL(18, 2) = NULL,
 	@Abbuono DECIMAL(18, 2) = NULL,
-	@Note VARCHAR(1000) = NULL
+	@Note VARCHAR(250) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -3261,6 +3256,12 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'L''abbuono deve essere compreso tra zero e l''importo della rata';
+			GOTO BRANCH_END;
+		END
+		IF LEN(@Note) > 200
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Le note della rata non possono superare i 200 caratteri';
 			GOTO BRANCH_END;
 		END
 

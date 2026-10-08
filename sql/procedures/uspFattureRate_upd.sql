@@ -11,7 +11,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFattureRate_upd
 	@DataScadenza DATE = NULL,
 	@Importo DECIMAL(18, 2) = NULL,
 	@Abbuono DECIMAL(18, 2) = NULL,
-	@Note VARCHAR(1000) = NULL
+	@Note VARCHAR(250) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -98,6 +98,12 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'L''abbuono deve essere compreso tra zero e l''importo della rata';
+			GOTO BRANCH_END;
+		END
+		IF LEN(@Note) > 200
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Le note della rata non possono superare i 200 caratteri';
 			GOTO BRANCH_END;
 		END
 

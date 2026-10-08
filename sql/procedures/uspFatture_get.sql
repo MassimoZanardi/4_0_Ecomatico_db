@@ -86,7 +86,6 @@ BEGIN
 			f.CodiceCig,
 			f.CodiceCup,
 			f.Causale,
-			f.Note,
 			SolaLettura = ISNULL(f.SolaLettura, 0),
 			f.Lock,
 			NomeCompleto = s.NomeCompleto,

@@ -8,7 +8,7 @@ CREATE TABLE [dbo].[tblFattureRate](
 	[Importo] [decimal](18, 2) NULL,
 	[Abbuono] [decimal](18, 2) NULL,
 	[DataScadenza] [date] NULL,
-	[Note] [varchar](1000) COLLATE Latin1_General_CI_AS NULL,
+	[Note] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblFattureRate] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

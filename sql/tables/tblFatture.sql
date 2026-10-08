@@ -13,12 +13,14 @@ CREATE TABLE [dbo].[tblFatture](
 	[IdRataInizio] [char](2) COLLATE Latin1_General_CI_AS NULL,
 	[IdValuta] [char](3) COLLATE Latin1_General_CI_AS NULL,
 	[IdBancaCassa] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdFatturaRiferimento] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[Tipo] [char](1) COLLATE Latin1_General_CI_AS NULL,
 	[Numero] [int] NULL,
 	[Sezionale] [char](1) COLLATE Latin1_General_CI_AS NULL,
 	[NumeroFornitore] [varchar](30) COLLATE Latin1_General_CI_AS NULL,
 	[DataRegistrazione] [date] NULL,
 	[DataEmissione] [date] NULL,
+	[Causale] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
 	[Iban] [varchar](34) COLLATE Latin1_General_CI_AS NULL,
 	[RataGiorniInizio] [int] NULL,
 	[Ordine] [varchar](30) COLLATE Latin1_General_CI_AS NULL,
@@ -27,11 +29,8 @@ CREATE TABLE [dbo].[tblFatture](
 	[Bollo] [decimal](9, 2) NULL,
 	[CodiceCig] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
 	[CodiceCup] [varchar](15) COLLATE Latin1_General_CI_AS NULL,
-	[Note] [varchar](1000) COLLATE Latin1_General_CI_AS NULL,
 	[SolaLettura] [bit] NULL,
 	[Lock] [tinyint] NULL,
-	[IdFatturaRiferimento] [char](16) COLLATE Latin1_General_CI_AS NULL,
-	[Causale] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblFatture] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

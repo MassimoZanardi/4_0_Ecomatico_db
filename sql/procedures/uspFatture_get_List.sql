@@ -12,8 +12,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_get_List
 	@DataDa DATE = NULL,
 	@DataA DATE = NULL,
 	@IdTipo CHAR(4) = NULL,
-	@IdStato CHAR(1) = NULL,
-	@Note VARCHAR(50) = NULL
+	@IdStato CHAR(1) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -27,7 +26,6 @@ BEGIN
 		SET @Numero = NULLIF(LTRIM(RTRIM(@Numero)), '');
 		SET @IdTipo = NULLIF(NULLIF(LTRIM(RTRIM(@IdTipo)), ''), REPLICATE('0', 4));
 		SET @IdStato = NULLIF(NULLIF(LTRIM(RTRIM(@IdStato)), ''), '0');
-		SET @Note = dbo.ufnStringhe_get_SenzaSpazi(@Note, 0, 1);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -82,7 +80,6 @@ BEGIN
 			t.Totale,
 			t.NettoAPagare,
 			SolaLettura = ISNULL(f.SolaLettura, 0),
-			f.Note,
 			RowsCount = COUNT(*) OVER ()
 		FROM
 			dbo.tblFatture f
@@ -107,7 +104,6 @@ BEGIN
 			AND (@DataA IS NULL OR f.DataEmissione <= @DataA)
 			AND (@IdTipo IS NULL OR f.IdTipo = @IdTipo)
 			AND (@IdStato IS NULL OR f.IdStato = @IdStato)
-			AND (@Note IS NULL OR f.Note LIKE '%' + @Note + '%')
 		ORDER BY
 			f.DataEmissione DESC,
 			f.Numero DESC,

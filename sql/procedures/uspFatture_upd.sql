@@ -31,7 +31,6 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_upd
 	@CodiceCig VARCHAR(20) = NULL,
 	@CodiceCup VARCHAR(20) = NULL,
 	@Causale VARCHAR(250) = NULL,
-	@Note VARCHAR(1000) = NULL,
 	@SolaLettura BIT = 0,
 	@Conferma BIT = 1
 AS
@@ -67,7 +66,6 @@ BEGIN
 		SET @Bollo = ISNULL(@Bollo, 0);
 		SET @SolaLettura = ISNULL(@SolaLettura, 0);
 		SET @Conferma = ISNULL(@Conferma, 1);
-		SET @Note = dbo.ufnStringhe_get_SenzaSpazi(@Note, 0, 1);
 
 		IF @Id IS NULL
 		BEGIN
@@ -438,7 +436,6 @@ BEGIN
 				CodiceCig = @CodiceCig,
 				CodiceCup = @CodiceCup,
 				Causale = @Causale,
-				Note = @Note,
 				SolaLettura = @SolaLettura
 			WHERE
 				Id = @Id

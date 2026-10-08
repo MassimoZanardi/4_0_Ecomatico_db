@@ -60,11 +60,17 @@ BEGIN
 
 		-- Scope: azienda interna corrente della sessione (tblSessioni.IdAzienda); senza azienda nessuna riga.
 		-- @Numero cerca nel numero della fattura e, per i fornitori, nel numero del loro documento.
-		-- Stato della riga: avviso se la fattura non ha righe con importi
+		-- Stato della riga: avviso se la fattura non ha righe con importi o se ha rate la cui somma è diversa
+		-- dal netto a pagare (una fattura senza rate non è segnalata)
 		SELECT
 			f.Id,
-			StatoValore = CASE WHEN t.Totale = 0 THEN 1 ELSE 0 END,
-			StatoDescrizione = CASE WHEN t.Totale = 0 THEN 'Fattura senza importi' ELSE 'OK' END,
+			StatoValore = CASE WHEN t.Totale = 0 OR (z.Numero > 0 AND z.Importo <> t.NettoAPagare) THEN 1 ELSE 0 END,
+			StatoDescrizione =
+				CASE
+					WHEN t.Totale = 0 THEN 'Fattura senza importi'
+					WHEN z.Numero > 0 AND z.Importo <> t.NettoAPagare THEN 'Le rate non corrispondono al netto a pagare'
+					ELSE 'OK'
+				END,
 			f.Numero,
 			f.Sezionale,
 			f.NumeroFornitore,
@@ -89,6 +95,7 @@ BEGIN
 			LEFT JOIN dbo.tblFattureTipi p ON f.IdTipo = p.Id
 			LEFT JOIN dbo.tblFattureStati a ON f.IdStato = a.Id
 			OUTER APPLY dbo.ufnFatture_get_Totali(f.Id) t
+			OUTER APPLY (SELECT Numero = COUNT(*), Importo = ISNULL(SUM(q.Importo), 0) FROM dbo.tblFattureRate q WHERE q.IdFattura = f.Id) z
 		WHERE
 			e.Id = @IdSessione
 			AND f.Tipo = @Tipo

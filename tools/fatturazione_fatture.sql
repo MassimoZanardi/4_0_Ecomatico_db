@@ -164,7 +164,6 @@ BEGIN
 		Importo DECIMAL(18, 2) NULL,
 		Abbuono DECIMAL(18, 2) NULL,
 		DataScadenza DATE NULL,
-		Note VARCHAR(200) NULL,
 		CONSTRAINT PK_tblFattureRate PRIMARY KEY CLUSTERED (Id)
 	);
 
@@ -196,8 +195,8 @@ IF COL_LENGTH('dbo.tblFattureRighe', 'Lock') IS NOT NULL
 	ALTER TABLE dbo.tblFattureRighe DROP COLUMN Lock;
 IF COL_LENGTH('dbo.tblFattureRate', 'Lock') IS NOT NULL
 	ALTER TABLE dbo.tblFattureRate DROP COLUMN Lock;
-IF COL_LENGTH('dbo.tblFattureRate', 'Note') > 200
-	ALTER TABLE dbo.tblFattureRate ALTER COLUMN Note VARCHAR(200) NULL;
+IF COL_LENGTH('dbo.tblFattureRate', 'Note') IS NOT NULL
+	ALTER TABLE dbo.tblFattureRate DROP COLUMN Note;
 IF COL_LENGTH('dbo.tblPagamenti', 'IdSede') IS NULL
 	ALTER TABLE dbo.tblPagamenti ADD IdSede CHAR(16) NULL;
 IF COL_LENGTH('dbo.tblPagamenti', 'Tipo') IS NULL

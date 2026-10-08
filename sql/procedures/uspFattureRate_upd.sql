@@ -10,8 +10,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFattureRate_upd
 	@IdSessione CHAR(16) = NULL,
 	@DataScadenza DATE = NULL,
 	@Importo DECIMAL(18, 2) = NULL,
-	@Abbuono DECIMAL(18, 2) = NULL,
-	@Note VARCHAR(250) = NULL
+	@Abbuono DECIMAL(18, 2) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -23,7 +22,6 @@ BEGIN
 		SET @IdFattura = NULLIF(LTRIM(RTRIM(@IdFattura)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @Abbuono = ISNULL(@Abbuono, 0);
-		SET @Note = dbo.ufnStringhe_get_SenzaSpazi(@Note, 0, 1);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -100,11 +98,25 @@ BEGIN
 			SET @returnMessage = 'L''abbuono deve essere compreso tra zero e l''importo della rata';
 			GOTO BRANCH_END;
 		END
-		IF LEN(@Note) > 200
+
+		-- Rata con pagamenti: l'importo, tolto l'abbuono, non può scendere sotto quanto già pagato
+		IF @Id IS NOT NULL
 		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Le note della rata non possono superare i 200 caratteri';
-			GOTO BRANCH_END;
+			DECLARE @pagato DECIMAL(18, 2);
+			SELECT @pagato = ISNULL(SUM(rp.Importo), 0)
+			FROM
+				dbo.tblFattureRatePagamenti rp
+				INNER JOIN dbo.tblPagamenti g ON rp.IdPagamento = g.Id
+			WHERE
+				rp.IdRata = @Id
+				AND g.Lock = 0;
+
+			IF @Importo - @Abbuono < @pagato
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'L''importo della rata, tolto l''abbuono, non può essere inferiore a quanto già pagato (' + FORMAT(@pagato, 'N2', 'it-IT') + ')';
+				GOTO BRANCH_END;
+			END
 		END
 
 		-- Nuova rata: uspId_get FUORI dalla transazione
@@ -114,15 +126,14 @@ BEGIN
 
 		BEGIN TRANSACTION;
 			IF @nuova = 1
-				INSERT dbo.tblFattureRate (Id, IdFattura, Importo, Abbuono, DataScadenza, Note)
-				VALUES (@Id, @IdFattura, @Importo, @Abbuono, @DataScadenza, @Note);
+				INSERT dbo.tblFattureRate (Id, IdFattura, Importo, Abbuono, DataScadenza)
+				VALUES (@Id, @IdFattura, @Importo, @Abbuono, @DataScadenza);
 			ELSE
 				UPDATE dbo.tblFattureRate
 				SET
 					Importo = @Importo,
 					Abbuono = @Abbuono,
-					DataScadenza = @DataScadenza,
-					Note = @Note
+					DataScadenza = @DataScadenza
 				WHERE Id = @Id;
 		COMMIT TRANSACTION;
 

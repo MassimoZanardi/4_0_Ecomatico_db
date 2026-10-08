@@ -195,7 +195,6 @@ BEGIN
 		Importo DECIMAL(18, 2) NULL,
 		Abbuono DECIMAL(18, 2) NULL,
 		DataScadenza DATE NULL,
-		Note VARCHAR(200) NULL,
 		CONSTRAINT PK_tblFattureRate PRIMARY KEY CLUSTERED (Id)
 	);
 
@@ -227,8 +226,8 @@ IF COL_LENGTH('dbo.tblFattureRighe', 'Lock') IS NOT NULL
 	ALTER TABLE dbo.tblFattureRighe DROP COLUMN Lock;
 IF COL_LENGTH('dbo.tblFattureRate', 'Lock') IS NOT NULL
 	ALTER TABLE dbo.tblFattureRate DROP COLUMN Lock;
-IF COL_LENGTH('dbo.tblFattureRate', 'Note') > 200
-	ALTER TABLE dbo.tblFattureRate ALTER COLUMN Note VARCHAR(200) NULL;
+IF COL_LENGTH('dbo.tblFattureRate', 'Note') IS NOT NULL
+	ALTER TABLE dbo.tblFattureRate DROP COLUMN Note;
 IF COL_LENGTH('dbo.tblPagamenti', 'IdSede') IS NULL
 	ALTER TABLE dbo.tblPagamenti ADD IdSede CHAR(16) NULL;
 IF COL_LENGTH('dbo.tblPagamenti', 'Tipo') IS NULL
@@ -2931,8 +2930,7 @@ BEGIN
 			r.DataScadenza,
 			Importo = CAST(r.Importo AS DECIMAL(18, 2)),
 			Abbuono = CAST(ISNULL(r.Abbuono, 0) AS DECIMAL(18, 2)),
-			Pagato = CAST(x.Pagato AS DECIMAL(18, 2)),
-			r.Note
+			Pagato = CAST(x.Pagato AS DECIMAL(18, 2))
 		FROM
 			dbo.tblFattureRate r
 			INNER JOIN dbo.tblFatture f ON r.IdFattura = f.Id
@@ -3175,8 +3173,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFattureRate_upd
 	@IdSessione CHAR(16) = NULL,
 	@DataScadenza DATE = NULL,
 	@Importo DECIMAL(18, 2) = NULL,
-	@Abbuono DECIMAL(18, 2) = NULL,
-	@Note VARCHAR(250) = NULL
+	@Abbuono DECIMAL(18, 2) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -3188,7 +3185,6 @@ BEGIN
 		SET @IdFattura = NULLIF(LTRIM(RTRIM(@IdFattura)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @Abbuono = ISNULL(@Abbuono, 0);
-		SET @Note = dbo.ufnStringhe_get_SenzaSpazi(@Note, 0, 1);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -3265,11 +3261,25 @@ BEGIN
 			SET @returnMessage = 'L''abbuono deve essere compreso tra zero e l''importo della rata';
 			GOTO BRANCH_END;
 		END
-		IF LEN(@Note) > 200
+
+		-- Rata con pagamenti: l'importo, tolto l'abbuono, non può scendere sotto quanto già pagato
+		IF @Id IS NOT NULL
 		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Le note della rata non possono superare i 200 caratteri';
-			GOTO BRANCH_END;
+			DECLARE @pagato DECIMAL(18, 2);
+			SELECT @pagato = ISNULL(SUM(rp.Importo), 0)
+			FROM
+				dbo.tblFattureRatePagamenti rp
+				INNER JOIN dbo.tblPagamenti g ON rp.IdPagamento = g.Id
+			WHERE
+				rp.IdRata = @Id
+				AND g.Lock = 0;
+
+			IF @Importo - @Abbuono < @pagato
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'L''importo della rata, tolto l''abbuono, non può essere inferiore a quanto già pagato (' + FORMAT(@pagato, 'N2', 'it-IT') + ')';
+				GOTO BRANCH_END;
+			END
 		END
 
 		-- Nuova rata: uspId_get FUORI dalla transazione
@@ -3279,15 +3289,14 @@ BEGIN
 
 		BEGIN TRANSACTION;
 			IF @nuova = 1
-				INSERT dbo.tblFattureRate (Id, IdFattura, Importo, Abbuono, DataScadenza, Note)
-				VALUES (@Id, @IdFattura, @Importo, @Abbuono, @DataScadenza, @Note);
+				INSERT dbo.tblFattureRate (Id, IdFattura, Importo, Abbuono, DataScadenza)
+				VALUES (@Id, @IdFattura, @Importo, @Abbuono, @DataScadenza);
 			ELSE
 				UPDATE dbo.tblFattureRate
 				SET
 					Importo = @Importo,
 					Abbuono = @Abbuono,
-					DataScadenza = @DataScadenza,
-					Note = @Note
+					DataScadenza = @DataScadenza
 				WHERE Id = @Id;
 		COMMIT TRANSACTION;
 

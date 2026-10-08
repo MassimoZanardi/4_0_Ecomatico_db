@@ -60,8 +60,7 @@ BEGIN
 			r.DataScadenza,
 			Importo = CAST(r.Importo AS DECIMAL(18, 2)),
 			Abbuono = CAST(ISNULL(r.Abbuono, 0) AS DECIMAL(18, 2)),
-			Pagato = CAST(x.Pagato AS DECIMAL(18, 2)),
-			r.Note
+			Pagato = CAST(x.Pagato AS DECIMAL(18, 2))
 		FROM
 			dbo.tblFattureRate r
 			INNER JOIN dbo.tblFatture f ON r.IdFattura = f.Id

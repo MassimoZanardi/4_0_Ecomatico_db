@@ -81,7 +81,7 @@ BEGIN
 			SedeUnitaLocaleNome = su.Nome + ' ' + su.IndirizzoCompleto,
 			IdAteco = ud.IdAteco,
 			AtecoDescrizione = a.Descrizione,
-			CodiceRea = ud.CodiceRea,
+			NumeroRea = ud.NumeroRea,
 			Dipendenti = ud.Dipendenti,
 			c.Data,
 			c.Anno,

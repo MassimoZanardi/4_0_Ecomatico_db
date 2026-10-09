@@ -12,7 +12,7 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiMud_upd]
 	@LegaleNome VARCHAR(50) = NULL,
 	@LegaleCognome VARCHAR(50) = NULL,
 	@IdAteco VARCHAR(10) = NULL,
-	@CodiceRea VARCHAR(10) = NULL,
+	@NumeroRea VARCHAR(10) = NULL,
 	@Dipendenti INT = NULL,
 	@Telefono VARCHAR(100) = NULL,
 	@Email VARCHAR(100) = NULL
@@ -30,7 +30,7 @@ BEGIN
 		SET @LegaleNome = dbo.ufnStringhe_get_SenzaSpazi(@LegaleNome, 0, 1);
 		SET @LegaleCognome = dbo.ufnStringhe_get_SenzaSpazi(@LegaleCognome, 0, 1);
 		SET @IdAteco = NULLIF(LTRIM(RTRIM(@IdAteco)), '');
-		SET @CodiceRea = dbo.ufnStringhe_get_SenzaSpazi(@CodiceRea, 0, 1);
+		SET @NumeroRea = dbo.ufnStringhe_get_SenzaSpazi(@NumeroRea, 0, 1);
 		SET @Telefono = dbo.ufnStringhe_get_SenzaSpazi(@Telefono, 0, 1);
 		SET @Email = dbo.ufnStringhe_get_SenzaSpazi(@Email, 0, 1);
 
@@ -200,12 +200,12 @@ BEGIN
 				UPDATE dbo.tblSediDatiEstesi
 				SET
 					IdAteco = @IdAteco,
-					CodiceRea = @CodiceRea,
+					NumeroRea = @NumeroRea,
 					Dipendenti = @Dipendenti
 				WHERE Id = @IdSedeUnitaLocale;
 			ELSE
-				INSERT dbo.tblSediDatiEstesi (Id, IdAteco, CodiceRea, Dipendenti)
-				VALUES (@IdSedeUnitaLocale, @IdAteco, @CodiceRea, @Dipendenti);
+				INSERT dbo.tblSediDatiEstesi (Id, IdAteco, NumeroRea, Dipendenti)
+				VALUES (@IdSedeUnitaLocale, @IdAteco, @NumeroRea, @Dipendenti);
 
 			-- Telefono/e-mail: aggiornano l'anagrafica reale della Sede (Unità locale),
 			-- upsert mirato sui soli recapiti T0/M0 per non toccare T1/T2/M1/M2

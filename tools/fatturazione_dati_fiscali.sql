@@ -109,7 +109,7 @@ WHEN MATCHED AND (ISNULL(t.Nome, '') <> s.Nome OR ISNULL(t.Pos, 0) <> s.Pos) THE
 WHEN NOT MATCHED THEN INSERT (Id, Nome, Pos) VALUES (s.Id, s.Nome, s.Pos);
 GO
 -- Dati fiscali dell'azienda interna (Id = azienda, una riga per azienda). NumeroRea è quello dell'azienda: non
--- è tblSediDatiEstesi.CodiceRea, che il MUD salva sull'unità locale. SocioUnico: SU socio unico, SM più soci.
+-- è tblSediDatiEstesi.NumeroRea, che il MUD salva sull'unità locale. SocioUnico: SU socio unico, SM più soci.
 -- StatoLiquidazione: LS in liquidazione, LN non in liquidazione.
 IF OBJECT_ID('dbo.tblFattureDatiFiscali') IS NULL
 BEGIN
@@ -147,13 +147,14 @@ WHERE
 	AND RiferimentoNormativo IS NULL;
 GO
 -- Pagina e voce di menu. Menu Fatturazione: Fatture clienti, Fatture fornitori, Scadenziario clienti,
--- Scadenziario fornitori, Conti, Dati fiscali, Banche e casse, Aliquote IVA
+-- Scadenziario fornitori, Conti, Banche e casse, Aliquote IVA, Dati fiscali (ultima: è configurazione iniziale)
 IF NOT EXISTS (SELECT 1 FROM dbo.tblPagine WHERE Id = 'FTD')
 	INSERT INTO dbo.tblPagine (Id, IdFunzione, Nome, Url, Note) VALUES ('FTD', 'FTC', 'Dati fiscali', 'dati-fiscali', NULL);
 
 IF NOT EXISTS (SELECT 1 FROM dbo.tblMenu WHERE Id = 'AJ8')
-	INSERT INTO dbo.tblMenu (Id, IdParent, IdArea, IdPagina, Pos) VALUES ('AJ8', 'AJ0', NULL, 'FTD', 5);
+	INSERT INTO dbo.tblMenu (Id, IdParent, IdArea, IdPagina, Pos) VALUES ('AJ8', 'AJ0', NULL, 'FTD', 7);
 
-UPDATE dbo.tblMenu SET Pos = 6 WHERE Id = 'AJ1' AND Pos <> 6;
-UPDATE dbo.tblMenu SET Pos = 7 WHERE Id = 'AJ2' AND Pos <> 7;
+UPDATE dbo.tblMenu SET Pos = 5 WHERE Id = 'AJ1' AND Pos <> 5;
+UPDATE dbo.tblMenu SET Pos = 6 WHERE Id = 'AJ2' AND Pos <> 6;
+UPDATE dbo.tblMenu SET Pos = 7 WHERE Id = 'AJ8' AND Pos <> 7;
 GO

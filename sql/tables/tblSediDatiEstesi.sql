@@ -7,7 +7,7 @@ GO
 CREATE TABLE [dbo].[tblSediDatiEstesi](
 	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdAteco] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
-	[CodiceRea] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
+	[NumeroRea] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
 	[Dipendenti] [int] NULL,
 	[LegaleNome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[LegaleCognome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,

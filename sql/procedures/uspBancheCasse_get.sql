@@ -71,6 +71,8 @@ BEGIN
 			b.Iban,
 			b.CodiceSia,
 			b.Bic,
+			b.SaldoIniziale,
+			b.DataSaldoIniziale,
 			b.Lock
 		FROM dbo.tblBancheCasse b
 		WHERE

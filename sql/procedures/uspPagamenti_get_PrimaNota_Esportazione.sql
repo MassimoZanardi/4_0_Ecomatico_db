@@ -58,11 +58,13 @@ BEGIN
 			[Movimento] = IIF(t.Tipo = 'E', 'Entrata', 'Uscita'),
 			[Pagamento tramite] = t.ModalitaNome,
 			[Causale] = t.Causale,
+			[Conto] = t.ContoNome,
 			[Entrata] = t.Entrata,
 			[Uscita] = t.Uscita,
 			[Saldo] = t.Saldo,
 			[Fatture] = t.Fatture,
 			[Cliente o fornitore] = t.NomeCompleto,
+			[Origine] = IIF(t.Manuale = 1, 'Movimento manuale', 'Fattura'),
 			[Partita IVA] = t.PartitaIva,
 			[Codice fiscale] = t.CodiceFiscale
 		FROM dbo.ufnPagamenti_get_PrimaNota(@IdSessione, @DataDa, @DataA, @IdBancaCassa, @Verso, @Testo) t

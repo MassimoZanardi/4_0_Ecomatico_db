@@ -88,6 +88,13 @@ BEGIN
 				SET @returnMessage = 'Un conto usato nelle righe di una fattura non può essere cancellato';
 				GOTO BRANCH_END;
 			END
+			-- Lo stesso per un conto indicato in un movimento manuale attivo della prima nota
+			IF EXISTS (SELECT 1 FROM dbo.tblPagamenti WHERE IdConto = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un conto usato in un movimento della prima nota non può essere cancellato';
+				GOTO BRANCH_END;
+			END
 
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblFattureConti

@@ -13,6 +13,7 @@ CREATE TABLE [dbo].[tblPagamenti](
 	[DataContabile] [date] NULL,
 	[Importo] [decimal](18, 2) NULL,
 	[Lock] [tinyint] NULL,
+	[IdConto] [char](16) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblPagamenti] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
@@ -23,6 +24,11 @@ ALTER TABLE [dbo].[tblPagamenti]  WITH CHECK ADD  CONSTRAINT [FK_tblPagamenti_tb
 REFERENCES [dbo].[tblBancheCasse] ([Id])
 GO
 ALTER TABLE [dbo].[tblPagamenti] CHECK CONSTRAINT [FK_tblPagamenti_tblBancheCasse]
+GO
+ALTER TABLE [dbo].[tblPagamenti]  WITH CHECK ADD  CONSTRAINT [FK_tblPagamenti_tblFattureConti] FOREIGN KEY([IdConto])
+REFERENCES [dbo].[tblFattureConti] ([Id])
+GO
+ALTER TABLE [dbo].[tblPagamenti] CHECK CONSTRAINT [FK_tblPagamenti_tblFattureConti]
 GO
 ALTER TABLE [dbo].[tblPagamenti]  WITH CHECK ADD  CONSTRAINT [FK_tblPagamenti_tblPagamentiModalita] FOREIGN KEY([IdModalita])
 REFERENCES [dbo].[tblPagamentiModalita] ([Id])

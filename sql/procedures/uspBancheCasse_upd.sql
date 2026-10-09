@@ -9,7 +9,9 @@ CREATE OR ALTER PROCEDURE dbo.uspBancheCasse_upd
 	@Nome VARCHAR(50) = NULL,
 	@Iban VARCHAR(50) = NULL,
 	@CodiceSia VARCHAR(20) = NULL,
-	@Bic VARCHAR(20) = NULL
+	@Bic VARCHAR(20) = NULL,
+	@SaldoIniziale DECIMAL(18, 2) = NULL,
+	@DataSaldoIniziale DATE = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -116,6 +118,15 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Saldo iniziale, per la prima nota: importo (anche negativo) e data si indicano insieme. È il saldo
+		-- all'inizio del giorno indicato: il saldo progressivo parte da lì
+		IF (@SaldoIniziale IS NULL AND @DataSaldoIniziale IS NOT NULL) OR (@SaldoIniziale IS NOT NULL AND @DataSaldoIniziale IS NULL)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Per il saldo iniziale indicare sia l''importo sia la data';
+			GOTO BRANCH_END;
+		END
+
 		-- Controlla che non esista un'altra banca o cassa attiva con lo stesso nome nella stessa azienda
 		IF EXISTS (
 			SELECT 1
@@ -140,7 +151,9 @@ BEGIN
 				Nome = @Nome,
 				Iban = @Iban,
 				CodiceSia = @CodiceSia,
-				Bic = @Bic
+				Bic = @Bic,
+				SaldoIniziale = @SaldoIniziale,
+				DataSaldoIniziale = @DataSaldoIniziale
 			WHERE
 				Id = @Id
 				AND Lock <= 2;

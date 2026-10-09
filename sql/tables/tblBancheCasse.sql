@@ -11,6 +11,8 @@ CREATE TABLE [dbo].[tblBancheCasse](
 	[CodiceSia] [varchar](5) COLLATE Latin1_General_CI_AS NULL,
 	[Bic] [varchar](11) COLLATE Latin1_General_CI_AS NULL,
 	[Lock] [tinyint] NULL,
+	[SaldoIniziale] [decimal](18, 2) NULL,
+	[DataSaldoIniziale] [date] NULL,
  CONSTRAINT [PK_tblBancheCasse] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

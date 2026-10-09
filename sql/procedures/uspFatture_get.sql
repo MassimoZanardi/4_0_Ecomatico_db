@@ -88,6 +88,8 @@ BEGIN
 			f.Causale,
 			SolaLettura = ISNULL(f.SolaLettura, 0),
 			f.Lock,
+			-- Fattura cliente: ultimo file XML generato; fattura fornitore: caricamento del file da cui è nata
+			f.DataXml,
 			NomeCompleto = s.NomeCompleto,
 			t.Imponibile,
 			t.Iva,

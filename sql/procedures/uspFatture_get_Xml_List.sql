@@ -8,6 +8,7 @@ GO
 --     della nota di credito, banca dell'azienda, totali. Al massimo 101 righe: la 101a dice a chi chiama che
 --     l'intervallo supera il limite di 100 fatture per generazione.
 --   R righe, in ordine di posizione; A rate, in ordine di scadenza.
+-- Con @Id si lavora su quella sola fattura (generazione dalla scheda o con allegati): intervallo e anno non servono.
 -- I controlli sui dati mancanti e la composizione del file sono nell'applicazione (FatturaXmlService).
 CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Xml_List
 	@IdSessione CHAR(16) = NULL,
@@ -16,7 +17,8 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Xml_List
 	@AlNumero INT = NULL,
 	@Anno INT = NULL,
 	@Sezionale CHAR(1) = NULL,
-	@EscludiGenerate BIT = 0
+	@EscludiGenerate BIT = 0,
+	@Id CHAR(16) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -28,6 +30,7 @@ BEGIN
 		SET @Elenco = UPPER(NULLIF(LTRIM(RTRIM(@Elenco)), ''));
 		SET @Sezionale = UPPER(NULLIF(LTRIM(RTRIM(@Sezionale)), ''));
 		SET @EscludiGenerate = ISNULL(@EscludiGenerate, 0);
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -41,7 +44,7 @@ BEGIN
 			SET @returnMessage = 'Il parametro @Elenco deve essere T (testate), R (righe) o A (rate)';
 			GOTO BRANCH_END;
 		END
-		IF @Anno IS NULL OR @Anno < 1900 OR @Anno > 9998
+		IF @Id IS NULL AND (@Anno IS NULL OR @Anno < 1900 OR @Anno > 9998)
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Indicare l''anno delle fatture';
@@ -130,7 +133,7 @@ BEGIN
 				c.CodiceDestinatario,
 				c.PecDestinatario
 			FROM
-				dbo.ufnFatture_get_XmlIntervallo(@IdSessione, @DalNumero, @AlNumero, @Anno, @Sezionale, @EscludiGenerate) x
+				dbo.ufnFatture_get_XmlIntervallo(@IdSessione, @DalNumero, @AlNumero, @Anno, @Sezionale, @EscludiGenerate, @Id) x
 				INNER JOIN dbo.tblFatture f ON x.Id = f.Id
 				INNER JOIN dbo.tblSedi a ON f.IdSede = a.Id
 				LEFT JOIN dbo.tblSediIndirizzi asi ON a.Id = asi.Id
@@ -171,7 +174,7 @@ BEGIN
 				RitenutaAcconto = ISNULL(i.RitenutaAcconto, 0),
 				Imponibile = CAST(ROUND(ISNULL(i.Quantita, 1) * ISNULL(i.Importo, 0), 2) AS DECIMAL(18, 2))
 			FROM
-				dbo.ufnFatture_get_XmlIntervallo(@IdSessione, @DalNumero, @AlNumero, @Anno, @Sezionale, @EscludiGenerate) x
+				dbo.ufnFatture_get_XmlIntervallo(@IdSessione, @DalNumero, @AlNumero, @Anno, @Sezionale, @EscludiGenerate, @Id) x
 				INNER JOIN dbo.tblFattureRighe r ON x.Id = r.IdFattura
 				LEFT JOIN dbo.tblFattureRigheImporti i ON r.Id = i.Id
 				LEFT JOIN dbo.tblUnitaMisura u ON i.IdUnitaMisura = u.Id
@@ -187,7 +190,7 @@ BEGIN
 				r.DataScadenza,
 				Importo = CAST(ISNULL(r.Importo, 0) - ISNULL(r.Abbuono, 0) AS DECIMAL(18, 2))
 			FROM
-				dbo.ufnFatture_get_XmlIntervallo(@IdSessione, @DalNumero, @AlNumero, @Anno, @Sezionale, @EscludiGenerate) x
+				dbo.ufnFatture_get_XmlIntervallo(@IdSessione, @DalNumero, @AlNumero, @Anno, @Sezionale, @EscludiGenerate, @Id) x
 				INNER JOIN dbo.tblFattureRate r ON x.Id = r.IdFattura
 			ORDER BY
 				r.IdFattura,

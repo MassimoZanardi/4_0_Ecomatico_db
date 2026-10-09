@@ -2,10 +2,12 @@
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Prima nota: righe per l'esportazione in CSV (Azioni > Esporta). Stessi movimenti e stessa ricerca
--- dell'elenco (ufnPagamenti_get_PrimaNota), tutti e senza paginazione, con più colonne di quelle a video.
--- Il nome di ogni colonna è l'intestazione che finisce nel file: l'applicazione (CsvService) scrive le colonne
--- così come arrivano, nello stesso ordine. Per cambiare che cosa si esporta si modifica solo questa SP.
+-- Prima nota: righe per l'esportazione in Excel e in CSV (Azioni > Esporta in Excel, Esporta in CSV). Stessi
+-- movimenti e stessa ricerca dell'elenco (ufnPagamenti_get_PrimaNota), tutti e senza paginazione, con più
+-- colonne di quelle a video.
+-- Il nome di ogni colonna è l'intestazione che finisce nel file: l'applicazione (ExcelService, CsvService)
+-- scrive le colonne così come arrivano, nello stesso ordine, uguali nei due formati. Per cambiare che cosa si
+-- esporta si modifica solo questa SP.
 CREATE OR ALTER PROCEDURE dbo.uspPagamenti_get_PrimaNota_Esportazione
 	@IdSessione CHAR(16) = NULL,
 	@DataDa DATE = NULL,

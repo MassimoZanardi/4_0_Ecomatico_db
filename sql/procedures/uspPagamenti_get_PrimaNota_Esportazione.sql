@@ -7,14 +7,16 @@ GO
 -- colonne di quelle a video.
 -- Il nome di ogni colonna è l'intestazione che finisce nel file: l'applicazione (ExcelService, CsvService)
 -- scrive le colonne così come arrivano, nello stesso ordine, uguali nei due formati. Per cambiare che cosa si
--- esporta si modifica solo questa SP.
+-- esporta si modifica solo questa SP. Al massimo @MaxRighe + 1 righe (la riga in più dice all'applicazione
+-- che la ricerca va ristretta).
 CREATE OR ALTER PROCEDURE dbo.uspPagamenti_get_PrimaNota_Esportazione
 	@IdSessione CHAR(16) = NULL,
 	@DataDa DATE = NULL,
 	@DataA DATE = NULL,
 	@IdBancaCassa CHAR(16) = NULL,
 	@Verso CHAR(1) = NULL,
-	@Testo VARCHAR(50) = NULL
+	@Testo VARCHAR(50) = NULL,
+	@MaxRighe INT = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -26,6 +28,7 @@ BEGIN
 		SET @IdBancaCassa = NULLIF(NULLIF(LTRIM(RTRIM(@IdBancaCassa)), ''), REPLICATE('0', 16));
 		SET @Verso = UPPER(NULLIF(LTRIM(RTRIM(@Verso)), ''));
 		SET @Testo = dbo.ufnStringhe_get_SenzaSpazi(@Testo, 0, 1);
+		SET @MaxRighe = IIF(ISNULL(@MaxRighe, 0) < 1, 50000, @MaxRighe);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -53,7 +56,7 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		SELECT
+		SELECT TOP (@MaxRighe + 1)
 			[Data contabile] = t.DataContabile,
 			[Data registrazione] = t.DataRegistrazione,
 			[Banca o cassa] = t.BancaCassaNome,

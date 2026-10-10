@@ -42,11 +42,17 @@ BEGIN
 
 		-- Restituisce i moduli selezionabili per un dominio
 		-- escludendo BAS (Base) e IMP (Impostazioni) riservati al sistema.
-		-- Con @Id (il dominio) solo quelli non ancora assegnati al dominio
+		-- Con @Id (il dominio) solo quelli non ancora assegnati al dominio.
+		-- Se non ne resta nessuno, l'unica voce è "(Nessuno)" con Id a zeri: non è un modulo da aggiungere
+		DECLARE @moduli TABLE (
+			Id CHAR(3) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY,
+			Nome VARCHAR(50) COLLATE DATABASE_DEFAULT NULL
+		);
+
+		INSERT @moduli (Id, Nome)
 		SELECT
 			m.Id,
-			[Text] = m.Nome,
-			Selected = CAST(0 AS BIT)
+			m.Nome
 		FROM dbo.tblModuli m
 		WHERE
 			m.Id NOT IN ('BAS', 'IMP')
@@ -55,8 +61,20 @@ BEGIN
 				@Id IS NULL
 				OR NOT EXISTS (SELECT 1 FROM dbo.tblDominiModuli d WHERE d.Id = @Id AND d.IdModulo = m.Id)
 				)
-		ORDER BY m.Nome
 		OPTION (RECOMPILE);
+
+		IF EXISTS (SELECT 1 FROM @moduli)
+			SELECT
+				m.Id,
+				[Text] = m.Nome,
+				Selected = CAST(0 AS BIT)
+			FROM @moduli m
+			ORDER BY m.Nome;
+		ELSE
+			SELECT
+				Id = CAST(REPLICATE('0', 3) AS CHAR(3)),
+				[Text] = CAST('(Nessuno)' AS VARCHAR(50)),
+				Selected = CAST(1 AS BIT);
 
 	END TRY
 	BEGIN CATCH

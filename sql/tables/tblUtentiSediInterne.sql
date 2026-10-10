@@ -28,3 +28,4 @@ REFERENCES [dbo].[tblUtenti] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblUtentiSediInterne] CHECK CONSTRAINT [FK_tblUtentiSediInterne_tblUtenti]
+GO

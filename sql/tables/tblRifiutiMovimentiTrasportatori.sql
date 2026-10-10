@@ -38,3 +38,4 @@ REFERENCES [dbo].[tblRifiutiMovimentiTrasportiTipi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiMovimentiTrasportatori] CHECK CONSTRAINT [FK_tblRifiutiMovimentiTrasportatori_tblRifiutiMovimentiTrasportiTipi]
+GO

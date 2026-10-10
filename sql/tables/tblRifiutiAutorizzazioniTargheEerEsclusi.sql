@@ -30,3 +30,4 @@ REFERENCES [dbo].[tblRifiutiEer] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiAutorizzazioniTargheEerEsclusi] CHECK CONSTRAINT [FK_tblRifiutiAutorizzazioniTargheEerEsclusi_tblRifiutiEer]
+GO

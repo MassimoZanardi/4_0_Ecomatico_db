@@ -29,3 +29,4 @@ REFERENCES [dbo].[tblProprieta] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblEventiProprieta] CHECK CONSTRAINT [FK_tblEventiProprieta_tblProprieta]
+GO

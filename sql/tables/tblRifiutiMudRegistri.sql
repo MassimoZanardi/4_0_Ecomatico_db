@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
@@ -7,7 +7,7 @@ GO
 CREATE TABLE [dbo].[tblRifiutiMudRegistri](
 	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdRegistro] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
- CONSTRAINT [PK_tblRifiutiMudRegistri] PRIMARY KEY CLUSTERED
+ CONSTRAINT [PK_tblRifiutiMudRegistri] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC,
 	[IdRegistro] ASC

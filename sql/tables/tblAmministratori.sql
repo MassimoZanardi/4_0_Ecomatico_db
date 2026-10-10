@@ -10,20 +10,29 @@ CREATE TABLE [dbo].[tblAmministratori](
 	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[Note] [varchar](1000) COLLATE Latin1_General_CI_AS NULL,
 	[Lock] [tinyint] NULL,
- CONSTRAINT [PK_tblAmministratori] PRIMARY KEY CLUSTERED
+ CONSTRAINT [PK_tblAmministratori] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
+
+GO
+
+SET ANSI_PADDING ON
+
 GO
 
 CREATE NONCLUSTERED INDEX [IX_tblAmministratori_IdSede] ON [dbo].[tblAmministratori]
 (
 	[IdSede] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
--- Una sola scheda attiva per soggetto nella stessa azienda
+SET ANSI_PADDING ON
+
+GO
+
 CREATE UNIQUE NONCLUSTERED INDEX [UX_tblAmministratori_IdAziendaInterna_IdSede] ON [dbo].[tblAmministratori]
 (
 	[IdAziendaInterna] ASC,
@@ -31,6 +40,7 @@ CREATE UNIQUE NONCLUSTERED INDEX [UX_tblAmministratori_IdAziendaInterna_IdSede] 
 )
 WHERE ([Lock]=(0))
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblAmministratori]  WITH CHECK ADD  CONSTRAINT [FK_tblAmministratori_tblSedi_IdAziendaInterna] FOREIGN KEY([IdAziendaInterna])

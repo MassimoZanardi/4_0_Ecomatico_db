@@ -28,3 +28,4 @@ REFERENCES [dbo].[tblRifiutiModelli] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelliEtichette] CHECK CONSTRAINT [FK_tblRifiutiModelliEtichette_tblRifiutiModelli]
+GO

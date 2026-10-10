@@ -28,3 +28,4 @@ REFERENCES [dbo].[tblModuli] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblModuliRelazioni] CHECK CONSTRAINT [FK_tblModuliRelazioni_tblModuli_IdParent]
+GO

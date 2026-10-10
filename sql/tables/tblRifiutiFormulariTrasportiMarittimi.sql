@@ -21,3 +21,4 @@ REFERENCES [dbo].[tblRifiutiFormulari] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiFormulariTrasportiMarittimi] CHECK CONSTRAINT [FK_tblRifiutiFormulariTrasportiMarittimi_tblRifiutiFormulari]
+GO

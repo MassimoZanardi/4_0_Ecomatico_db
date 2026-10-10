@@ -24,3 +24,4 @@ REFERENCES [dbo].[tblId] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblIdLog] CHECK CONSTRAINT [FK_tblIdLog_tblId]
+GO

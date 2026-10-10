@@ -63,6 +63,7 @@ CREATE NONCLUSTERED INDEX [IX_RifiutiModelli_IdRegistro_Lock] ON [dbo].[tblRifiu
 )
 WHERE ([Lock]<(2))
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblAdr] FOREIGN KEY([IdAdr])
@@ -77,6 +78,13 @@ REFERENCES [dbo].[tblImballi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblImballi]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAnalisiTipi] FOREIGN KEY([IdAnalisiTipo])
+REFERENCES [dbo].[tblRifiutiAnalisiTipi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAnalisiTipi]
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAttivitaRecuperoSmaltimento] FOREIGN KEY([IdAttivita])
@@ -100,6 +108,20 @@ GO
 ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneDestinatario]
 GO
 
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneIntermediario2] FOREIGN KEY([IdAutorizzazioneIntermediario2])
+REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneIntermediario2]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneIntermediario3] FOREIGN KEY([IdAutorizzazioneIntermediario3])
+REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneIntermediario3]
+GO
+
 ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneProduttoreDetentore] FOREIGN KEY([IdAutorizzazioneProduttoreDetentore])
 REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
 GO
@@ -114,11 +136,39 @@ GO
 ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneTrasportatore1]
 GO
 
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneTrasportatore2] FOREIGN KEY([IdAutorizzazioneTrasportatore2])
+REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneTrasportatore2]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneTrasportatore3] FOREIGN KEY([IdAutorizzazioneTrasportatore3])
+REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneTrasportatore3]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiDocumentiTrasportiTipi] FOREIGN KEY([IdTrasportoTransfrontalieroTipo])
+REFERENCES [dbo].[tblRifiutiDocumentiTrasportiTipi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiDocumentiTrasportiTipi]
+GO
+
 ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiEer] FOREIGN KEY([IdEer])
 REFERENCES [dbo].[tblRifiutiEer] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiEer]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMateriali] FOREIGN KEY([IdMateriale])
+REFERENCES [dbo].[tblRifiutiMateriali] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMateriali]
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi1] FOREIGN KEY([IdTipoTrasporto1])
@@ -128,11 +178,39 @@ GO
 ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi1]
 GO
 
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi2] FOREIGN KEY([IdTipoTrasporto2])
+REFERENCES [dbo].[tblRifiutiMovimentiTrasportiTipi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi2]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi3] FOREIGN KEY([IdTipoTrasporto3])
+REFERENCES [dbo].[tblRifiutiMovimentiTrasportiTipi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi3]
+GO
+
 ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiOperazioni] FOREIGN KEY([IdOperazione])
 REFERENCES [dbo].[tblRifiutiOperazioni] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiOperazioni]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiProvenienze] FOREIGN KEY([IdProvenienza])
+REFERENCES [dbo].[tblRifiutiProvenienze] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiProvenienze]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiRaee] FOREIGN KEY([IdRaee])
+REFERENCES [dbo].[tblRifiutiRaee] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiRaee]
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiRegistri] FOREIGN KEY([IdRegistro])
@@ -155,79 +233,3 @@ GO
 
 ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblUnitaMisura]
 GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiProvenienze] FOREIGN KEY([IdProvenienza])
-REFERENCES [dbo].[tblRifiutiProvenienze] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiProvenienze]
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMateriali] FOREIGN KEY([IdMateriale])
-REFERENCES [dbo].[tblRifiutiMateriali] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMateriali]
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneTrasportatore2] FOREIGN KEY([IdAutorizzazioneTrasportatore2])
-REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneTrasportatore2]
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneTrasportatore3] FOREIGN KEY([IdAutorizzazioneTrasportatore3])
-REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneTrasportatore3]
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneIntermediario2] FOREIGN KEY([IdAutorizzazioneIntermediario2])
-REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneIntermediario2]
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneIntermediario3] FOREIGN KEY([IdAutorizzazioneIntermediario3])
-REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAutorizzazioni_IdAutorizzazioneIntermediario3]
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi2] FOREIGN KEY([IdTipoTrasporto2])
-REFERENCES [dbo].[tblRifiutiMovimentiTrasportiTipi] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi2]
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi3] FOREIGN KEY([IdTipoTrasporto3])
-REFERENCES [dbo].[tblRifiutiMovimentiTrasportiTipi] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiMovimentiTrasportiTipi3]
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiDocumentiTrasportiTipi] FOREIGN KEY([IdTrasportoTransfrontalieroTipo])
-REFERENCES [dbo].[tblRifiutiDocumentiTrasportiTipi] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiDocumentiTrasportiTipi]
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiRaee] FOREIGN KEY([IdRaee])
-REFERENCES [dbo].[tblRifiutiRaee] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiRaee]
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAnalisiTipi] FOREIGN KEY([IdAnalisiTipo])
-REFERENCES [dbo].[tblRifiutiAnalisiTipi] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelli] CHECK CONSTRAINT [FK_tblRifiutiModelli_tblRifiutiAnalisiTipi]

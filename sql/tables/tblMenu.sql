@@ -37,3 +37,4 @@ REFERENCES [dbo].[tblPagineAree] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblMenu] CHECK CONSTRAINT [FK_tblMenu_tblPagineAree]
+GO

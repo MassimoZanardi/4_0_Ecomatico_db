@@ -35,6 +35,7 @@ CREATE NONCLUSTERED INDEX [IX_Eventi_IdCalendario_IdTipo_Lock] ON [dbo].[tblEven
 	[Lock] ASC
 )
 INCLUDE([IdStato],[Data],[InGiornata],[AvvisoAnticipo],[Avviso],[Etichette],[Email]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblEventi]  WITH CHECK ADD  CONSTRAINT [FK_tblEventi_tblCalendari] FOREIGN KEY([IdCalendario])
@@ -56,3 +57,4 @@ REFERENCES [dbo].[tblEventiTipi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblEventi] CHECK CONSTRAINT [FK_tblEventi_tblEventiTipi]
+GO

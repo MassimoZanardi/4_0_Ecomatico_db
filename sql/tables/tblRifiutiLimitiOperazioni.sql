@@ -7,7 +7,7 @@ GO
 CREATE TABLE [dbo].[tblRifiutiLimitiOperazioni](
 	[IdLimite] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdOperazione] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
- CONSTRAINT [PK_tblRifiutiLimitiOperazioni] PRIMARY KEY CLUSTERED
+ CONSTRAINT [PK_tblRifiutiLimitiOperazioni] PRIMARY KEY CLUSTERED 
 (
 	[IdLimite] ASC,
 	[IdOperazione] ASC
@@ -28,3 +28,4 @@ REFERENCES [dbo].[tblRifiutiOperazioni] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiLimitiOperazioni] CHECK CONSTRAINT [FK_tblRifiutiLimitiOperazioni_tblRifiutiOperazioni]
+GO

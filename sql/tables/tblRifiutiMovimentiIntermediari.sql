@@ -30,3 +30,4 @@ REFERENCES [dbo].[tblRifiutiMovimenti] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiMovimentiIntermediari] CHECK CONSTRAINT [FK_tblRifiutiMovimentiIntermediari_tblRifiutiMovimenti]
+GO

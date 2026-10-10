@@ -28,3 +28,4 @@ REFERENCES [dbo].[tblModuli] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblModuliFunzioni] CHECK CONSTRAINT [FK_tblModuliFunzioni_tblModuli]
+GO

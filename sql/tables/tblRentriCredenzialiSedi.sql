@@ -8,7 +8,7 @@ CREATE TABLE [dbo].[tblRentriCredenzialiSedi](
 	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdCredenziale] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdRentri] [char](16) COLLATE Latin1_General_CI_AS NULL,
-	[Pos] [tinyint] NULL
+	[Pos] [tinyint] NULL,
  CONSTRAINT [PK_tblRentriCredenzialiSedi] PRIMARY KEY CLUSTERED 
 (
 	[IdSede] ASC,
@@ -31,4 +31,3 @@ GO
 
 ALTER TABLE [dbo].[tblRentriCredenzialiSedi] CHECK CONSTRAINT [FK_tblRentriCredenzialiSedi_tblSedi]
 GO
-

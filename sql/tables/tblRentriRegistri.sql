@@ -6,7 +6,7 @@ GO
 
 CREATE TABLE [dbo].[tblRentriRegistri](
 	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
-	[IdRentri] [char](16) COLLATE Latin1_General_CI_AS NULL
+	[IdRentri] [char](16) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblRentriRegistri] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
@@ -21,4 +21,3 @@ GO
 
 ALTER TABLE [dbo].[tblRentriRegistri] CHECK CONSTRAINT [FK_tblRentriRegistri_tblRifiutiRegistri]
 GO
-

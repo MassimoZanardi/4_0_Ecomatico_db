@@ -28,3 +28,4 @@ REFERENCES [dbo].[tblSedi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblSediIndirizzi] CHECK CONSTRAINT [FK_tblSediIndirizzi_tblSedi]
+GO

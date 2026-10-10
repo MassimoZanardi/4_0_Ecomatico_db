@@ -4,9 +4,6 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
-SET ANSI_PADDING ON
-GO
-
 CREATE TABLE [dbo].[tblEoWAllocazioniTipi](
 	[Id] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
@@ -17,5 +14,3 @@ CREATE TABLE [dbo].[tblEoWAllocazioniTipi](
 ) ON [PRIMARY]
 
 GO
-
-SET ANSI_PADDING OFF

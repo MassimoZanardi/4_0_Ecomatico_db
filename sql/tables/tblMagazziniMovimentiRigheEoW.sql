@@ -17,7 +17,7 @@ CREATE TABLE [dbo].[tblMagazziniMovimentiRigheEoW](
 	[Colli] [int] NULL,
 	[AllaRinfusa] [bit] NULL,
 	[Pos] [int] NULL,
- CONSTRAINT [PK_tblMagazziniMovimentiRigheEoW] PRIMARY KEY CLUSTERED
+ CONSTRAINT [PK_tblMagazziniMovimentiRigheEoW] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
@@ -25,22 +25,18 @@ CREATE TABLE [dbo].[tblMagazziniMovimentiRigheEoW](
 
 GO
 
--- ATTENZIONE: IdMovimento NON ha vincolo FK verso tblMagazziniMovimenti (asimmetria
--- rispetto a tblMagazziniMovimentiRighe, che invece ce l'ha) - verificato sullo schema
--- reale, non un refuso di questo backfill. Va validato in SP (THROW 50001), non a
--- livello di vincolo DB.
-ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblSedi] FOREIGN KEY([IdSede])
-REFERENCES [dbo].[tblSedi] ([Id])
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblEoWLotti] FOREIGN KEY([IdLotto])
+REFERENCES [dbo].[tblEoWLotti] ([Id])
 GO
 
-ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblSedi]
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblEoWLotti]
 GO
 
-ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblRifiutiMateriali] FOREIGN KEY([IdMateriale])
-REFERENCES [dbo].[tblRifiutiMateriali] ([Id])
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblImballi] FOREIGN KEY([IdImballo])
+REFERENCES [dbo].[tblImballi] ([Id])
 GO
 
-ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblRifiutiMateriali]
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblImballi]
 GO
 
 ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblMagazziniCriteriScarichiLotti] FOREIGN KEY([IdCriterio])
@@ -50,21 +46,23 @@ GO
 ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblMagazziniCriteriScarichiLotti]
 GO
 
--- IdLotto: lotto EoW da cui scaricare, valorizzato solo con il criterio Manuale (validato in
--- uspMagazziniMovimentiRigheEoW_ins).
-ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblEoWLotti] FOREIGN KEY([IdLotto])
-REFERENCES [dbo].[tblEoWLotti] ([Id])
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblMagazziniMovimenti] FOREIGN KEY([IdMovimento])
+REFERENCES [dbo].[tblMagazziniMovimenti] ([Id])
 GO
 
-ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblEoWLotti]
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblMagazziniMovimenti]
 GO
 
--- IdImballo, Colli, AllaRinfusa: dati "da documento" della riga (stampa DDT), modificabili
--- anche a movimento confermato (uspMagazziniMovimentiRigheEoW_upd). Pos: ordine delle righe
--- nel movimento, unico tra questa tabella e tblMagazziniMovimentiRighe.
-ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblImballi] FOREIGN KEY([IdImballo])
-REFERENCES [dbo].[tblImballi] ([Id])
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblRifiutiMateriali] FOREIGN KEY([IdMateriale])
+REFERENCES [dbo].[tblRifiutiMateriali] ([Id])
 GO
 
-ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblImballi]
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblRifiutiMateriali]
+GO
+
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblSedi] FOREIGN KEY([IdSede])
+REFERENCES [dbo].[tblSedi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblMagazziniMovimentiRigheEoW] CHECK CONSTRAINT [FK_tblMagazziniMovimentiRigheEoW_tblSedi]
 GO

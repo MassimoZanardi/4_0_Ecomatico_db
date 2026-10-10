@@ -7,7 +7,7 @@ GO
 CREATE TABLE [dbo].[tblRifiutiModelliRegistrazioniAutoEtichette](
 	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdEtichetta] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
- CONSTRAINT [PK_tblRifiutiModelliRegistrazioniAutoEtichette] PRIMARY KEY CLUSTERED
+ CONSTRAINT [PK_tblRifiutiModelliRegistrazioniAutoEtichette] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC,
 	[IdEtichetta] ASC

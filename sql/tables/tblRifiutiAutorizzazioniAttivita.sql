@@ -28,3 +28,4 @@ REFERENCES [dbo].[tblRifiutiAutorizzazioni] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiAutorizzazioniAttivita] CHECK CONSTRAINT [FK_tblRifiutiAutorizzazioniAttivita_tblRifiutiAutorizzazioni]
+GO

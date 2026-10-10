@@ -25,6 +25,7 @@ CREATE NONCLUSTERED INDEX [IX_RifiutiFormulariEtichette_IdEtichetta] ON [dbo].[t
 	[IdEtichetta] ASC
 )
 INCLUDE([Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblRifiutiFormulariEtichette]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiFormulariEtichette_tblEtichette] FOREIGN KEY([IdEtichetta])
@@ -39,3 +40,4 @@ REFERENCES [dbo].[tblRifiutiFormulari] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiFormulariEtichette] CHECK CONSTRAINT [FK_tblRifiutiFormulariEtichette_tblRifiutiFormulari]
+GO

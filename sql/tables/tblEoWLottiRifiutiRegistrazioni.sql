@@ -4,9 +4,6 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
-SET ANSI_PADDING ON
-GO
-
 CREATE TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni](
 	[IdRegistrazione] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdLotto] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
@@ -22,7 +19,23 @@ CREATE TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni](
 
 GO
 
-SET ANSI_PADDING OFF
+SET ANSI_PADDING ON
+
+GO
+
+CREATE NONCLUSTERED INDEX [IX_EoWLottiRifiutiRegistrazioni_IdLotto] ON [dbo].[tblEoWLottiRifiutiRegistrazioni]
+(
+	[IdLotto] ASC
+)
+INCLUDE([Quantita]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
+GO
+
+ALTER TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblEoWLottiRifiutiRegistrazioni_tblEoWAllocazioniTipi] FOREIGN KEY([IdAllocazioneTipo])
+REFERENCES [dbo].[tblEoWAllocazioniTipi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblEoWLottiRifiutiRegistrazioni_tblEoWAllocazioniTipi]
 GO
 
 ALTER TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblEoWLottiRifiutiRegistrazioni_tblEoWLotti] FOREIGN KEY([IdLotto])
@@ -38,7 +51,3 @@ GO
 
 ALTER TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblEoWLottiRifiutiRegistrazioni_tblRifiutiRegistrazioni]
 GO
-ALTER TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblEoWLottiRifiutiRegistrazioni_tblEoWAllocazioniTipi] FOREIGN KEY([IdAllocazioneTipo])
-REFERENCES [dbo].[tblEoWAllocazioniTipi] ([Id])
-GO
-ALTER TABLE [dbo].[tblEoWLottiRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblEoWLottiRifiutiRegistrazioni_tblEoWAllocazioniTipi]

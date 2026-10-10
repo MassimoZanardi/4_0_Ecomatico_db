@@ -20,3 +20,4 @@ REFERENCES [dbo].[tblTipiDati] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblProprieta] CHECK CONSTRAINT [FK_tblProprieta_tblTipiDati]
+GO

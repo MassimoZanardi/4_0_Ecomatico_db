@@ -23,3 +23,4 @@ REFERENCES [dbo].[tblSessioni] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblUrlNavigazione] CHECK CONSTRAINT [FK_tblUrlNavigazione_tblSessioni]
+GO

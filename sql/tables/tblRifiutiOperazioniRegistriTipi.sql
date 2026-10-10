@@ -28,3 +28,4 @@ REFERENCES [dbo].[tblRifiutiRegistriTipi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiOperazioniRegistriTipi] CHECK CONSTRAINT [FK_tblRifiutiOperazioniRegistriTipi_tblRifiutiRegistriTipi]
+GO

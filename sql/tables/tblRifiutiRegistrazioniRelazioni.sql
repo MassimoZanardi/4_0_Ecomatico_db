@@ -28,6 +28,7 @@ CREATE NONCLUSTERED INDEX [IX_RifiutiRegistrazioniRelazioni_IdParent] ON [dbo].[
 	[IdParent] ASC
 )
 INCLUDE([Id],[Quantita],[Pos],[Operazione]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblRifiutiRegistrazioniRelazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiRegistrazioniRelazioni_tblRifiutiRegistrazioni_Id] FOREIGN KEY([Id])
@@ -42,3 +43,4 @@ REFERENCES [dbo].[tblRifiutiRegistrazioni] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiRegistrazioniRelazioni] CHECK CONSTRAINT [FK_tblRifiutiRegistrazioniRelazioni_tblRifiutiRegistrazioni_IdParent]
+GO

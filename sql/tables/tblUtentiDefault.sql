@@ -21,3 +21,4 @@ REFERENCES [dbo].[tblUtenti] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblUtentiDefault] CHECK CONSTRAINT [FK_tblUtentiDefault_tblUtenti]
+GO

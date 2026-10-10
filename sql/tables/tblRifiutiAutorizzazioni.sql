@@ -30,6 +30,21 @@ SET ANSI_PADDING ON
 
 GO
 
+CREATE NONCLUSTERED INDEX [IX_RifiutiAutorizzazioni_IdSede_DataFine_Lock] ON [dbo].[tblRifiutiAutorizzazioni]
+(
+	[IdSede] ASC,
+	[DataFine] ASC
+)
+INCLUDE([Numero],[IdRuolo]) 
+WHERE ([Nessuna]=(0) AND [Disabilitata]=(0) AND [Lock]=(0))
+WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
+GO
+
+SET ANSI_PADDING ON
+
+GO
+
 CREATE NONCLUSTERED INDEX [IX_RifiutiAutorizzazioni_IdSede_IdRuolo_Lock] ON [dbo].[tblRifiutiAutorizzazioni]
 (
 	[IdSede] ASC,
@@ -38,6 +53,7 @@ CREATE NONCLUSTERED INDEX [IX_RifiutiAutorizzazioni_IdSede_IdRuolo_Lock] ON [dbo
 INCLUDE([Numero],[Identificativo],[Disabilitata],[Nessuna]) 
 WHERE ([Lock]<(2))
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblRifiutiAutorizzazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiAutorizzazioni_tblRifiutiAutorizzazioniNumeriTipi] FOREIGN KEY([IdNumeroTipo])
@@ -66,3 +82,4 @@ REFERENCES [dbo].[tblSedi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiAutorizzazioni] CHECK CONSTRAINT [FK_tblRifiutiAutorizzazioni_tblSedi]
+GO

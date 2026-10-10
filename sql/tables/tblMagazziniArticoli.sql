@@ -12,7 +12,7 @@ CREATE TABLE [dbo].[tblMagazziniArticoli](
 	[Codice] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
 	[Descrizione] [varchar](1000) COLLATE Latin1_General_CI_AS NULL,
 	[Lock] [tinyint] NULL,
- CONSTRAINT [PK_tblMagazziniArticoli] PRIMARY KEY CLUSTERED
+ CONSTRAINT [PK_tblMagazziniArticoli] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
@@ -20,7 +20,6 @@ CREATE TABLE [dbo].[tblMagazziniArticoli](
 
 GO
 
--- IdSede è scope Azienda (l'Articolo appartiene all'Azienda, non a una singola Sede).
 ALTER TABLE [dbo].[tblMagazziniArticoli]  WITH CHECK ADD  CONSTRAINT [FK_tblMagazziniArticoli_tblSedi] FOREIGN KEY([IdSede])
 REFERENCES [dbo].[tblSedi] ([Id])
 GO

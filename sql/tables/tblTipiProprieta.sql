@@ -31,3 +31,4 @@ REFERENCES [dbo].[tblTipi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblTipiProprieta] CHECK CONSTRAINT [FK_tblTipiProprieta_tblTipi]
+GO

@@ -36,3 +36,4 @@ REFERENCES [dbo].[tblUtenti] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblUtentiFunzioni] CHECK CONSTRAINT [FK_tblUtentiFunzioni_tblUtenti]
+GO

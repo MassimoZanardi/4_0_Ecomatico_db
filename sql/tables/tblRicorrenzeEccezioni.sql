@@ -29,6 +29,7 @@ CREATE NONCLUSTERED INDEX [IX_RicorrenzeEccezioni_Id_Data_Lock] ON [dbo].[tblRic
 )
 WHERE ([Lock]=(0))
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblRicorrenzeEccezioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRicorrenzeEccezioni_tblEventi_Id] FOREIGN KEY([Id])
@@ -43,3 +44,4 @@ REFERENCES [dbo].[tblEventi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRicorrenzeEccezioni] CHECK CONSTRAINT [FK_tblRicorrenzeEccezioni_tblEventi_IdEvento]
+GO

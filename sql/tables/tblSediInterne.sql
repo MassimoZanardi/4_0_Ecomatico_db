@@ -23,6 +23,7 @@ CREATE NONCLUSTERED INDEX [IX_SediInterne_IdDominio] ON [dbo].[tblSediInterne]
 (
 	[IdDominio] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblSediInterne]  WITH CHECK ADD  CONSTRAINT [FK_tblSediInterne_tblDomini] FOREIGN KEY([IdDominio])
@@ -37,3 +38,4 @@ REFERENCES [dbo].[tblSedi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblSediInterne] CHECK CONSTRAINT [FK_tblSediInterne_tblSedi]
+GO

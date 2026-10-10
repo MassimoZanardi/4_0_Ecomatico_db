@@ -38,3 +38,4 @@ REFERENCES [dbo].[tblRifiutiMovimenti] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiMovimentiLog] CHECK CONSTRAINT [FK_tblRifiutiMovimentiLog_tblRifiutiMovimenti]
+GO

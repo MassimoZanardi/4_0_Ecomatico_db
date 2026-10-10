@@ -25,6 +25,7 @@ CREATE NONCLUSTERED INDEX [IX_SediEsterne_IdSedeInterna] ON [dbo].[tblSediEstern
 	[IdSedeInterna] ASC
 )
 INCLUDE([Id]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblSediEsterne]  WITH CHECK ADD  CONSTRAINT [FK_tblSediEsterne_tblSedi_Id] FOREIGN KEY([Id])
@@ -39,3 +40,4 @@ REFERENCES [dbo].[tblSedi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblSediEsterne] CHECK CONSTRAINT [FK_tblSediEsterne_tblSedi_IdSedeInterna]
+GO

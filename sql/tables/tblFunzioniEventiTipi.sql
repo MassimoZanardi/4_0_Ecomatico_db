@@ -28,3 +28,4 @@ REFERENCES [dbo].[tblFunzioni] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblFunzioniEventiTipi] CHECK CONSTRAINT [FK_tblFunzioniEventiTipi_tblFunzioni]
+GO

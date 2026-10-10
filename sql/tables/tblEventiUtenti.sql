@@ -24,6 +24,7 @@ CREATE NONCLUSTERED INDEX [IX_EventiUtenti_IdUtente] ON [dbo].[tblEventiUtenti]
 (
 	[IdUtente] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblEventiUtenti]  WITH CHECK ADD  CONSTRAINT [FK_tblEventiUtenti_tblEventi] FOREIGN KEY([Id])
@@ -38,3 +39,4 @@ REFERENCES [dbo].[tblUtenti] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblEventiUtenti] CHECK CONSTRAINT [FK_tblEventiUtenti_tblUtenti]
+GO

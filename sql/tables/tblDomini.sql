@@ -40,3 +40,4 @@ REFERENCES [dbo].[tblDominiStati] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblDomini] CHECK CONSTRAINT [FK_tblDomini_tblDominiStati]
+GO

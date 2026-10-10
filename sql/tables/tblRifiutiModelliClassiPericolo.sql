@@ -28,3 +28,4 @@ REFERENCES [dbo].[tblRifiutiModelli] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelliClassiPericolo] CHECK CONSTRAINT [FK_tblRifiutiModelliClassiPericolo_tblRifiutiModelli]
+GO

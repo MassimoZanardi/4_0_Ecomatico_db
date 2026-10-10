@@ -7,7 +7,7 @@ GO
 CREATE TABLE [dbo].[tblRentriAccreditamenti](
 	[Id] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
-	[Codice] [varchar](50) COLLATE Latin1_General_CI_AS NULL
+	[Codice] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblRentriAccreditamenti] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
@@ -15,4 +15,3 @@ CREATE TABLE [dbo].[tblRentriAccreditamenti](
 ) ON [PRIMARY]
 
 GO
-

@@ -30,3 +30,4 @@ REFERENCES [dbo].[tblRuoli] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblPersoneRuoli] CHECK CONSTRAINT [FK_tblPersoneRuoli_tblRuoli]
+GO

@@ -23,3 +23,4 @@ REFERENCES [dbo].[tblFunzioni] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblPagine] CHECK CONSTRAINT [FK_tblPagine_tblFunzioni]
+GO

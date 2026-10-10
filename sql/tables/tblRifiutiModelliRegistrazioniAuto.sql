@@ -14,7 +14,7 @@ CREATE TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto](
 	[IdUnitaMisura] [char](2) COLLATE Latin1_General_CI_AS NULL,
 	[IdMateriale] [char](2) COLLATE Latin1_General_CI_AS NULL,
 	[Lock] [tinyint] NULL,
- CONSTRAINT [PK_tblRifiutiModelliRegistrazioniAuto_1] PRIMARY KEY CLUSTERED
+ CONSTRAINT [PK_tblRifiutiModelliRegistrazioniAuto_1] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
@@ -22,11 +22,16 @@ CREATE TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto](
 
 GO
 
-ALTER TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelliRegistrazioniAuto_tblRifiutiModelli] FOREIGN KEY([IdModello])
-REFERENCES [dbo].[tblRifiutiModelli] ([Id])
+SET ANSI_PADDING ON
+
 GO
 
-ALTER TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto] CHECK CONSTRAINT [FK_tblRifiutiModelliRegistrazioniAuto_tblRifiutiModelli]
+CREATE NONCLUSTERED INDEX [IX_RifiutiModelliRegistrazioniAuto_IdModello] ON [dbo].[tblRifiutiModelliRegistrazioniAuto]
+(
+	[IdModello] ASC
+)
+INCLUDE([Percentuale]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelliRegistrazioniAuto_tblRifiutiEer] FOREIGN KEY([IdEer])
@@ -34,6 +39,20 @@ REFERENCES [dbo].[tblRifiutiEer] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto] CHECK CONSTRAINT [FK_tblRifiutiModelliRegistrazioniAuto_tblRifiutiEer]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelliRegistrazioniAuto_tblRifiutiMateriali] FOREIGN KEY([IdMateriale])
+REFERENCES [dbo].[tblRifiutiMateriali] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto] CHECK CONSTRAINT [FK_tblRifiutiModelliRegistrazioniAuto_tblRifiutiMateriali]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelliRegistrazioniAuto_tblRifiutiModelli] FOREIGN KEY([IdModello])
+REFERENCES [dbo].[tblRifiutiModelli] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto] CHECK CONSTRAINT [FK_tblRifiutiModelliRegistrazioniAuto_tblRifiutiModelli]
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelliRegistrazioniAuto_tblRifiutiStatiFisici] FOREIGN KEY([IdStatoFisico])
@@ -48,11 +67,4 @@ REFERENCES [dbo].[tblUnitaMisura] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto] CHECK CONSTRAINT [FK_tblRifiutiModelliRegistrazioniAuto_tblUnitaMisura]
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiModelliRegistrazioniAuto_tblRifiutiMateriali] FOREIGN KEY([IdMateriale])
-REFERENCES [dbo].[tblRifiutiMateriali] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiModelliRegistrazioniAuto] CHECK CONSTRAINT [FK_tblRifiutiModelliRegistrazioniAuto_tblRifiutiMateriali]
 GO

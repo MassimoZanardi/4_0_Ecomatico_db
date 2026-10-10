@@ -29,3 +29,4 @@ REFERENCES [dbo].[tblFirme] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblEventiFirme] CHECK CONSTRAINT [FK_tblEventiFirme_tblFirme]
+GO

@@ -29,3 +29,4 @@ REFERENCES [dbo].[tblServizi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblServiziOsepe] CHECK CONSTRAINT [FK_tblServiziOsepe_tblServizi]
+GO

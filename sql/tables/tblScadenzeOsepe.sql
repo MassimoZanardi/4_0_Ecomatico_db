@@ -28,3 +28,4 @@ REFERENCES [dbo].[tblScadenze] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblScadenzeOsepe] CHECK CONSTRAINT [FK_tblScadenzeOsepe_tblScadenze]
+GO

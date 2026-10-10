@@ -7,7 +7,7 @@ GO
 CREATE TABLE [dbo].[tblRifiutiLimitiEtichette](
 	[IdLimite] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdEtichetta] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
- CONSTRAINT [PK_tblRifiutiLimitiEtichette] PRIMARY KEY CLUSTERED
+ CONSTRAINT [PK_tblRifiutiLimitiEtichette] PRIMARY KEY CLUSTERED 
 (
 	[IdLimite] ASC,
 	[IdEtichetta] ASC
@@ -28,3 +28,4 @@ REFERENCES [dbo].[tblRifiutiLimiti] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiLimitiEtichette] CHECK CONSTRAINT [FK_tblRifiutiLimitiEtichette_tblRifiutiLimiti]
+GO

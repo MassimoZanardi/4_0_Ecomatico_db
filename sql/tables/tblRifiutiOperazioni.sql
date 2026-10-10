@@ -28,7 +28,7 @@ CREATE TABLE [dbo].[tblRifiutiOperazioni](
 	[IsMateriale] [bit] NULL,
 	[IsStoccaggioIstantaneo] [bit] NULL,
 	[IsRentriAccettazione] [bit] NULL,
- CONSTRAINT [PK_tblRifiutiOperazioni] PRIMARY KEY CLUSTERED
+ CONSTRAINT [PK_tblRifiutiOperazioni] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
@@ -41,3 +41,4 @@ REFERENCES [dbo].[tblRifiutiOperazioni] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiOperazioni] CHECK CONSTRAINT [FK_tblRifiutiOperazioni_tblRifiutiOperazioni]
+GO

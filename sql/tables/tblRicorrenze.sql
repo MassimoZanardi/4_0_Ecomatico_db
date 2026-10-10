@@ -30,6 +30,7 @@ CREATE NONCLUSTERED INDEX [IX_Ricorrenze_Id_DataFine] ON [dbo].[tblRicorrenze]
 	[DataFine] ASC
 )
 INCLUDE([IdIntervallo],[Frequenza],[Ripetizioni],[Relativo]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblRicorrenze]  WITH CHECK ADD  CONSTRAINT [FK_tblRicorrenze_tblEventi] FOREIGN KEY([Id])
@@ -51,3 +52,4 @@ REFERENCES [dbo].[tblRicorrenzeIntervalli] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRicorrenze] CHECK CONSTRAINT [FK_tblRicorrenze_tblRicorrenzeIntervalli]
+GO

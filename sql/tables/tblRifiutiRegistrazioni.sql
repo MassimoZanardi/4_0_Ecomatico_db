@@ -28,6 +28,7 @@ CREATE TABLE [dbo].[tblRifiutiRegistrazioni](
 	[RentriIdentificativo] [varchar](20) COLLATE Latin1_General_CI_AS NULL,
 	[RentriData] [datetime2](0) NULL,
 	[RentriSincronizzata] [bit] NULL,
+	[ConservazioneSostitutiva] [bit] NULL,
 	[Etichette] [varchar](2000) COLLATE Latin1_General_CI_AS NULL,
 	[Note] [varchar](500) COLLATE Latin1_General_CI_AS NULL,
 	[Lock] [tinyint] NULL,
@@ -46,6 +47,7 @@ CREATE NONCLUSTERED INDEX [IX_RifiutiRegistrazioni_Data_Lock] ON [dbo].[tblRifiu
 INCLUDE([IdMovimento],[Numero],[QuantitaVerificata],[Operazione],[Etichette]) 
 WHERE ([Lock]<(2))
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 SET ANSI_PADDING ON
@@ -58,9 +60,24 @@ CREATE NONCLUSTERED INDEX [IX_RifiutiRegistrazioni_IdMovimento_Data_Numero_Lock]
 	[Data] ASC,
 	[Numero] ASC
 )
-INCLUDE([QuantitaVerificata],[DataFineTrasporto],[IdTrasportoTransfrontalieroTipo],[Note],[Operazione],[Etichette])
+INCLUDE([QuantitaVerificata],[DataFineTrasporto],[IdTrasportoTransfrontalieroTipo],[Note],[Operazione],[Etichette],[RentriIdentificativo],[RentriData]) 
 WHERE ([Lock]<(2))
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
+GO
+
+ALTER TABLE [dbo].[tblRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiAttivitaProvenienze] FOREIGN KEY([IdAttivitaProvenienza])
+REFERENCES [dbo].[tblRifiutiAttivitaProvenienze] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiAttivitaProvenienze]
+GO
+
+ALTER TABLE [dbo].[tblRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiDocumentiTrasportiTipi] FOREIGN KEY([IdTrasportoTransfrontalieroTipo])
+REFERENCES [dbo].[tblRifiutiDocumentiTrasportiTipi] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiDocumentiTrasportiTipi]
 GO
 
 ALTER TABLE [dbo].[tblRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiMateriali] FOREIGN KEY([IdMateriale])
@@ -98,22 +115,9 @@ GO
 ALTER TABLE [dbo].[tblRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiRegistrazioniEsitiCausaliRespingimento]
 GO
 
-ALTER TABLE [dbo].[tblRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiDocumentiTrasportiTipi] FOREIGN KEY([IdTrasportoTransfrontalieroTipo])
-REFERENCES [dbo].[tblRifiutiDocumentiTrasportiTipi] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiDocumentiTrasportiTipi]
-GO
-
 ALTER TABLE [dbo].[tblRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiRegistrazioni_tblUnitaMisura] FOREIGN KEY([IdUnitaMisuraQuantitaRespinta])
 REFERENCES [dbo].[tblUnitaMisura] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblRifiutiRegistrazioni_tblUnitaMisura]
 GO
-
-ALTER TABLE [dbo].[tblRifiutiRegistrazioni]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiAttivitaProvenienze] FOREIGN KEY([IdAttivitaProvenienza])
-REFERENCES [dbo].[tblRifiutiAttivitaProvenienze] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRifiutiRegistrazioni] CHECK CONSTRAINT [FK_tblRifiutiRegistrazioni_tblRifiutiAttivitaProvenienze]

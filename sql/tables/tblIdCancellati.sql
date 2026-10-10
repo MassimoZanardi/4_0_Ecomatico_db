@@ -30,3 +30,4 @@ REFERENCES [dbo].[tblSessioni] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblIdCancellati] CHECK CONSTRAINT [FK_tblIdCancellati_tblSessioni]
+GO

@@ -1,4 +1,4 @@
-SET ANSI_NULLS ON
+﻿SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
@@ -7,13 +7,10 @@ GO
 CREATE TABLE [dbo].[tblMagazziniCausali](
 	[Id] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
- CONSTRAINT [PK_tblMagazziniCausali] PRIMARY KEY CLUSTERED
+ CONSTRAINT [PK_tblMagazziniCausali] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 
 GO
-
--- Causale del trasporto per il DDT (Conto visione, Conto lavoro, Omaggio, Prestito d'uso,
--- Riparazione, Reso, Tentata vendita, Vendita).

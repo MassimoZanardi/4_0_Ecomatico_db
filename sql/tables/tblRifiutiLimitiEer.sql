@@ -7,7 +7,7 @@ GO
 CREATE TABLE [dbo].[tblRifiutiLimitiEer](
 	[IdLimite] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdEer] [char](6) COLLATE Latin1_General_CI_AS NOT NULL,
- CONSTRAINT [PK_tblRifiutiLimitiEer] PRIMARY KEY CLUSTERED
+ CONSTRAINT [PK_tblRifiutiLimitiEer] PRIMARY KEY CLUSTERED 
 (
 	[IdLimite] ASC,
 	[IdEer] ASC
@@ -28,3 +28,4 @@ REFERENCES [dbo].[tblRifiutiLimiti] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiLimitiEer] CHECK CONSTRAINT [FK_tblRifiutiLimitiEer_tblRifiutiLimiti]
+GO

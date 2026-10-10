@@ -10,8 +10,8 @@ CREATE TABLE [dbo].[tblRentriFirmeCredenziali](
 	[CredentialsId] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[DeviceIdentifier] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[DataBoarding] [datetime2](0) NULL,
-	[Lock] [tinyint] NULL
- CONSTRAINT [PK_tblRentriFirmeCredenziali] PRIMARY KEY CLUSTERED
+	[Lock] [tinyint] NULL,
+ CONSTRAINT [PK_tblRentriFirmeCredenziali] PRIMARY KEY CLUSTERED 
 (
 	[IdUtente] ASC,
 	[IdCredenziale] ASC
@@ -20,16 +20,16 @@ CREATE TABLE [dbo].[tblRentriFirmeCredenziali](
 
 GO
 
-ALTER TABLE [dbo].[tblRentriFirmeCredenziali]  WITH CHECK ADD  CONSTRAINT [FK_tblRentriFirmeCredenziali_tblUtenti] FOREIGN KEY([IdUtente])
-REFERENCES [dbo].[tblUtenti] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblRentriFirmeCredenziali] CHECK CONSTRAINT [FK_tblRentriFirmeCredenziali_tblUtenti]
-GO
-
 ALTER TABLE [dbo].[tblRentriFirmeCredenziali]  WITH CHECK ADD  CONSTRAINT [FK_tblRentriFirmeCredenziali_tblRentriCredenziali] FOREIGN KEY([IdCredenziale])
 REFERENCES [dbo].[tblRentriCredenziali] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRentriFirmeCredenziali] CHECK CONSTRAINT [FK_tblRentriFirmeCredenziali_tblRentriCredenziali]
+GO
+
+ALTER TABLE [dbo].[tblRentriFirmeCredenziali]  WITH CHECK ADD  CONSTRAINT [FK_tblRentriFirmeCredenziali_tblUtenti] FOREIGN KEY([IdUtente])
+REFERENCES [dbo].[tblUtenti] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblRentriFirmeCredenziali] CHECK CONSTRAINT [FK_tblRentriFirmeCredenziali_tblUtenti]
 GO

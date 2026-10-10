@@ -37,3 +37,4 @@ REFERENCES [dbo].[tblSessioni] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblSessioniFunzioniPermessi] CHECK CONSTRAINT [FK_tblSessioniFunzioniPermessi_tblSessioni]
+GO

@@ -26,6 +26,7 @@ CREATE NONCLUSTERED INDEX [IX_Scadenze_IdEvento] ON [dbo].[tblScadenze]
 	[IdEvento] ASC
 )
 INCLUDE([Descrizione],[IdTipo]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblScadenze]  WITH CHECK ADD  CONSTRAINT [FK_tblScadenze_tblEventi] FOREIGN KEY([IdEvento])
@@ -40,3 +41,4 @@ REFERENCES [dbo].[tblTipi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblScadenze] CHECK CONSTRAINT [FK_tblScadenze_tblTipi]
+GO

@@ -49,3 +49,4 @@ REFERENCES [dbo].[tblUnitaMisura] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblOggetti] CHECK CONSTRAINT [FK_tblOggetti_tblUnitaMisura]
+GO

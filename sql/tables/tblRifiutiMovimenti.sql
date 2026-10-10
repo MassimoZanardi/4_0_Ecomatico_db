@@ -30,7 +30,7 @@ CREATE TABLE [dbo].[tblRifiutiMovimenti](
 	[RentriFormularioInviiConservazione] [int] NULL,
 	[RentriFormularioCartaceo] [bit] NULL,
 	[IdModello] [char](16) COLLATE Latin1_General_CI_AS NULL,
- CONSTRAINT [PK_tblRifiutiMovimenti] PRIMARY KEY CLUSTERED
+ CONSTRAINT [PK_tblRifiutiMovimenti] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
@@ -47,6 +47,7 @@ CREATE NONCLUSTERED INDEX [IX_RifiutiMovimenti_IdRegistro] ON [dbo].[tblRifiutiM
 	[IdRegistro] ASC
 )
 INCLUDE([IdOperazione],[IdEer],[IdStatoFisico],[IdUnitaMisura],[Quantita],[IdSedeDestinatario],[IdSedeIntermediario1],[FormularioNumero],[IdAttivita],[IdSedeProduttoreDetentore],[IdSedeTrasportatore1],[IdProvenienza],[RentriFormularioStato],[RentriFormularioDataCopia],[RentriFormularioDataPresaVisione],[RentriFormularioDataTrasmissione],[RentriFormularioDataConservazione],[RentriFormularioInviiConservazione]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
 GO
 
 ALTER TABLE [dbo].[tblRifiutiMovimenti]  WITH CHECK ADD  CONSTRAINT [FK_tblRifiutiMovimenti_tblRifiutiAttivitaRecuperoSmaltimento] FOREIGN KEY([IdAttivita])
@@ -131,3 +132,4 @@ REFERENCES [dbo].[tblUnitaMisura] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblRifiutiMovimenti] CHECK CONSTRAINT [FK_tblRifiutiMovimenti_tblUnitaMisura]
+GO

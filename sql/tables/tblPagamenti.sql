@@ -24,6 +24,23 @@ CREATE TABLE [dbo].[tblPagamenti](
 
 GO
 
+SET ANSI_PADDING ON
+
+GO
+
+CREATE NONCLUSTERED INDEX [IX_Pagamenti_IdSede_IdBancaCassa_DataContabile_DataRegistrazione_Lock] ON [dbo].[tblPagamenti]
+(
+	[IdSede] ASC,
+	[IdBancaCassa] ASC,
+	[DataContabile] ASC,
+	[DataRegistrazione] ASC
+)
+INCLUDE([Tipo],[Importo],[IdModalita],[IdConto],[Causale]) 
+WHERE ([Lock]=(0))
+WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
+GO
+
 ALTER TABLE [dbo].[tblPagamenti]  WITH CHECK ADD  CONSTRAINT [FK_tblPagamenti_tblBancheCasse] FOREIGN KEY([IdBancaCassa])
 REFERENCES [dbo].[tblBancheCasse] ([Id])
 GO

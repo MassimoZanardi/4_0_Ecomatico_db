@@ -22,7 +22,7 @@ SET ANSI_PADDING ON
 
 GO
 
-CREATE NONCLUSTERED INDEX [IX_tblAmministratori_IdSede] ON [dbo].[tblAmministratori]
+CREATE NONCLUSTERED INDEX [IX_Amministratori_IdSede] ON [dbo].[tblAmministratori]
 (
 	[IdSede] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
@@ -33,7 +33,7 @@ SET ANSI_PADDING ON
 
 GO
 
-CREATE UNIQUE NONCLUSTERED INDEX [UX_tblAmministratori_IdAziendaInterna_IdSede] ON [dbo].[tblAmministratori]
+CREATE UNIQUE NONCLUSTERED INDEX [UX_Amministratori_IdAziendaInterna_IdSede_Lock] ON [dbo].[tblAmministratori]
 (
 	[IdAziendaInterna] ASC,
 	[IdSede] ASC

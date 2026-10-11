@@ -67,6 +67,7 @@ BEGIN
 		END
 
 		DECLARE @lock INT = (SELECT Lock FROM dbo.tblBancheCasse WHERE Id = @Id);
+		DECLARE @idAzienda CHAR(16) = (SELECT IdSede FROM dbo.tblBancheCasse WHERE Id = @Id);
 
 		-- ── CASO 1: banca o cassa attiva (Lock = 0) → soft delete ────────────
 		IF @lock = 0
@@ -76,13 +77,15 @@ BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Una banca o cassa associata a clienti o fornitori non può essere cancellata';
 				GOTO BRANCH_END;
-			END			IF EXISTS (SELECT 1 FROM dbo.tblFatture WHERE IdBancaCassa = @Id AND Lock IN (0, 2))
+			END
+			IF EXISTS (SELECT 1 FROM dbo.tblFatture WHERE IdBancaCassa = @Id AND Lock IN (0, 2))
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Una banca o cassa indicata in una fattura non può essere cancellata';
 				GOTO BRANCH_END;
 			END
-			IF EXISTS (SELECT 1 FROM dbo.tblPagamenti WHERE IdBancaCassa = @Id AND Lock = 0)
+			-- IdSede (l'azienda della banca, la stessa dei suoi pagamenti) permette la ricerca nell'indice dei pagamenti
+			IF EXISTS (SELECT 1 FROM dbo.tblPagamenti WHERE IdSede = @idAzienda AND IdBancaCassa = @Id AND Lock = 0)
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Una banca o cassa con pagamenti registrati non può essere cancellata';

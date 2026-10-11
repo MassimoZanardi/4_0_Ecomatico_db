@@ -68,6 +68,7 @@ BEGIN
 		END
 
 		DECLARE @lock INT = (SELECT Lock FROM dbo.tblFattureConti WHERE Id = @Id);
+		DECLARE @idAzienda CHAR(16) = (SELECT IdSede FROM dbo.tblFattureConti WHERE Id = @Id);
 
 		-- ── CASO 1: conto attivo (Lock = 0) → soft delete ────────────────────
 		IF @lock = 0
@@ -88,8 +89,9 @@ BEGIN
 				SET @returnMessage = 'Un conto usato nelle righe di una fattura non può essere cancellato';
 				GOTO BRANCH_END;
 			END
-			-- Lo stesso per un conto indicato in un movimento manuale attivo della prima nota
-			IF EXISTS (SELECT 1 FROM dbo.tblPagamenti WHERE IdConto = @Id AND Lock = 0)
+			-- Lo stesso per un conto indicato in un movimento manuale attivo della prima nota. IdSede (l'azienda
+			-- del conto, la stessa dei suoi movimenti) permette la ricerca nell'indice dei pagamenti
+			IF EXISTS (SELECT 1 FROM dbo.tblPagamenti WHERE IdSede = @idAzienda AND IdConto = @Id AND Lock = 0)
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Un conto usato in un movimento della prima nota non può essere cancellato';

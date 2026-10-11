@@ -105,8 +105,9 @@ BEGIN
 		DECLARE @ultimo INT;
 
 		BEGIN TRANSACTION;
-			-- Progressivi dell'azienda riservati con il blocco sulla riga dei dati fiscali
-			UPDATE dbo.tblFattureDatiFiscali WITH (UPDLOCK, HOLDLOCK)
+			-- Progressivi dell'azienda riservati con il blocco sulla riga dei dati fiscali: l'UPDATE la
+			-- blocca in modo esclusivo fino al COMMIT, senza bisogno di hint
+			UPDATE dbo.tblFattureDatiFiscali
 			SET
 				@ultimo = ISNULL(ProgressivoInvio, 0),
 				ProgressivoInvio = ISNULL(ProgressivoInvio, 0) + @numero

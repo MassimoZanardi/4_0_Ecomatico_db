@@ -83,16 +83,29 @@ BEGIN
 		-- La pre-fattura non ha numero
 		IF ISNULL(@IdTipo, '') <> 'TD00'
 		BEGIN
-			SELECT @numero = ISNULL(MAX(Numero), 0) + 1
-			FROM dbo.tblFatture
-			WHERE
-				IdSede = @idAzienda
-				AND Tipo = @tipo
-				AND Lock = 0
-				AND Id <> @Id
-				AND ISNULL(Sezionale, '') = ISNULL(@Sezionale, '')
-				AND IIF(@tipo = 'C', DataEmissione, DataRegistrazione) >= @annoInizio
-				AND IIF(@tipo = 'C', DataEmissione, DataRegistrazione) < @annoFine;
+			-- Due letture, una per tipo, con il filtro sulla colonna della data (come in uspFatture_upd)
+			IF @tipo = 'C'
+				SELECT @numero = ISNULL(MAX(Numero), 0) + 1
+				FROM dbo.tblFatture
+				WHERE
+					IdSede = @idAzienda
+					AND Tipo = @tipo
+					AND Lock = 0
+					AND Id <> @Id
+					AND ISNULL(Sezionale, '') = ISNULL(@Sezionale, '')
+					AND DataEmissione >= @annoInizio
+					AND DataEmissione < @annoFine;
+			ELSE
+				SELECT @numero = ISNULL(MAX(Numero), 0) + 1
+				FROM dbo.tblFatture
+				WHERE
+					IdSede = @idAzienda
+					AND Tipo = @tipo
+					AND Lock = 0
+					AND Id <> @Id
+					AND ISNULL(Sezionale, '') = ISNULL(@Sezionale, '')
+					AND DataRegistrazione >= @annoInizio
+					AND DataRegistrazione < @annoFine;
 		END
 
 		SELECT Numero = @numero;

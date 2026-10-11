@@ -376,33 +376,66 @@ BEGIN
 		IF @numerata = 0
 			SET @Numero = NULL;
 
+		-- Le letture con blocco sono separate per tipo, con il filtro sulla colonna della data e non su
+		-- un'espressione: per le fatture cliente il blocco copre solo l'anno dell'azienda nell'indice
+		-- IX_Fatture_IdSede_Tipo_DataEmissione, per le fatture fornitore le fatture fornitore dell'azienda
+		DECLARE @duplicato BIT = 0;
+
 		BEGIN TRANSACTION;
 			IF @numerata = 1 AND @Numero IS NULL
 			BEGIN
-				SELECT @Numero = ISNULL(MAX(Numero), 0) + 1
-				FROM dbo.tblFatture WITH (UPDLOCK, HOLDLOCK)
-				WHERE
-					IdSede = @idAzienda
-					AND Tipo = @tipo
-					AND Lock = 0
-					AND Id <> @Id
-					AND ISNULL(Sezionale, '') = ISNULL(@Sezionale, '')
-					AND IIF(@tipo = 'C', DataEmissione, DataRegistrazione) >= @annoInizio
-					AND IIF(@tipo = 'C', DataEmissione, DataRegistrazione) < @annoFine;
+				IF @tipo = 'C'
+					SELECT @Numero = ISNULL(MAX(Numero), 0) + 1
+					FROM dbo.tblFatture WITH (UPDLOCK, HOLDLOCK)
+					WHERE
+						IdSede = @idAzienda
+						AND Tipo = @tipo
+						AND Lock = 0
+						AND Id <> @Id
+						AND ISNULL(Sezionale, '') = ISNULL(@Sezionale, '')
+						AND DataEmissione >= @annoInizio
+						AND DataEmissione < @annoFine;
+				ELSE
+					SELECT @Numero = ISNULL(MAX(Numero), 0) + 1
+					FROM dbo.tblFatture WITH (UPDLOCK, HOLDLOCK)
+					WHERE
+						IdSede = @idAzienda
+						AND Tipo = @tipo
+						AND Lock = 0
+						AND Id <> @Id
+						AND ISNULL(Sezionale, '') = ISNULL(@Sezionale, '')
+						AND DataRegistrazione >= @annoInizio
+						AND DataRegistrazione < @annoFine;
 			END
-			ELSE IF @numerata = 1 AND EXISTS (
-				SELECT 1
-				FROM dbo.tblFatture WITH (UPDLOCK, HOLDLOCK)
-				WHERE
-					IdSede = @idAzienda
-					AND Tipo = @tipo
-					AND Lock = 0
-					AND Id <> @Id
-					AND Numero = @Numero
-					AND ISNULL(Sezionale, '') = ISNULL(@Sezionale, '')
-					AND IIF(@tipo = 'C', DataEmissione, DataRegistrazione) >= @annoInizio
-					AND IIF(@tipo = 'C', DataEmissione, DataRegistrazione) < @annoFine
-			)
+			ELSE IF @numerata = 1
+			BEGIN
+				IF @tipo = 'C'
+					SELECT @duplicato = 1
+					FROM dbo.tblFatture WITH (UPDLOCK, HOLDLOCK)
+					WHERE
+						IdSede = @idAzienda
+						AND Tipo = @tipo
+						AND Lock = 0
+						AND Id <> @Id
+						AND Numero = @Numero
+						AND ISNULL(Sezionale, '') = ISNULL(@Sezionale, '')
+						AND DataEmissione >= @annoInizio
+						AND DataEmissione < @annoFine;
+				ELSE
+					SELECT @duplicato = 1
+					FROM dbo.tblFatture WITH (UPDLOCK, HOLDLOCK)
+					WHERE
+						IdSede = @idAzienda
+						AND Tipo = @tipo
+						AND Lock = 0
+						AND Id <> @Id
+						AND Numero = @Numero
+						AND ISNULL(Sezionale, '') = ISNULL(@Sezionale, '')
+						AND DataRegistrazione >= @annoInizio
+						AND DataRegistrazione < @annoFine;
+			END
+
+			IF @duplicato = 1
 			BEGIN
 				ROLLBACK TRANSACTION;
 				SET @returnValue = -1;

@@ -10,12 +10,15 @@ GO
 --   PL  Rifiuti prodotti da lavorazione                    NP
 --   RT  Rifiuti ricevuti da terzi                          T*              + produttore
 --   TR  Rifiuti trasportati                                T*aT
---   TT  Rifiuti trasportati da terzi                       aT, T*          + trasportatore (solo se esterno)
+--   TT  Rifiuti trasportati da terzi                       aT, T*          + trasportatore
 --   CT  Rifiuti consegnati a terzi (destinatari)           aT              + destinatario
---   IN  Rifiuti movimentati attraverso intermediari        aT, T*, T*aT, TR + intermediario (solo se indicato)
+--   IN  Rifiuti movimentati attraverso intermediari        aT, T*, T*aT, TR + intermediario
 --   DG  Destinazione (R o D) dei rifiuti gestiti nell'unità locale   T*, I  + attività
 --   DC  Destinazione (R o D) dei rifiuti consegnati a terzi          aT     + attività e destinatario
 --   MV  Quantità rifiuti movimentati per CER               tutte, tranne M (materiali) e SI (stoccaggio istantaneo)
+-- Nei report con la colonna del soggetto (RT, TT, CT, IN, DC) entrano solo le registrazioni che lo indicano,
+-- che sia una sede esterna o una sede dell'azienda: senza soggetto la registrazione non compare. Trasportatore
+-- e intermediario sono il primo indicato sul movimento; il secondo e il terzo non contano.
 -- La colonna Operazione (codice e nome della causale) distingue le righe quando il report conta più operazioni.
 -- Valori OPERATIVI (viewRifiutiRegistrazioniEffettive: EER, stato fisico, unità di misura e quantità dopo le
 -- rettifiche): contano le registrazioni confermate (Lock = 0), escluse le rettifiche e le registrazioni
@@ -167,15 +170,10 @@ BEGIN
 				OR r.[Data] >= @DataDa
 				)
 			AND (@DataA IS NULL OR r.[Data] <= @DataA)
-			-- Trasportati da terzi: solo con un trasportatore esterno; attraverso intermediari: solo con l'intermediario
+			-- Report con la colonna del soggetto: solo le registrazioni che lo indicano, interno o esterno
 			AND
 				(
-				@Report <> 'TT'
-				OR s.InternaEsterna = 'E'
-				)
-			AND
-				(
-				@Report <> 'IN'
+				@soggetto IS NULL
 				OR s.Id IS NOT NULL
 				)
 		GROUP BY

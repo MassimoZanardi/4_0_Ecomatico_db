@@ -132,6 +132,19 @@ BEGIN
 
 		BEGIN TRANSACTION;
 
+			-- Il registro si blocca per primo, prima delle relazioni: è lo stesso ordine di
+			-- uspRifiutiRegistrazioni_upd (che blocca il registro per la numerazione), cosi' una rettifica e un
+			-- salvataggio contemporanei sullo stesso registro si mettono in fila invece di bloccarsi a vicenda
+			DECLARE @registroBloccato CHAR(16) = (
+				SELECT g.Id
+				FROM dbo.tblRifiutiRegistri g WITH (UPDLOCK, HOLDLOCK)
+				WHERE g.Id = (
+					SELECT m.IdRegistro
+					FROM
+						dbo.tblRifiutiRegistrazioni r
+						INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					WHERE r.Id = @Id));
+
 			-- Relazioni carico/scarico dell'originale bloccate fino alla fine della transazione
 			-- (UPDLOCK/HOLDLOCK): una nuova associazione sull'originale attende la conferma di questa
 			-- rettifica, cosi' la decisione sui valori operativi presa sotto resta valida.

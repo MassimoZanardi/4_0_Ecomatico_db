@@ -192,21 +192,11 @@ BEGIN
 		FROM dbo.tblRifiutiMateriali
 		WHERE Id = @idMateriale;
 
-		-- Prossimo numero disponibile per Registro/anno (stesso schema di uspRifiutiRegistrazioni_upd,
-		-- ramo di rinumerazione: 1 + MAX(Numero) tra le registrazioni confermate/bozza dell'anno).
+		-- Il prossimo numero disponibile per Registro/anno si legge dentro la transazione, dopo il blocco
+		-- sul registro (vedi sotto)
 		DECLARE @annoInizio DATE = DATEFROMPARTS(YEAR(@data), 1, 1);
 		DECLARE @annoFine DATE = DATEFROMPARTS(YEAR(@data) + 1, 1, 1);
-		DECLARE @numero INT = 1 + ISNULL((
-			SELECT MAX(r.Numero)
-			FROM
-				dbo.tblRifiutiRegistrazioni r
-				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-			WHERE
-				r.Lock < 2
-				AND m.IdRegistro = @idRegistro
-				AND r.[Data] >= @annoInizio
-				AND r.[Data] < @annoFine
-		), 0);
+		DECLARE @numero INT;
 
 		DECLARE @idMovimento CHAR(16);
 
@@ -220,6 +210,28 @@ BEGIN
 		DECLARE @pos INT = 0;
 
 		BEGIN TRANSACTION;
+
+			-- Numerazione: il registro viene bloccato per tutta la transazione (UPDLOCK/HOLDLOCK sulla sua sola
+			-- riga), come in uspRifiutiRegistrazioni_upd: due operazioni contemporanee sullo stesso registro si
+			-- mettono in fila e non possono leggere lo stesso ultimo numero
+			DECLARE @registroBloccato CHAR(16) = (
+				SELECT Id
+				FROM dbo.tblRifiutiRegistri WITH (UPDLOCK, HOLDLOCK)
+				WHERE Id = @idRegistro);
+
+			-- Prossimo numero disponibile per Registro/anno (stesso schema di uspRifiutiRegistrazioni_upd,
+			-- ramo di rinumerazione: 1 + MAX(Numero) tra le registrazioni confermate/bozza dell'anno)
+			SET @numero = 1 + ISNULL((
+				SELECT MAX(r.Numero)
+				FROM
+					dbo.tblRifiutiRegistrazioni r
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				WHERE
+					r.Lock < 2
+					AND m.IdRegistro = @idRegistro
+					AND r.[Data] >= @annoInizio
+					AND r.[Data] < @annoFine
+			), 0);
 
 			INSERT dbo.tblRifiutiMovimenti
 				(Id, IdRegistro, IdOperazione, IdEer, EerDescrizione, IdStatoFisico, IdUnitaMisura, Quantita)

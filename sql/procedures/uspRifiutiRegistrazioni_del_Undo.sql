@@ -1,8 +1,14 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_del_Undo]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Ripristina le registrazioni cancellate dalla sessione (tblIdCancellati). Il ripristino è rifiutato se nel
+-- frattempo il numero di una di esse è stato assegnato a un'altra registrazione dello stesso registro e anno.
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_del_Undo]
 	@IdSessione CHAR(16) = NULL
 AS
 BEGIN
-	SET NOCOUNT, XACT_ABORT ON
+	SET NOCOUNT, XACT_ABORT ON;
 	BEGIN TRY
 
 		DECLARE @returnValue INT = 0;
@@ -30,6 +36,45 @@ BEGIN
 		END
 
 		BEGIN TRANSACTION;
+
+			-- Numerazione: i registri delle registrazioni da ripristinare vengono bloccati per tutta la
+			-- transazione (UPDLOCK/HOLDLOCK sulle loro sole righe), come in uspRifiutiRegistrazioni_upd
+			DECLARE @registriBloccati INT = (
+				SELECT COUNT(*)
+				FROM dbo.tblRifiutiRegistri g WITH (UPDLOCK, HOLDLOCK)
+				WHERE g.Id IN (
+					SELECT m.IdRegistro
+					FROM
+						dbo.tblIdCancellati c
+						INNER JOIN dbo.tblRifiutiRegistrazioni i ON c.Id = i.Id
+						INNER JOIN dbo.tblRifiutiMovimenti m ON i.IdMovimento = m.Id
+					WHERE c.IdSessione = @IdSessione));
+
+			-- Dopo la cancellazione il numero può essere stato riassegnato a un'altra registrazione dello
+			-- stesso registro e anno: il ripristino creerebbe due registrazioni con lo stesso numero
+			IF EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblIdCancellati c
+					INNER JOIN dbo.tblRifiutiRegistrazioni i ON c.Id = i.Id
+					INNER JOIN dbo.tblRifiutiMovimenti mi ON i.IdMovimento = mi.Id
+					INNER JOIN dbo.tblRifiutiMovimenti ma ON mi.IdRegistro = ma.IdRegistro
+					INNER JOIN dbo.tblRifiutiRegistrazioni a ON ma.Id = a.IdMovimento
+				WHERE
+					c.IdSessione = @IdSessione
+					AND i.Lock = 4
+					AND a.Lock < 2
+					AND a.Id <> i.Id
+					AND a.Numero = i.Numero
+					AND a.[Data] >= DATEFROMPARTS(YEAR(i.[Data]), 1, 1)
+					AND a.[Data] < DATEFROMPARTS(YEAR(i.[Data]) + 1, 1, 1)
+			)
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Ripristino non possibile: il numero della registrazione è già stato assegnato a un''altra registrazione';
+				GOTO BRANCH_END;
+			END
 
 			UPDATE i
 			SET Lock = 0
@@ -63,11 +108,12 @@ BEGIN
 		THROW;
 	END CATCH
 	BRANCH_END:
-	SET NOCOUNT, XACT_ABORT OFF
+	SET NOCOUNT, XACT_ABORT OFF;
 	IF @returnValue < 0
 	BEGIN
 		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
-		THROW 50001, @returnMessage, 1
+		THROW 50001, @returnMessage, 1;
 	END
 
 END;
+GO

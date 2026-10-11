@@ -452,76 +452,8 @@ BEGIN
 			END
 		END
 
-		-- Controllo numero registrazione duplicato (sargable)
-		IF @RinumeraRegistro = 0
-		BEGIN
-			IF EXISTS (
-				SELECT 1
-				FROM
-					dbo.tblRifiutiRegistrazioni r
-					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-				WHERE
-					r.Lock < 2
-					AND m.IdRegistro = @idRegistro
-					AND r.[Data] >= @annoInizio
-					AND r.[Data] < @annoFine
-					AND r.Numero = @RegistrazioneNumero
-					AND r.Id <> @Id
-			)
-			BEGIN
-				SET @returnValue = -1;
-				SET @returnMessage = 'Un''altra registrazione con lo stesso numero è già presente';
-				GOTO BRANCH_END;
-			END
-		END
-
-		-- Controllo numero > con data < (sargable)
-		IF @RinumeraRegistro = 0
-		BEGIN
-			IF EXISTS (
-				SELECT 1
-				FROM
-					dbo.tblRifiutiRegistrazioni r
-					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-				WHERE
-					r.Lock < 2
-					AND m.IdRegistro = @idRegistro
-					AND r.[Data] >= @annoInizio
-					AND r.[Data] < @annoFine
-					AND r.Numero > @RegistrazioneNumero
-					AND r.[Data] < @RegistrazioneData
-					AND r.Id <> @Id
-			)
-			BEGIN
-				SET @returnValue = -1;
-				SET @returnMessage = 'Almeno una registrazione con numero maggiore e data inferiore a quella indicata è già presente';
-				GOTO BRANCH_END;
-			END
-		END
-
-		-- Controllo numero < con data > (sargable)
-		IF @RinumeraRegistro = 0
-		BEGIN
-			IF EXISTS (
-				SELECT 1
-				FROM
-					dbo.tblRifiutiRegistrazioni r
-					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-				WHERE
-					r.Lock < 2
-					AND m.IdRegistro = @idRegistro
-					AND r.[Data] >= @annoInizio
-					AND r.[Data] < @annoFine
-					AND r.Numero < @RegistrazioneNumero
-					AND r.[Data] > @RegistrazioneData
-					AND r.Id <> @Id
-			)
-			BEGIN
-				SET @returnValue = -1;
-				SET @returnMessage = 'Almeno una registrazione con numero inferiore e data maggiore a quella indicata è già presente';
-				GOTO BRANCH_END;
-			END
-		END
+		-- I controlli sul numero di registrazione (duplicato, ordine rispetto alla data) e il calcolo della
+		-- rinumerazione sono dentro la transazione, dopo il blocco sul registro: vedi sotto
 
 		-- Controllo data relazioni padre
 		IF @lock < 2
@@ -666,54 +598,137 @@ BEGIN
 			WHERE Id = @IdSessione;
 		END
 
-		-- Rinumerazione registro (sargable)
-		IF @RinumeraRegistro = 1
-		BEGIN
-			DECLARE @isLibero1 BIT = 0;
-			DECLARE @isLibero2 BIT = 0;
-
-			IF @lock = 2
-				SET @RegistrazioneNumero = 1 +
-					(SELECT ISNULL(MAX(r.Numero), 0)
-					 FROM
-						 dbo.tblRifiutiRegistrazioni r
-						 INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-					 WHERE
-						 r.Lock < 2
-						 AND m.IdRegistro = @idRegistro
-						 AND r.[Data] <= @RegistrazioneData
-						 AND r.[Data] >= @annoInizio
-						 AND r.[Data] < @annoFine
-					);
-
-			SET @isLibero1 = IIF(EXISTS (
-				SELECT 1
-				FROM
-					dbo.tblRifiutiRegistrazioni r
-					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-				WHERE
-					r.Lock < 2
-					AND m.IdRegistro = @idRegistro
-					AND r.Numero = @RegistrazioneNumero
-					AND r.[Data] >= @annoInizio
-					AND r.[Data] < @annoFine
-			), 0, 1);
-
-			SET @isLibero2 = IIF(EXISTS (
-				SELECT 1
-				FROM
-					dbo.tblRifiutiRegistrazioni r
-					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-				WHERE
-					r.Lock < 2
-					AND m.IdRegistro = @idRegistro
-					AND r.Numero = @RegistrazioneNumero + 1
-					AND r.[Data] >= @annoInizio
-					AND r.[Data] < @annoFine
-			), 0, 1);
-		END
-
 		BEGIN TRANSACTION;
+
+			-- Numerazione: il registro viene bloccato per tutta la transazione (UPDLOCK/HOLDLOCK sulla sua sola
+			-- riga), cosi' due salvataggi contemporanei sullo stesso registro si mettono in fila e non possono
+			-- leggere lo stesso ultimo numero. Registri diversi e letture non aspettano. Il registro si blocca
+			-- sempre per primo, prima delle relazioni (stesso ordine in _upd_Rettifica e _upd_Annullamento)
+			DECLARE @registroBloccato CHAR(16) = (
+				SELECT Id
+				FROM dbo.tblRifiutiRegistri WITH (UPDLOCK, HOLDLOCK)
+				WHERE Id = @idRegistro);
+
+			-- Controllo numero registrazione duplicato (sargable)
+			IF @RinumeraRegistro = 0
+			BEGIN
+				IF EXISTS (
+					SELECT 1
+					FROM
+						dbo.tblRifiutiRegistrazioni r
+						INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					WHERE
+						r.Lock < 2
+						AND m.IdRegistro = @idRegistro
+						AND r.[Data] >= @annoInizio
+						AND r.[Data] < @annoFine
+						AND r.Numero = @RegistrazioneNumero
+						AND r.Id <> @Id
+				)
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Un''altra registrazione con lo stesso numero è già presente';
+					GOTO BRANCH_END;
+				END
+			END
+
+			-- Controllo numero > con data < (sargable)
+			IF @RinumeraRegistro = 0
+			BEGIN
+				IF EXISTS (
+					SELECT 1
+					FROM
+						dbo.tblRifiutiRegistrazioni r
+						INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					WHERE
+						r.Lock < 2
+						AND m.IdRegistro = @idRegistro
+						AND r.[Data] >= @annoInizio
+						AND r.[Data] < @annoFine
+						AND r.Numero > @RegistrazioneNumero
+						AND r.[Data] < @RegistrazioneData
+						AND r.Id <> @Id
+				)
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Almeno una registrazione con numero maggiore e data inferiore a quella indicata è già presente';
+					GOTO BRANCH_END;
+				END
+			END
+
+			-- Controllo numero < con data > (sargable)
+			IF @RinumeraRegistro = 0
+			BEGIN
+				IF EXISTS (
+					SELECT 1
+					FROM
+						dbo.tblRifiutiRegistrazioni r
+						INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					WHERE
+						r.Lock < 2
+						AND m.IdRegistro = @idRegistro
+						AND r.[Data] >= @annoInizio
+						AND r.[Data] < @annoFine
+						AND r.Numero < @RegistrazioneNumero
+						AND r.[Data] > @RegistrazioneData
+						AND r.Id <> @Id
+				)
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'Almeno una registrazione con numero inferiore e data maggiore a quella indicata è già presente';
+					GOTO BRANCH_END;
+				END
+			END
+
+			-- Rinumerazione registro (sargable)
+			IF @RinumeraRegistro = 1
+			BEGIN
+				DECLARE @isLibero1 BIT = 0;
+				DECLARE @isLibero2 BIT = 0;
+
+				IF @lock = 2
+					SET @RegistrazioneNumero = 1 +
+						(SELECT ISNULL(MAX(r.Numero), 0)
+						 FROM
+							 dbo.tblRifiutiRegistrazioni r
+							 INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+						 WHERE
+							 r.Lock < 2
+							 AND m.IdRegistro = @idRegistro
+							 AND r.[Data] <= @RegistrazioneData
+							 AND r.[Data] >= @annoInizio
+							 AND r.[Data] < @annoFine
+						);
+
+				SET @isLibero1 = IIF(EXISTS (
+					SELECT 1
+					FROM
+						dbo.tblRifiutiRegistrazioni r
+						INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					WHERE
+						r.Lock < 2
+						AND m.IdRegistro = @idRegistro
+						AND r.Numero = @RegistrazioneNumero
+						AND r.[Data] >= @annoInizio
+						AND r.[Data] < @annoFine
+				), 0, 1);
+
+				SET @isLibero2 = IIF(EXISTS (
+					SELECT 1
+					FROM
+						dbo.tblRifiutiRegistrazioni r
+						INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					WHERE
+						r.Lock < 2
+						AND m.IdRegistro = @idRegistro
+						AND r.Numero = @RegistrazioneNumero + 1
+						AND r.[Data] >= @annoInizio
+						AND r.[Data] < @annoFine
+				), 0, 1);
+			END
 
 			IF @RinumeraRegistro = 1
 			BEGIN

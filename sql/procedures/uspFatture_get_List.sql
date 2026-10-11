@@ -61,9 +61,46 @@ BEGIN
 		-- Scope: azienda interna corrente della sessione (tblSessioni.IdAzienda); senza azienda nessuna riga.
 		-- @Numero cerca nel numero della fattura e, per i fornitori, nel numero del loro documento.
 		-- Stato della riga: avviso se la fattura non ha righe con importi o se ha rate la cui somma è diversa
-		-- dal netto a pagare (una fattura senza rate non è segnalata)
+		-- dal netto a pagare (una fattura senza rate non è segnalata).
+		-- Prima si filtra e si prende la pagina, con le sole colonne di filtro e ordinamento (quelle
+		-- dell'indice delle fatture); poi, solo per le fatture della pagina, si leggono le altre colonne
+		-- e si calcolano totali e rate
+		;WITH pagina AS (
+			SELECT
+				f.Id,
+				f.Numero,
+				f.DataEmissione,
+				s.NomeCompleto,
+				RowsCount = COUNT(*) OVER ()
+			FROM
+				dbo.tblFatture f
+				INNER JOIN dbo.tblSessioni e ON f.IdSede = e.IdAzienda
+				LEFT JOIN dbo.tblClientiFornitori c ON f.IdClienteFornitore = c.Id
+				LEFT JOIN dbo.tblSedi s ON c.IdSede = s.Id
+			WHERE
+				e.Id = @IdSessione
+				AND f.Tipo = @Tipo
+				AND f.Lock = 0
+				AND (@Nome IS NULL OR s.NomeCompleto LIKE '%' + @Nome + '%')
+				AND
+					(
+					@Numero IS NULL
+					OR CAST(f.Numero AS VARCHAR(12)) + ISNULL('/' + f.Sezionale, '') LIKE @Numero + '%'
+					OR f.NumeroFornitore LIKE '%' + @Numero + '%'
+					)
+				AND (@DataDa IS NULL OR f.DataEmissione >= @DataDa)
+				AND (@DataA IS NULL OR f.DataEmissione <= @DataA)
+				AND (@IdTipo IS NULL OR f.IdTipo = @IdTipo)
+				AND (@IdStato IS NULL OR f.IdStato = @IdStato)
+			ORDER BY
+				f.DataEmissione DESC,
+				f.Numero DESC,
+				f.Id
+			OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
+			FETCH NEXT @RowsPerPage ROWS ONLY
+		)
 		SELECT
-			f.Id,
+			g.Id,
 			StatoValore = CASE WHEN t.Totale = 0 OR (z.Numero > 0 AND z.Importo <> t.NettoAPagare) THEN 1 ELSE 0 END,
 			StatoDescrizione =
 				CASE
@@ -80,43 +117,24 @@ BEGIN
 			TipoNome = p.Nome,
 			f.IdStato,
 			StatoNome = a.Nome,
-			s.NomeCompleto,
+			g.NomeCompleto,
 			t.Imponibile,
 			t.Iva,
 			t.Totale,
 			t.NettoAPagare,
 			SolaLettura = ISNULL(f.SolaLettura, 0),
-			RowsCount = COUNT(*) OVER ()
+			g.RowsCount
 		FROM
-			dbo.tblFatture f
-			INNER JOIN dbo.tblSessioni e ON f.IdSede = e.IdAzienda
-			LEFT JOIN dbo.tblClientiFornitori c ON f.IdClienteFornitore = c.Id
-			LEFT JOIN dbo.tblSedi s ON c.IdSede = s.Id
+			pagina g
+			INNER JOIN dbo.tblFatture f ON g.Id = f.Id
 			LEFT JOIN dbo.tblFattureTipi p ON f.IdTipo = p.Id
 			LEFT JOIN dbo.tblFattureStati a ON f.IdStato = a.Id
-			OUTER APPLY dbo.ufnFatture_get_Totali(f.Id) t
-			OUTER APPLY (SELECT Numero = COUNT(*), Importo = ISNULL(SUM(q.Importo), 0) FROM dbo.tblFattureRate q WHERE q.IdFattura = f.Id) z
-		WHERE
-			e.Id = @IdSessione
-			AND f.Tipo = @Tipo
-			AND f.Lock = 0
-			AND (@Nome IS NULL OR s.NomeCompleto LIKE '%' + @Nome + '%')
-			AND
-				(
-				@Numero IS NULL
-				OR CAST(f.Numero AS VARCHAR(12)) + ISNULL('/' + f.Sezionale, '') LIKE @Numero + '%'
-				OR f.NumeroFornitore LIKE '%' + @Numero + '%'
-				)
-			AND (@DataDa IS NULL OR f.DataEmissione >= @DataDa)
-			AND (@DataA IS NULL OR f.DataEmissione <= @DataA)
-			AND (@IdTipo IS NULL OR f.IdTipo = @IdTipo)
-			AND (@IdStato IS NULL OR f.IdStato = @IdStato)
+			OUTER APPLY dbo.ufnFatture_get_Totali(g.Id) t
+			OUTER APPLY (SELECT Numero = COUNT(*), Importo = ISNULL(SUM(q.Importo), 0) FROM dbo.tblFattureRate q WHERE q.IdFattura = g.Id) z
 		ORDER BY
-			f.DataEmissione DESC,
-			f.Numero DESC,
-			f.Id
-		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
-		FETCH NEXT @RowsPerPage ROWS ONLY
+			g.DataEmissione DESC,
+			g.Numero DESC,
+			g.Id
 		OPTION (RECOMPILE);
 
 	END TRY

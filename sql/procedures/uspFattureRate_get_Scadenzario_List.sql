@@ -70,7 +70,10 @@ BEGIN
 
 		-- Scope: azienda interna corrente della sessione (tblSessioni.IdAzienda); senza azienda nessuna riga.
 		-- @Numero cerca nel numero della fattura e, per i fornitori, nel numero del loro documento.
-		-- Pagato = quote dei pagamenti attivi attribuite alla rata
+		-- Pagato = quote dei pagamenti attivi attribuite alla rata.
+		-- Il residuo serve al filtro per stato, quindi va calcolato per tutte le rate dell'azienda: lo si fa
+		-- con le sole colonne che servono a filtro e ordinamento (quelle degli indici delle fatture e delle
+		-- rate); il resto della riga (tipo, modalità, banca) si legge solo per le rate della pagina
 		DECLARE @oggi DATE = CAST(GETDATE() AS DATE);
 
 		WITH rate AS (
@@ -83,23 +86,13 @@ BEGIN
 				x.Pagato,
 				Residuo = IIF(ISNULL(r.Importo, 0) - ISNULL(r.Abbuono, 0) - x.Pagato > 0, ISNULL(r.Importo, 0) - ISNULL(r.Abbuono, 0) - x.Pagato, 0),
 				f.Numero,
-				f.Sezionale,
-				f.NumeroFornitore,
-				f.DataEmissione,
-				f.IdTipo,
-				TipoNome = p.Nome,
-				f.IdModalita,
-				f.IdBancaCassa,
-				s.NomeCompleto,
-				NotaCredito = CAST(IIF(f.IdTipo = 'TD04', 1, 0) AS BIT),
-				SolaLettura = ISNULL(f.SolaLettura, 0)
+				s.NomeCompleto
 			FROM
 				dbo.tblFattureRate r
 				INNER JOIN dbo.tblFatture f ON r.IdFattura = f.Id
 				INNER JOIN dbo.tblSessioni e ON f.IdSede = e.IdAzienda
 				LEFT JOIN dbo.tblClientiFornitori c ON f.IdClienteFornitore = c.Id
 				LEFT JOIN dbo.tblSedi s ON c.IdSede = s.Id
-				LEFT JOIN dbo.tblFattureTipi p ON f.IdTipo = p.Id
 				CROSS APPLY
 					(
 						SELECT Pagato = ISNULL(SUM(rp.Importo), 0)
@@ -124,6 +117,33 @@ BEGIN
 					)
 				AND (@DataDa IS NULL OR r.DataScadenza >= @DataDa)
 				AND (@DataA IS NULL OR r.DataScadenza <= @DataA)
+		),
+		pagina AS (
+			SELECT
+				t.Id,
+				t.IdFattura,
+				t.DataScadenza,
+				t.Importo,
+				t.Abbuono,
+				t.Pagato,
+				t.Residuo,
+				t.Numero,
+				t.NomeCompleto,
+				RowsCount = COUNT(*) OVER ()
+			FROM rate t
+			WHERE
+				@Stato = 'T'
+				OR (@Stato = 'A' AND t.Residuo > 0)
+				OR (@Stato = 'S' AND t.Residuo > 0 AND t.DataScadenza < @oggi)
+				OR (@Stato = 'D' AND t.Residuo > 0 AND t.DataScadenza >= @oggi)
+				OR (@Stato = 'P' AND t.Residuo = 0)
+			ORDER BY
+				t.DataScadenza,
+				t.NomeCompleto,
+				t.Numero,
+				t.Id
+			OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
+			FETCH NEXT @RowsPerPage ROWS ONLY
 		)
 		SELECT
 			t.Id,
@@ -139,36 +159,31 @@ BEGIN
 				ELSE 'Da pagare'
 			END,
 			t.DataScadenza,
-			t.Numero,
-			t.Sezionale,
-			t.NumeroFornitore,
-			t.DataEmissione,
-			t.IdTipo,
-			t.TipoNome,
-			t.IdModalita,
-			t.IdBancaCassa,
+			f.Numero,
+			f.Sezionale,
+			f.NumeroFornitore,
+			f.DataEmissione,
+			f.IdTipo,
+			TipoNome = p.Nome,
+			f.IdModalita,
+			f.IdBancaCassa,
 			t.NomeCompleto,
-			t.NotaCredito,
-			t.SolaLettura,
+			NotaCredito = CAST(IIF(f.IdTipo = 'TD04', 1, 0) AS BIT),
+			SolaLettura = ISNULL(f.SolaLettura, 0),
 			Importo = CAST(t.Importo AS DECIMAL(18, 2)),
 			Abbuono = CAST(t.Abbuono AS DECIMAL(18, 2)),
 			Pagato = CAST(t.Pagato AS DECIMAL(18, 2)),
 			Residuo = CAST(t.Residuo AS DECIMAL(18, 2)),
-			RowsCount = COUNT(*) OVER ()
-		FROM rate t
-		WHERE
-			@Stato = 'T'
-			OR (@Stato = 'A' AND t.Residuo > 0)
-			OR (@Stato = 'S' AND t.Residuo > 0 AND t.DataScadenza < @oggi)
-			OR (@Stato = 'D' AND t.Residuo > 0 AND t.DataScadenza >= @oggi)
-			OR (@Stato = 'P' AND t.Residuo = 0)
+			t.RowsCount
+		FROM
+			pagina t
+			INNER JOIN dbo.tblFatture f ON t.IdFattura = f.Id
+			LEFT JOIN dbo.tblFattureTipi p ON f.IdTipo = p.Id
 		ORDER BY
 			t.DataScadenza,
 			t.NomeCompleto,
 			t.Numero,
 			t.Id
-		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
-		FETCH NEXT @RowsPerPage ROWS ONLY
 		OPTION (RECOMPILE);
 
 	END TRY

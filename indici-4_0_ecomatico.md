@@ -348,9 +348,14 @@ Verifica in sviluppo con 160.000 fatture, 160.000 rate e 152.000 pagamenti inser
 
 **Numerazione delle fatture (`uspFatture_upd`, `uspFatture_get_ProssimoNumero`)**: il filtro `IIF(@tipo = 'C', DataEmissione, DataRegistrazione) >= …` non permetteva il seek sulla data, e con `UPDLOCK, HOLDLOCK` bloccava tutte le fatture di quell'azienda e tipo. Riscritto in due letture, una per tipo, con il filtro sulla colonna: per i clienti 12 letture invece di 49 e blocco limitato all'anno; per i fornitori (anno della `DataRegistrazione`, che non è in chiave) resta il blocco sulle fatture fornitore dell'azienda. In `uspFatture_upd_Xml` tolto l'hint `UPDLOCK, HOLDLOCK` dall'`UPDATE` di `tblFattureDatiFiscali`, superfluo.
 
+**Elenco fatture (`uspFatture_get_List`)**: calcolava `ufnFatture_get_Totali` e la somma delle rate per tutte le fatture che passavano il filtro, non solo per la pagina. Ora una CTE filtra, ordina e prende la pagina con le sole colonne dell'indice, e solo per quelle righe si leggono le altre colonne e si calcolano totali e rate. Con 846 fatture nell'anno e 20 righe a video: circa 1.000 letture invece di 38.350 (`tblFattureRighe` 600 invece di 25.380, `tblFatture` 136 invece di 5.153). Stesso schema da verificare nelle altre `_get_List` che usano una funzione di totali.
+
+**Scadenziario (`uspFattureRate_get_Scadenzario_List`)**: il residuo serve al filtro per stato, quindi va calcolato per tutte le rate dell'azienda. Ora lo si calcola con le sole colonne di filtro e ordinamento, e tipo, modalità e banca si leggono solo per le rate della pagina. Con 5.000 rate: circa 46.300 letture invece di 71.500 (`tblFatture` 129 invece di 15.393, `tblFattureTipi` 41 invece di 10.005). Restano circa 15.000 letture ciascuna su `tblFattureRate`, `tblFattureRatePagamenti` e `tblPagamenti`.
+
+Entrambe confrontate con la versione precedente su 11 combinazioni di filtri e pagine, a volume: stesse righe.
+
 **Voci aperte, non di indicizzazione:**
-- `uspFatture_get_List` calcola `ufnFatture_get_Totali` e la somma delle rate per **tutte** le fatture che passano il filtro, non solo per la pagina: con 846 fatture dell'anno e 20 righe a video, 25.380 letture su `tblFattureRighe` e 2.734 su `tblFattureRate`. Si risolve paginando prima e calcolando i totali dopo. Stesso schema da verificare nelle altre `_get_List` che usano una funzione di totali.
-- Scadenziario (`uspFattureRate_get_Scadenzario_List`): il residuo di ogni rata è calcolato su tutte le rate dell'azienda prima del filtro per stato (5.000 rate aperte: circa 15.000 letture per tabella). È strutturale finché il residuo non è un dato memorizzato.
+- Scadenziario: per scendere ancora serve il pagato memorizzato sulla rata (colonna su `tblFattureRate` aggiornata da `uspPagamenti_ins` e `uspPagamenti_del`), che toglie le letture su `tblFattureRatePagamenti` e `tblPagamenti` (da circa 46.000 a circa 16.000). È una modifica al modello dei dati, con due fonti da tenere allineate: non fatta.
 - `uspRifiutiRegistrazioni_upd` e `uspRifiutiRegistrazioni_ins_CaricoAuto` controllano e calcolano il numero della registrazione fuori dalla transazione e senza blocco: due salvataggi contemporanei sullo stesso registro possono prendere lo stesso numero. Intervento separato.
 
 Legenda: 🔲 Non iniziato · 🔄 In corso · ✅ Completato (con eventuale nota su modifiche applicate/rimandate).

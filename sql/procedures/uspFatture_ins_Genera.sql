@@ -9,7 +9,7 @@ GO
 --   Senza @Id: i documenti dell'azienda interna corrente della sessione con data tra @DataDa e @DataA,
 --        eventualmente riconducibili al solo cliente @IdClienteFornitore (Fatture clienti > Nuovo > Tramite
 --        procedura automatica). @Rifiuti = 0: le registrazioni dei rifiuti non sono state scelte.
--- Entrano solo i documenti fatturabili (ufnFattureDocumenti_get_Rifiuti, gli stessi della verifica).
+-- Entrano solo i documenti fatturabili, raggruppati come li mostra la verifica (ufnFattureGenera_get_Documenti).
 -- Una fattura per cliente; secondo il raggruppamento della scheda del cliente (tblClientiFornitori.
 -- IdRaggruppamento) una per sede del produttore (S) o una per contratto (T): solo in quest'ultimo caso la
 -- fattura riporta ordine, data dell'ordine, CIG e CUP del contratto.
@@ -147,13 +147,11 @@ BEGIN
 			d.IdOffertaContratto,
 			ISNULL(d.IdClienteFornitore, REPLICATE('0', 16)),
 			d.IdPreFattura,
-			IIF(d.IdPreFattura IS NOT NULL AND ROW_NUMBER() OVER (PARTITION BY d.IdPreFattura ORDER BY d.[Data], d.Numero, d.Id) = 1, 1, 0),
-			IIF(c.IdRaggruppamento = 'S', d.IdProduttore, NULL),
-			IIF(c.IdRaggruppamento = 'T', d.IdOffertaContratto, NULL),
+			d.PrimoDellaPreFattura,
+			d.GruppoSede,
+			d.GruppoContratto,
 			d.Fatturabile
-		FROM
-			dbo.ufnFattureDocumenti_get_Rifiuti(@IdSessione, @idAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture) d
-			LEFT JOIN dbo.tblClientiFornitori c ON d.IdClienteFornitore = c.Id
+		FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture) d
 		WHERE
 			@Rifiuti = 1
 			AND (@Id IS NOT NULL OR d.Fatturabile = 1)
@@ -165,25 +163,6 @@ BEGIN
 			SET @returnMessage = 'Il documento non è fatturabile: usare "Verifica importo e cliente" per vedere il motivo';
 			GOTO BRANCH_END;
 		END
-
-		-- I documenti di una stessa pre-fattura restano insieme: stesso gruppo del suo primo documento
-		DECLARE @primi TABLE (
-			IdPreFattura CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY,
-			GruppoSede CHAR(16) COLLATE DATABASE_DEFAULT NULL,
-			GruppoContratto CHAR(16) COLLATE DATABASE_DEFAULT NULL
-		);
-		INSERT @primi (IdPreFattura, GruppoSede, GruppoContratto)
-		SELECT IdPreFattura, GruppoSede, GruppoContratto
-		FROM @doc
-		WHERE PrimoDellaPreFattura = 1;
-
-		UPDATE d
-		SET
-			GruppoSede = p.GruppoSede,
-			GruppoContratto = p.GruppoContratto
-		FROM
-			@doc d
-			INNER JOIN @primi p ON d.IdPreFattura = p.IdPreFattura;
 
 		-- Righe di fattura di ogni documento, calcolate ora una volta per tutte: quelle dell'importo applicato
 		-- oppure, per il primo documento di una pre-fattura, le righe della pre-fattura così come sono

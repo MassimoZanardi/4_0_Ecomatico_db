@@ -12,6 +12,7 @@ GO
 CREATE OR ALTER PROCEDURE dbo.uspImportiRifiuti_get_Esportazione
 	@IdSessione CHAR(16) = NULL,
 	@Search VARCHAR(50) = NULL,
+	@SoloContrattoScaduto BIT = 0,
 	@MaxRighe INT = NULL
 AS
 BEGIN
@@ -58,7 +59,7 @@ BEGIN
 			[Valido dal] = t.ContrattoDataInizio,
 			[Valido al] = t.ContrattoDataFine,
 			[Righe] = t.Righe
-		FROM dbo.ufnImportiRifiuti_get_List(@IdSessione, @Search) t
+		FROM dbo.ufnImportiRifiuti_get_List(@IdSessione, @Search, @SoloContrattoScaduto) t
 		ORDER BY t.Nome, t.Id
 		OPTION (RECOMPILE);
 

@@ -6,20 +6,25 @@ GO
 -- verrebbero applicati (ufnImportiRifiuti_get_Applicazione) e l'esito. Serve sia alla verifica
 -- (uspFatture_get_Genera_List) sia alla generazione (uspFatture_ins_Genera), così leggono le stesse righe.
 --   @Id: una sola registrazione ("Genera la fattura" dalla scheda); altrimenti @IdAzienda e l'intervallo di date.
---   @IdClienteFornitore: solo i documenti che verrebbero fatturati a quel cliente.
+--   @IdClienteFornitore: solo i documenti riconducibili a quel cliente (quelli che gli verrebbero fatturati).
+--   @IncludiPreFatture = 1: rientrano anche i documenti già in una pre-fattura (IdPreFattura), che verrà
+--        convertita: in fattura vanno le righe della pre-fattura, non quelle ricalcolate dagli importi, e il
+--        cliente è quello della pre-fattura.
 -- Candidate: registrazioni confermate (Lock = 0) di un'operazione fatturabile, non rettifiche, di un registro
--- di una sede che la sessione vede (titolarità).
--- Fatturabile = 1: non annullata, non "Non fatturabile", non già fatturata, con un importo che coincide, un
+-- di una sede che la sessione vede (titolarità), non ancora in una fattura (le pre-fatture non contano come
+-- fattura quando si includono).
+-- Fatturabile = 1: non annullata, non "Non fatturabile", con un importo che coincide, un
 -- cliente determinato, almeno una riga e l'aliquota IVA su ogni riga con importo (della riga o della scheda del
 -- cliente). Stessa condizione di uspFattureDocumenti_get ("Verifica importo e
--- cliente" sulla scheda): vanno tenute allineate.
+-- cliente" sulla scheda): vanno tenute allineate. Un documento in una pre-fattura inclusa è sempre fatturabile.
 CREATE OR ALTER FUNCTION dbo.ufnFattureDocumenti_get_Rifiuti (
 	@IdSessione CHAR(16),
 	@IdAzienda CHAR(16),
 	@Id CHAR(16),
 	@DataDa DATE,
 	@DataA DATE,
-	@IdClienteFornitore CHAR(16))
+	@IdClienteFornitore CHAR(16),
+	@IncludiPreFatture BIT)
 RETURNS TABLE
 AS
 RETURN
@@ -35,18 +40,21 @@ RETURN
 		a.Quantita,
 		a.IsAnnullata,
 		a.NonFatturabile,
-		a.IdFattura,
+		IdPreFattura = IIF(a.IsPreFattura = 1, a.IdFattura, NULL),
 		a.IdImporto,
 		a.IdOffertaContratto,
-		a.IdClienteFornitore,
+		IdClienteFornitore = IIF(a.IsPreFattura = 1, a.IdClientePreFattura, a.IdClienteFornitore),
 		a.ClienteOrigine,
 		a.IdImportoScartato,
 		Righe = ISNULL(t.Righe, 0),
 		Totale = t.Totale,
 		SenzaIva = ISNULL(t.SenzaIva, 0),
-		Fatturabile = CAST(IIF(
-			a.IsAnnullata = 0 AND a.NonFatturabile = 0 AND a.IdFattura IS NULL
-			AND a.IdImporto IS NOT NULL AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0, 1, 0) AS BIT)
+		Fatturabile = CAST(CASE
+			WHEN a.IsPreFattura = 1 THEN 1
+			WHEN a.IsAnnullata = 0 AND a.NonFatturabile = 0
+				AND a.IdImporto IS NOT NULL AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0 THEN 1
+			ELSE 0
+		END AS BIT)
 	FROM
 		dbo.tblRifiutiRegistrazioni r
 		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
@@ -66,6 +74,12 @@ RETURN
 		r.Lock = 0
 		AND o.IsFatturabile = 1
 		AND a.IsRettifica = 0
+		-- Non ancora in una fattura; in una pre-fattura solo se si includono
+		AND
+			(
+			a.IdFattura IS NULL
+			OR (a.IsPreFattura = 1 AND @IncludiPreFatture = 1)
+			)
 		AND
 			(
 				(@Id IS NOT NULL AND r.Id = @Id)
@@ -77,6 +91,10 @@ RETURN
 					AND r.[Data] <= @DataA
 				)
 			)
-		AND (@IdClienteFornitore IS NULL OR a.IdClienteFornitore = @IdClienteFornitore)
+		AND
+			(
+			@IdClienteFornitore IS NULL
+			OR IIF(a.IsPreFattura = 1, a.IdClientePreFattura, a.IdClienteFornitore) = @IdClienteFornitore
+			)
 );
 GO

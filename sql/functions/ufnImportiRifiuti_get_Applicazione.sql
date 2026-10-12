@@ -25,6 +25,8 @@ GO
 -- IdImportoScartato: importo di un contratto che coinciderebbe con la registrazione ma il cui contratto non è
 -- valido alla data della registrazione (serve all'avviso "contratto scaduto").
 -- IdFattura: solo se la fattura non è cancellata (cancellata la fattura, la registrazione torna fatturabile).
+-- IsPreFattura, IdClientePreFattura: il documento è in una pre-fattura (TD00), intestata a quel cliente; la
+-- generazione può riprenderla e convertirla in fattura (uspFatture_ins_Genera, @IncludiPreFatture).
 CREATE OR ALTER FUNCTION dbo.ufnImportiRifiuti_get_Applicazione (
 	@Id CHAR(16))
 RETURNS TABLE
@@ -54,7 +56,9 @@ RETURN
 			m.FormularioNumero,
 			IdClienteIndicato = d.IdClienteFornitore,
 			NonFatturabile = CAST(ISNULL(d.NonFatturabile, 0) AS BIT),
-			IdFattura = f.Id
+			IdFattura = f.Id,
+			IsPreFattura = CAST(IIF(f.IdTipo = 'TD00', 1, 0) AS BIT),
+			IdClientePreFattura = IIF(f.IdTipo = 'TD00', f.IdClienteFornitore, NULL)
 		FROM
 			dbo.tblRifiutiRegistrazioni r
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
@@ -91,6 +95,8 @@ RETURN
 		doc.IdClienteIndicato,
 		doc.NonFatturabile,
 		doc.IdFattura,
+		doc.IsPreFattura,
+		doc.IdClientePreFattura,
 		a.IdImporto,
 		a.IdOffertaContratto,
 		IdClienteFornitore = COALESCE(doc.IdClienteIndicato, a.IdClienteContratto, cp.Id),

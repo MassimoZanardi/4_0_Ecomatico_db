@@ -7,7 +7,8 @@ GO
 --   @Id (con @IdModulo = 'RIF'): un solo documento ("Genera la fattura" dalla scheda); l'azienda è quella del
 --        documento. Se il documento non è fatturabile la SP lo rifiuta.
 --   Senza @Id: i documenti dell'azienda interna corrente della sessione con data tra @DataDa e @DataA,
---        eventualmente del solo cliente @IdClienteFornitore (Fatture clienti > Azioni > Genera fatture).
+--        eventualmente riconducibili al solo cliente @IdClienteFornitore (Fatture clienti > Nuovo > Tramite
+--        procedura automatica). @Rifiuti = 0: le registrazioni dei rifiuti non sono state scelte.
 -- Entrano solo i documenti fatturabili (ufnFattureDocumenti_get_Rifiuti, gli stessi della verifica).
 -- Una fattura per cliente; secondo il raggruppamento della scheda del cliente (tblClientiFornitori.
 -- IdRaggruppamento) una per sede del produttore (S) o una per contratto (T): solo in quest'ultimo caso la
@@ -17,6 +18,11 @@ GO
 -- valuta e split payment dalla scheda del cliente; numero successivo dell'anno senza sezionale, assegnato con
 -- lo stesso blocco di uspFatture_upd. Righe: quelle dell'importo applicato a ogni documento, nell'ordine dei
 -- documenti (data, numero); ritenuta d'acconto della scheda del cliente. Rate: uspFattureRate_ins_Genera.
+-- Pre-fatture (@IncludiPreFatture = 1): i documenti già in una pre-fattura rientrano e la pre-fattura viene
+-- convertita PER INTERO: le sue righe (non ricalcolate dagli importi, con aliquota, conto e ritenuta che hanno)
+-- vanno nella fattura del suo cliente insieme agli altri documenti, al posto del suo primo documento, e tutti i
+-- suoi documenti, anche quelli fuori dal periodo, passano alla nuova fattura. Con @RimuoviPreFatture = 1 la
+-- pre-fattura viene poi cancellata (Lock 4), altrimenti resta in elenco senza più documenti collegati.
 -- Ogni documento resta legato alla fattura (tblFattureDocumenti, con importo e contratto applicati) e non
 -- viene fatturato due volte: un documento fatturato nel frattempo da un'altra sessione fa saltare la sua fattura.
 -- Una transazione per fattura. Restituisce Fatture, Documenti e IdFattura (l'ultima generata).
@@ -28,7 +34,10 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_ins_Genera
 	@DataA DATE = NULL,
 	@IdClienteFornitore CHAR(16) = NULL,
 	@DataEmissione DATE = NULL,
-	@PreFattura BIT = 0
+	@PreFattura BIT = 0,
+	@Rifiuti BIT = 1,
+	@IncludiPreFatture BIT = 0,
+	@RimuoviPreFatture BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -42,6 +51,9 @@ BEGIN
 		SET @IdClienteFornitore = NULLIF(NULLIF(LTRIM(RTRIM(@IdClienteFornitore)), ''), REPLICATE('0', 16));
 		SET @DataEmissione = ISNULL(@DataEmissione, CAST(GETDATE() AS DATE));
 		SET @PreFattura = ISNULL(@PreFattura, 0);
+		SET @Rifiuti = ISNULL(@Rifiuti, 1);
+		SET @IncludiPreFatture = ISNULL(@IncludiPreFatture, 0);
+		SET @RimuoviPreFatture = ISNULL(@RimuoviPreFatture, 0);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -65,6 +77,13 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'La data di fine del periodo non può precedere quella di inizio';
+			GOTO BRANCH_END;
+		END
+		-- Convertire le pre-fatture in altre pre-fatture non ha senso
+		IF @PreFattura = 1 AND @IncludiPreFatture = 1
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Per includere le pre-fatture togliere la spunta "Genera come pre-fatture"';
 			GOTO BRANCH_END;
 		END
 
@@ -95,6 +114,12 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 		END
+		ELSE
+		BEGIN
+			-- Un solo documento: sempre i rifiuti, senza pre-fatture
+			SET @Rifiuti = 1;
+			SET @IncludiPreFatture = 0;
+		END
 
 		-- Documenti da fatturare, con il raggruppamento della scheda del cliente
 		DECLARE @doc TABLE (
@@ -102,31 +127,36 @@ BEGIN
 			[Data] DATE NULL,
 			Numero INT NULL,
 			IdAzienda CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL,
-			IdImporto CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL,
+			IdImporto CHAR(16) COLLATE DATABASE_DEFAULT NULL,
 			IdOffertaContratto CHAR(16) COLLATE DATABASE_DEFAULT NULL,
 			IdClienteFornitore CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL,
+			IdPreFattura CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			-- Primo documento della sua pre-fattura: porta le righe della pre-fattura e decide il gruppo
+			PrimoDellaPreFattura BIT NOT NULL,
 			GruppoSede CHAR(16) COLLATE DATABASE_DEFAULT NULL,
 			GruppoContratto CHAR(16) COLLATE DATABASE_DEFAULT NULL,
 			Fatturabile BIT NOT NULL
 		);
-		INSERT @doc (Id, [Data], Numero, IdAzienda, IdImporto, IdOffertaContratto, IdClienteFornitore, GruppoSede, GruppoContratto, Fatturabile)
+		INSERT @doc (Id, [Data], Numero, IdAzienda, IdImporto, IdOffertaContratto, IdClienteFornitore, IdPreFattura, PrimoDellaPreFattura, GruppoSede, GruppoContratto, Fatturabile)
 		SELECT
 			d.Id,
 			d.[Data],
 			d.Numero,
 			d.IdAzienda,
-			ISNULL(d.IdImporto, REPLICATE('0', 16)),
+			d.IdImporto,
 			d.IdOffertaContratto,
 			ISNULL(d.IdClienteFornitore, REPLICATE('0', 16)),
+			d.IdPreFattura,
+			IIF(d.IdPreFattura IS NOT NULL AND ROW_NUMBER() OVER (PARTITION BY d.IdPreFattura ORDER BY d.[Data], d.Numero, d.Id) = 1, 1, 0),
 			IIF(c.IdRaggruppamento = 'S', d.IdProduttore, NULL),
 			IIF(c.IdRaggruppamento = 'T', d.IdOffertaContratto, NULL),
 			d.Fatturabile
 		FROM
-			dbo.ufnFattureDocumenti_get_Rifiuti(@IdSessione, @idAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore) d
+			dbo.ufnFattureDocumenti_get_Rifiuti(@IdSessione, @idAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture) d
 			LEFT JOIN dbo.tblClientiFornitori c ON d.IdClienteFornitore = c.Id
 		WHERE
-			@Id IS NOT NULL
-			OR d.Fatturabile = 1
+			@Rifiuti = 1
+			AND (@Id IS NOT NULL OR d.Fatturabile = 1)
 		OPTION (RECOMPILE);
 
 		IF @Id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM @doc WHERE Fatturabile = 1)
@@ -136,11 +166,30 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Righe di fattura di ogni documento, calcolate ora una volta per tutte
+		-- I documenti di una stessa pre-fattura restano insieme: stesso gruppo del suo primo documento
+		DECLARE @primi TABLE (
+			IdPreFattura CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY,
+			GruppoSede CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			GruppoContratto CHAR(16) COLLATE DATABASE_DEFAULT NULL
+		);
+		INSERT @primi (IdPreFattura, GruppoSede, GruppoContratto)
+		SELECT IdPreFattura, GruppoSede, GruppoContratto
+		FROM @doc
+		WHERE PrimoDellaPreFattura = 1;
+
+		UPDATE d
+		SET
+			GruppoSede = p.GruppoSede,
+			GruppoContratto = p.GruppoContratto
+		FROM
+			@doc d
+			INNER JOIN @primi p ON d.IdPreFattura = p.IdPreFattura;
+
+		-- Righe di fattura di ogni documento, calcolate ora una volta per tutte: quelle dell'importo applicato
+		-- oppure, per il primo documento di una pre-fattura, le righe della pre-fattura così come sono
 		DECLARE @righe TABLE (
 			N INT IDENTITY(1, 1) NOT NULL PRIMARY KEY,
 			IdDocumento CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL,
-			Pos INT NULL,
 			IdRiga CHAR(16) COLLATE DATABASE_DEFAULT NULL,
 			Descrizione VARCHAR(1000) NULL,
 			SolaDescrizione BIT NOT NULL,
@@ -148,24 +197,69 @@ BEGIN
 			IdUnitaMisura CHAR(2) COLLATE DATABASE_DEFAULT NULL,
 			Importo DECIMAL(18, 4) NULL,
 			IdAliquotaIva CHAR(16) COLLATE DATABASE_DEFAULT NULL,
-			IdConto CHAR(16) COLLATE DATABASE_DEFAULT NULL
+			IdConto CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			-- NULL: la ritenuta è quella della scheda del cliente
+			RitenutaAcconto INT NULL
 		);
-		INSERT @righe (IdDocumento, Pos, Descrizione, SolaDescrizione, Quantita, IdUnitaMisura, Importo, IdAliquotaIva, IdConto)
+		INSERT @righe (IdDocumento, Descrizione, SolaDescrizione, Quantita, IdUnitaMisura, Importo, IdAliquotaIva, IdConto, RitenutaAcconto)
 		SELECT
-			d.Id,
-			g.Pos,
-			g.Descrizione,
-			g.SolaDescrizione,
-			g.Quantita,
-			g.IdUnitaMisura,
-			g.Importo,
-			g.IdAliquotaIva,
-			g.IdConto
+			t.IdDocumento,
+			t.Descrizione,
+			t.SolaDescrizione,
+			t.Quantita,
+			t.IdUnitaMisura,
+			t.Importo,
+			t.IdAliquotaIva,
+			t.IdConto,
+			t.RitenutaAcconto
 		FROM
-			@doc d
-			CROSS APPLY dbo.ufnImportiRifiuti_get_ApplicazioneRighe(d.Id) g
-		WHERE d.Fatturabile = 1
-		ORDER BY d.[Data], d.Numero, d.Id, ISNULL(g.Pos, 0), g.Id;
+			(
+				SELECT
+					IdDocumento = d.Id,
+					d.[Data],
+					d.Numero,
+					Pos = ISNULL(g.Pos, 0),
+					Ordine = g.Id,
+					g.Descrizione,
+					g.SolaDescrizione,
+					g.Quantita,
+					g.IdUnitaMisura,
+					g.Importo,
+					g.IdAliquotaIva,
+					g.IdConto,
+					RitenutaAcconto = CAST(NULL AS INT)
+				FROM
+					@doc d
+					CROSS APPLY dbo.ufnImportiRifiuti_get_ApplicazioneRighe(d.Id) g
+				WHERE
+					d.Fatturabile = 1
+					AND d.IdPreFattura IS NULL
+
+				UNION ALL
+
+				SELECT
+					IdDocumento = d.Id,
+					d.[Data],
+					d.Numero,
+					Pos = ISNULL(r.Pos, 0),
+					Ordine = r.Id,
+					r.Descrizione,
+					SolaDescrizione = CAST(IIF(i.Id IS NULL, 1, 0) AS BIT),
+					i.Quantita,
+					i.IdUnitaMisura,
+					i.Importo,
+					i.IdAliquotaIva,
+					i.IdConto,
+					RitenutaAcconto = ISNULL(i.RitenutaAcconto, 0)
+				FROM
+					@doc d
+					INNER JOIN dbo.tblFattureRighe r ON d.IdPreFattura = r.IdFattura
+					LEFT JOIN dbo.tblFattureRigheImporti i ON r.Id = i.Id
+				WHERE
+					d.Fatturabile = 1
+					AND d.PrimoDellaPreFattura = 1
+			) t
+		ORDER BY t.[Data], t.Numero, t.IdDocumento, t.Pos, t.Ordine;
 
 		-- Una fattura per ogni gruppo: cliente e, secondo il raggruppamento, sede del produttore o contratto
 		DECLARE @gruppi TABLE (
@@ -201,6 +295,7 @@ BEGIN
 		DECLARE @annoInizio DATE = DATEFROMPARTS(YEAR(@DataEmissione), 1, 1);
 		DECLARE @annoFine DATE = DATEADD(YEAR, 1, @annoInizio);
 		DECLARE @gDoc TABLE (Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY);
+		DECLARE @gPre TABLE (Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY);
 
 		WHILE @n <= @gruppiTotale
 		BEGIN
@@ -223,6 +318,15 @@ BEGIN
 				AND ISNULL(GruppoSede, '') = ISNULL(@gSede, '')
 				AND ISNULL(GruppoContratto, '') = ISNULL(@gContratto, '');
 
+			-- Pre-fatture del gruppo, da convertire
+			DELETE @gPre;
+			INSERT @gPre (Id)
+			SELECT DISTINCT IdPreFattura
+			FROM @doc
+			WHERE
+				Id IN (SELECT Id FROM @gDoc)
+				AND IdPreFattura IS NOT NULL;
+
 			-- Id della fattura e delle sue righe: uspId_get FUORI dalla transazione
 			SET @idFattura = NULL;
 			EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @idFattura OUTPUT;
@@ -237,16 +341,28 @@ BEGIN
 			END
 
 			BEGIN TRANSACTION;
-				-- Un documento fatturato nel frattempo da un'altra sessione: questa fattura non si genera
+				-- Un documento fatturato nel frattempo da un'altra sessione (in una fattura che non è una delle
+				-- pre-fatture da convertire), o una pre-fattura nel frattempo cancellata o diventata fattura:
+				-- questa fattura non si genera
 				IF EXISTS (
-					SELECT 1
-					FROM
-						dbo.tblFattureDocumenti fd WITH (UPDLOCK, HOLDLOCK)
-						INNER JOIN dbo.tblFatture f ON fd.IdFattura = f.Id
-					WHERE
-						fd.Id IN (SELECT Id FROM @gDoc)
-						AND f.Lock IN (0, 2)
-				)
+						SELECT 1
+						FROM
+							dbo.tblFattureDocumenti fd WITH (UPDLOCK, HOLDLOCK)
+							INNER JOIN dbo.tblFatture f ON fd.IdFattura = f.Id
+						WHERE
+							fd.Id IN (SELECT Id FROM @gDoc)
+							AND f.Lock IN (0, 2)
+							AND f.Id NOT IN (SELECT Id FROM @gPre)
+					)
+					OR EXISTS (
+						SELECT 1
+						FROM
+							@gPre p
+							LEFT JOIN dbo.tblFatture f WITH (UPDLOCK, HOLDLOCK) ON p.Id = f.Id
+																			  AND f.Lock IN (0, 2)
+																			  AND f.IdTipo = 'TD00'
+						WHERE f.Id IS NULL
+					)
 				BEGIN
 					ROLLBACK TRANSACTION;
 
@@ -303,7 +419,7 @@ BEGIN
 						g.IdUnitaMisura,
 						g.Quantita,
 						g.Importo,
-						ISNULL(c.RitenutaAcconto, 0)
+						ISNULL(g.RitenutaAcconto, ISNULL(c.RitenutaAcconto, 0))
 					FROM
 						@righe g
 						INNER JOIN dbo.tblClientiFornitori c ON c.Id = @gCliente
@@ -311,8 +427,20 @@ BEGIN
 						g.IdDocumento IN (SELECT Id FROM @gDoc)
 						AND g.SolaDescrizione = 0;
 
-					-- Legame dei documenti con la fattura, con l'importo e il contratto applicati; cliente indicato
-					-- e spunta restano quelli già presenti
+					-- Pre-fatture convertite: tutti i loro documenti, anche quelli fuori dal periodo, passano alla
+					-- nuova fattura (le righe della pre-fattura non si possono dividere per documento); importo e
+					-- contratto applicati restano quelli già registrati
+					UPDATE dbo.tblFattureDocumenti
+					SET IdFattura = @idFattura
+					WHERE IdFattura IN (SELECT Id FROM @gPre);
+
+					IF @RimuoviPreFatture = 1
+						UPDATE dbo.tblFatture
+						SET Lock = 4
+						WHERE Id IN (SELECT Id FROM @gPre);
+
+					-- Legame degli altri documenti con la fattura, con l'importo e il contratto applicati; cliente
+					-- indicato e spunta restano quelli già presenti
 					UPDATE fd
 					SET
 						IdFattura = @idFattura,
@@ -321,7 +449,9 @@ BEGIN
 					FROM
 						dbo.tblFattureDocumenti fd
 						INNER JOIN @doc d ON fd.Id = d.Id
-					WHERE d.Id IN (SELECT Id FROM @gDoc);
+					WHERE
+						d.Id IN (SELECT Id FROM @gDoc)
+						AND d.IdPreFattura IS NULL;
 
 					INSERT dbo.tblFattureDocumenti (Id, IdModulo, IdFattura, IdImporto, IdOffertaContratto, NonFatturabile)
 					SELECT d.Id, 'RIF', @idFattura, d.IdImporto, d.IdOffertaContratto, 0

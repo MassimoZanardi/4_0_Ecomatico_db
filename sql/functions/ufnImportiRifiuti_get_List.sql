@@ -6,10 +6,13 @@ GO
 -- (uspImportiRifiuti_get_List) e all'esportazione (uspImportiRifiuti_get_Esportazione), così scope e
 -- criteri di ricerca stanno in un posto solo. Senza azienda nel contesto nessuna riga.
 -- Una variabile non indicata nell'importo (NULL) vale "qualsiasi".
+-- @SoloContrattoScaduto = 1: solo gli importi di un contratto scaduto (collegamento del riquadro giallo della
+-- procedura automatica di fatturazione e spunta della ricerca).
 -- Contratto: al massimo uno per importo (UX_OfferteContrattiImporti_IdImporto); Tipo C contratto, O offerta.
 CREATE OR ALTER FUNCTION dbo.ufnImportiRifiuti_get_List (
 	@IdSessione CHAR(16),
-	@Search VARCHAR(50))
+	@Search VARCHAR(50),
+	@SoloContrattoScaduto BIT)
 RETURNS TABLE
 AS
 RETURN
@@ -64,6 +67,7 @@ RETURN
 		OUTER APPLY (
 			SELECT TOP (1)
 				oc.Tipo,
+				oc.Lock,
 				oc.DataInizio,
 				oc.DataFine,
 				Cliente = cs.NomeCompleto
@@ -79,6 +83,12 @@ RETURN
 	WHERE
 		s.Id = @IdSessione
 		AND i.Lock = 0
+		-- Solo gli importi di un contratto confermato la cui validità è finita prima di oggi
+		AND
+			(
+			ISNULL(@SoloContrattoScaduto, 0) = 0
+			OR (c.Tipo = 'C' AND c.Lock = 0 AND c.DataFine < CAST(GETDATE() AS DATE))
+			)
 		AND
 			(
 			@Search IS NULL

@@ -8,7 +8,8 @@ CREATE OR ALTER PROCEDURE dbo.uspImportiRifiuti_get_List
 	@PageNumber INT = 1,
 	@RowsPerPage INT = 50,
 	@IdSessione CHAR(16) = NULL,
-	@Search VARCHAR(50) = NULL
+	@Search VARCHAR(50) = NULL,
+	@SoloContrattoScaduto BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -62,7 +63,7 @@ BEGIN
 			t.ContrattoDataFine,
 			t.Righe,
 			RowsCount = COUNT(*) OVER ()
-		FROM dbo.ufnImportiRifiuti_get_List(@IdSessione, @Search) t
+		FROM dbo.ufnImportiRifiuti_get_List(@IdSessione, @Search, @SoloContrattoScaduto) t
 		ORDER BY t.Nome, t.Id
 		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
 		FETCH NEXT @RowsPerPage ROWS ONLY

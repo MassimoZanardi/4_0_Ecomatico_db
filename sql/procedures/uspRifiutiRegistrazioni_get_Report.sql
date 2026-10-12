@@ -16,6 +16,8 @@ GO
 --   DG  Destinazione (R o D) dei rifiuti gestiti nell'unità locale   T*, I  + attività
 --   DC  Destinazione (R o D) dei rifiuti consegnati a terzi          aT     + attività e destinatario
 --   MV  Quantità rifiuti movimentati per CER               tutte, tranne M (materiali) e SI (stoccaggio istantaneo)
+--   OI  ORSO Impianti                                      T*, RE, I, aT per mese e soggetto, più la giacenza a
+--       fine mese: ramo a parte, con colonne e regole sue (descritte dove inizia)
 -- Nei report con la colonna del soggetto (RT, TT, CT, IN, DC) entrano solo le registrazioni che lo indicano,
 -- che sia una sede esterna o una sede dell'azienda: senza soggetto la registrazione non compare. Trasportatore
 -- e intermediario sono il primo indicato sul movimento; il secondo e il terzo non contano.
@@ -51,7 +53,7 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		IF @Report IS NULL OR @Report NOT IN ('PR', 'PL', 'RT', 'TR', 'TT', 'CT', 'IN', 'DG', 'DC', 'MV')
+		IF @Report IS NULL OR @Report NOT IN ('PR', 'PL', 'RT', 'TR', 'TT', 'CT', 'IN', 'DG', 'DC', 'MV', 'OI')
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Report non previsto';
@@ -77,6 +79,234 @@ BEGIN
 		SELECT @idSede = NULLIF(IdSede, REPLICATE('0', 16))
 		FROM dbo.tblSessioni
 		WHERE Id = @IdSessione;
+
+		-- ORSO Impianti: i dati mensili della scheda impianti di ORSO, per chi la compila. Una riga per mese,
+		-- operazione, EER e soggetto: ricevuti da terzi (T*) con il produttore, prodotti fuori dall'unità locale
+		-- (RE), trattati internamente (I), consegnati a terzi (aT) con il destinatario; per T* e I l'attività di
+		-- recupero o smaltimento. Il soggetto ha comune e provincia (nazione se estero) e può mancare: la
+		-- registrazione conta comunque. Gli stati fisici si sommano.
+		-- In più la giacenza a fine mese, per EER: il residuo all'ultimo giorno del mese dei carichi di rifiuti
+		-- non ricevuti da terzi (DT, NP, RE), cioè la quantità meno quanto prelevato dalle registrazioni fino a
+		-- quel giorno (stesso calcolo di uspRifiutiGiacenze_get_Carichi_List). Solo per i mesi conclusi entro
+		-- @DataA e non oltre oggi. I carichi ricevuti da terzi e i materiali non sono in questa giacenza.
+		IF @Report = 'OI'
+		BEGIN
+			DECLARE @oggi DATE = GETDATE();
+			DECLARE @fineUltima DATE = IIF(@DataA IS NULL OR @DataA > @oggi, @oggi, @DataA);
+			DECLARE @fine DATE;
+
+			-- I mesi partono da @DataDa, ma non prima della prima registrazione della sede (senza
+			-- registrazioni nessun mese)
+			SELECT @fine = EOMONTH(IIF(@DataDa > MIN(r.[Data]), @DataDa, MIN(r.[Data])))
+			FROM
+				dbo.tblRifiutiRegistrazioni r
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+			WHERE
+				g.IdSede = @idSede
+				AND r.Lock = 0;
+
+			DECLARE @mesi TABLE (
+				Fine DATE NOT NULL PRIMARY KEY
+			);
+			WHILE @fine <= @fineUltima
+			BEGIN
+				INSERT @mesi (Fine) VALUES (@fine);
+				SET @fine = EOMONTH(DATEADD(MONTH, 1, @fine));
+			END
+
+			DECLARE @carichi TABLE (
+				Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY,
+				[Data] DATE NOT NULL,
+				IdEer CHAR(6) COLLATE DATABASE_DEFAULT NULL,
+				IdUnitaMisura CHAR(2) COLLATE DATABASE_DEFAULT NULL,
+				Quantita DECIMAL(18, 4) NOT NULL
+			);
+			INSERT @carichi (Id, [Data], IdEer, IdUnitaMisura, Quantita)
+			SELECT
+				r.Id,
+				r.[Data],
+				v.IdEer,
+				v.IdUnitaMisura,
+				v.Quantita
+			FROM
+				dbo.tblRifiutiRegistrazioni r
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
+			WHERE
+				g.IdSede = @idSede
+				AND r.Lock = 0
+				AND v.IsRettifica = 0
+				AND v.Quantita > 0
+				AND m.IdOperazione IN ('C', 'M', 'F')
+				AND r.[Data] <= @fineUltima
+				AND
+					(
+					@IdRegistro IS NULL
+					OR m.IdRegistro = @IdRegistro
+					)
+			OPTION (RECOMPILE);
+
+			-- Quanto prelevato da ogni carico, con la data della registrazione che preleva: una registrazione
+			-- annullata ha quantità effettiva zero e non consuma più il carico
+			DECLARE @prelievi TABLE (
+				Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL,
+				[Data] DATE NOT NULL,
+				Quantita DECIMAL(18, 4) NOT NULL
+			);
+			INSERT @prelievi (Id, [Data], Quantita)
+			SELECT
+				l.Id,
+				p.[Data],
+				l.Quantita
+			FROM
+				@carichi c
+				INNER JOIN dbo.tblRifiutiRegistrazioniRelazioni l ON c.Id = l.Id
+				INNER JOIN dbo.tblRifiutiRegistrazioni p ON l.IdParent = p.Id
+				INNER JOIN dbo.viewRifiutiRegistrazioniEffettive vp ON p.Id = vp.Id
+			WHERE
+				p.Lock = 0
+				AND vp.Quantita > 0
+				AND p.[Data] <= @fineUltima;
+
+			WITH Movimenti AS (
+				SELECT
+					Mese = DATEFROMPARTS(YEAR(r.[Data]), MONTH(r.[Data]), 1),
+					Ordine = CASE m.IdOperazione WHEN 'Z' THEN 1 WHEN 'F' THEN 2 WHEN 'R' THEN 3 ELSE 4 END,
+					Operazione = CAST(o.Codice + ' - ' + o.Nome AS VARCHAR(110)),
+					Eer = e.Nome,
+					Descrizione = e.Descrizione,
+					Attivita = IIF(m.IdOperazione IN ('Z', 'R'), a.Codice, NULL),
+					IdSoggetto = s.Id,
+					Soggetto = s.NomeCompleto,
+					Comune = c.Nome,
+					Provincia = CAST(IIF(pv.Id IS NULL, n.Nome, pv.Nome + ' (' + pv.Sigla + ')') AS VARCHAR(110)),
+					Registrazioni = COUNT(*),
+					Quantita = CAST(SUM(v.Quantita) AS DECIMAL(18, 2)),
+					Unita = u.Codice
+				FROM
+					dbo.tblRifiutiRegistrazioni r
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+					INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+					INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+					INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
+					LEFT JOIN dbo.tblRifiutiEer e ON v.IdEer = e.Id
+					LEFT JOIN dbo.tblUnitaMisura u ON v.IdUnitaMisura = u.Id
+					LEFT JOIN dbo.tblRifiutiAttivitaRecuperoSmaltimento a ON m.IdAttivita = a.Id
+					LEFT JOIN dbo.tblSedi s ON s.Id =
+						CASE m.IdOperazione
+							WHEN 'Z' THEN m.IdSedeProduttoreDetentore
+							WHEN 'S' THEN m.IdSedeDestinatario
+						END
+					LEFT JOIN dbo.tblSediIndirizzi si ON s.Id = si.Id
+					LEFT JOIN dbo.tblIndirizzi i ON si.IdIndirizzo = i.Id
+					LEFT JOIN dbo.tblComuni c ON i.IdComune = c.Id
+					LEFT JOIN dbo.tblProvince pv ON c.IdProvincia = pv.Id
+					LEFT JOIN dbo.tblNazioni n ON i.IdNazione = n.Id
+				WHERE
+					g.IdSede = @idSede
+					AND r.Lock = 0
+					AND v.IsRettifica = 0
+					AND v.IsAnnullata = 0
+					AND m.IdOperazione IN ('Z', 'F', 'R', 'S')
+					AND
+						(
+						@IdRegistro IS NULL
+						OR m.IdRegistro = @IdRegistro
+						)
+					AND
+						(
+						@DataDa IS NULL
+						OR r.[Data] >= @DataDa
+						)
+					AND (@DataA IS NULL OR r.[Data] <= @DataA)
+				GROUP BY
+					DATEFROMPARTS(YEAR(r.[Data]), MONTH(r.[Data]), 1),
+					m.IdOperazione,
+					o.Codice,
+					o.Nome,
+					e.Nome,
+					e.Descrizione,
+					IIF(m.IdOperazione IN ('Z', 'R'), a.Codice, NULL),
+					s.Id,
+					s.NomeCompleto,
+					c.Nome,
+					pv.Id,
+					pv.Nome,
+					pv.Sigla,
+					n.Nome,
+					u.Codice
+			),
+			Residui AS (
+				SELECT
+					ms.Fine,
+					c.IdEer,
+					c.IdUnitaMisura,
+					Residuo = c.Quantita - ISNULL(
+						(SELECT SUM(p.Quantita)
+						FROM @prelievi p
+						WHERE
+							p.Id = c.Id
+							AND p.[Data] <= ms.Fine), 0)
+				FROM
+					@mesi ms
+					INNER JOIN @carichi c ON c.[Data] <= ms.Fine
+			),
+			Giacenze AS (
+				SELECT
+					Mese = DATEFROMPARTS(YEAR(x.Fine), MONTH(x.Fine), 1),
+					Ordine = 5,
+					Operazione = CAST('Giacenza a fine mese' AS VARCHAR(110)),
+					Eer = e.Nome,
+					Descrizione = e.Descrizione,
+					Attivita = CAST(NULL AS VARCHAR(3)),
+					IdSoggetto = CAST(NULL AS CHAR(16)),
+					Soggetto = CAST(NULL AS VARCHAR(200)),
+					Comune = CAST(NULL AS VARCHAR(100)),
+					Provincia = CAST(NULL AS VARCHAR(110)),
+					Registrazioni = COUNT(*),
+					Quantita = CAST(SUM(x.Residuo) AS DECIMAL(18, 2)),
+					Unita = u.Codice
+				FROM
+					Residui x
+					LEFT JOIN dbo.tblRifiutiEer e ON x.IdEer = e.Id
+					LEFT JOIN dbo.tblUnitaMisura u ON x.IdUnitaMisura = u.Id
+				WHERE x.Residuo > 0
+				GROUP BY
+					x.Fine,
+					e.Nome,
+					e.Descrizione,
+					u.Codice
+			)
+			SELECT TOP (@MaxRighe + 1)
+				[Mese] = RIGHT('0' + CAST(MONTH(x.Mese) AS VARCHAR(2)), 2) + '/' + CAST(YEAR(x.Mese) AS CHAR(4)),
+				[Operazione] = x.Operazione,
+				[EER] = x.Eer,
+				[Descrizione] = x.Descrizione,
+				[Attività] = x.Attivita,
+				[Soggetto] = x.Soggetto,
+				[Comune] = x.Comune,
+				[Provincia] = x.Provincia,
+				[Registrazioni] = x.Registrazioni,
+				[Quantità] = x.Quantita,
+				[Unità] = x.Unita
+			FROM
+				(SELECT * FROM Movimenti
+				UNION ALL
+				SELECT * FROM Giacenze) x
+			ORDER BY
+				x.Mese,
+				x.Ordine,
+				x.Eer,
+				x.Attivita,
+				x.Soggetto,
+				x.IdSoggetto,
+				x.Unita
+			OPTION (RECOMPILE);
+
+			GOTO BRANCH_END;
+		END
 
 		-- Operazioni contate dal report (tblRifiutiOperazioni.Id)
 		DECLARE @operazioni TABLE (

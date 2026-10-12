@@ -38,6 +38,14 @@ BEGIN
 				@IdFunzione = 'FTC',
 				@Permesso = @permesso OUTPUT;
 		END
+		-- Anche le righe degli importi (OCI, modulo Offerte e contratti)
+		IF 1 > @permesso
+		BEGIN
+			EXEC dbo.uspSessione_get_FunzionePermesso
+				@Id = @IdSessione,
+				@IdFunzione = 'OCI',
+				@Permesso = @permesso OUTPUT;
+		END
 		IF 1 > @permesso
 		BEGIN
 			SET @returnValue = -1;

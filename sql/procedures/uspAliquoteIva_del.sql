@@ -99,6 +99,22 @@ BEGIN
 				SET @returnMessage = 'Un''aliquota usata nelle righe di una fattura non può essere cancellata';
 				GOTO BRANCH_END;
 			END
+			-- Modulo Offerte e contratti: lo stesso per le righe di un importo non cancellato
+			IF EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblImportiRigheDettagli d
+					INNER JOIN dbo.tblImportiRighe g ON d.Id = g.Id
+					INNER JOIN dbo.tblImporti i ON g.IdImporto = i.Id
+				WHERE
+					d.IdAliquotaIva = @Id
+					AND i.Lock IN (0, 2)
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un''aliquota usata nelle righe di un importo non può essere cancellata';
+				GOTO BRANCH_END;
+			END
 
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblAliquoteIva

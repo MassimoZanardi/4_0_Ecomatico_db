@@ -83,6 +83,13 @@ BEGIN
 				SET @returnMessage = IIF(@tipo = 'C', 'Un cliente con fatture non può essere cancellato', 'Un fornitore con fatture non può essere cancellato');
 				GOTO BRANCH_END;
 			END
+			-- Modulo Offerte e contratti: lo stesso per una scheda con contratti o offerte non cancellati
+			IF EXISTS (SELECT 1 FROM dbo.tblOfferteContratti WHERE IdClienteFornitore = @Id AND Lock IN (0, 2))
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un cliente con contratti o offerte non può essere cancellato';
+				GOTO BRANCH_END;
+			END
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblClientiFornitori
 				SET Lock = 4

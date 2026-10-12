@@ -8,9 +8,13 @@ GO
 -- della fattura. Decorrenza DF: scadenza = data della fattura + mesi. Decorrenza FM: fine del mese
 -- di (data della fattura + mesi) e, con il giorno del mese indicato, quel giorno del mese successivo.
 -- Importo: netto a pagare diviso in parti uguali, con il resto degli arrotondamenti sull'ultima rata.
+-- @Interno = 1: chiamata da un'altra SP che ha già controllato l'azienda della fattura (uspFatture_ins_Genera,
+-- generazione automatica: l'azienda è quella del documento, non quella del contesto della sessione); non
+-- restituisce il numero di rate. L'applicazione non lo passa.
 CREATE OR ALTER PROCEDURE dbo.uspFattureRate_ins_Genera
 	@IdFattura CHAR(16) = NULL,
-	@IdSessione CHAR(16) = NULL
+	@IdSessione CHAR(16) = NULL,
+	@Interno BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -20,6 +24,7 @@ BEGIN
 
 		SET @IdFattura = NULLIF(LTRIM(RTRIM(@IdFattura)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Interno = ISNULL(@Interno, 0);
 
 		IF @IdFattura IS NULL
 		BEGIN
@@ -66,11 +71,11 @@ BEGIN
 			@primaMesi = ISNULL(r.PrimaMesi, 0)
 		FROM
 			dbo.tblFatture f
-			INNER JOIN dbo.tblSessioni e ON f.IdSede = e.IdAzienda
+			LEFT JOIN dbo.tblSessioni e ON e.Id = @IdSessione
 			LEFT JOIN dbo.tblPagamentiRate r ON f.IdRata = r.Id
 		WHERE
 			f.Id = @IdFattura
-			AND e.Id = @IdSessione
+			AND (@Interno = 1 OR f.IdSede = e.IdAzienda)
 			AND f.Lock IN (0, 2);
 
 		IF @idAzienda IS NULL
@@ -171,7 +176,8 @@ BEGIN
 			FROM @rate;
 		COMMIT TRANSACTION;
 
-		SELECT ReturnValue = @numero;
+		IF @Interno = 0
+			SELECT ReturnValue = @numero;
 
 	END TRY
 	BEGIN CATCH

@@ -36,6 +36,24 @@ BEGIN
 					INNER JOIN dbo.tblPagine p ON m.IdPagina = p.Id
 					INNER JOIN dbo.ufnFunzioni_get_ByUtente_List(@IdUtente) f
 											  ON p.IdFunzione = f.Id
+				WHERE
+					-- Pagina che richiede un altro modulo oltre a quello dell'area (tblPagine.IdModulo):
+					-- il modulo deve essere abilitato sul dominio dell'utente; l'Admin Master la vede sempre
+					p.IdModulo IS NULL
+					OR EXISTS (
+						SELECT 1
+						FROM dbo.tblUtenti u
+						INNER JOIN dbo.tblDomini d ON u.IdDominio = d.Id
+						WHERE u.Id = @IdUtente
+						  AND d.[Master] = 1
+					)
+					OR EXISTS (
+						SELECT 1
+						FROM dbo.tblDominiModuli dm
+						INNER JOIN dbo.tblUtenti u ON dm.Id = u.IdDominio
+						WHERE dm.IdModulo = p.IdModulo
+						  AND u.Id = @IdUtente
+					)
 			)
 			SELECT @Menu = (
 				SELECT

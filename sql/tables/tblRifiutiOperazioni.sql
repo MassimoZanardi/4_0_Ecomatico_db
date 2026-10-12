@@ -28,6 +28,7 @@ CREATE TABLE [dbo].[tblRifiutiOperazioni](
 	[IsMateriale] [bit] NULL,
 	[IsStoccaggioIstantaneo] [bit] NULL,
 	[IsRentriAccettazione] [bit] NULL,
+	[IsFatturabile] [bit] NULL,
  CONSTRAINT [PK_tblRifiutiOperazioni] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

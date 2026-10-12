@@ -24,6 +24,7 @@ CREATE TABLE [dbo].[tblClientiFornitori](
 	[PecDestinatario] [varchar](100) COLLATE Latin1_General_CI_AS NULL,
 	[Note] [varchar](1000) COLLATE Latin1_General_CI_AS NULL,
 	[Lock] [tinyint] NULL,
+	[IdRaggruppamento] [char](1) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblClientiFornitori] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
@@ -70,6 +71,13 @@ REFERENCES [dbo].[tblBancheCasse] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblClientiFornitori] CHECK CONSTRAINT [FK_tblClientiFornitori_tblBancheCasse]
+GO
+
+ALTER TABLE [dbo].[tblClientiFornitori]  WITH CHECK ADD  CONSTRAINT [FK_tblClientiFornitori_tblFattureRaggruppamenti] FOREIGN KEY([IdRaggruppamento])
+REFERENCES [dbo].[tblFattureRaggruppamenti] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblClientiFornitori] CHECK CONSTRAINT [FK_tblClientiFornitori_tblFattureRaggruppamenti]
 GO
 
 ALTER TABLE [dbo].[tblClientiFornitori]  WITH CHECK ADD  CONSTRAINT [FK_tblClientiFornitori_tblPagamentiModalita] FOREIGN KEY([IdModalita])

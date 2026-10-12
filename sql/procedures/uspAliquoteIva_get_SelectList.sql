@@ -52,7 +52,16 @@ BEGIN
 				@Id = @IdSessione,
 				@IdFunzione = 'FTT',
 				@Permesso = @permesso OUTPUT;
-		END		IF 1 > @permesso
+		END
+		-- Anche le righe degli importi (OCI, modulo Offerte e contratti)
+		IF 1 > @permesso
+		BEGIN
+			EXEC dbo.uspSessione_get_FunzionePermesso
+				@Id = @IdSessione,
+				@IdFunzione = 'OCI',
+				@Permesso = @permesso OUTPUT;
+		END
+		IF 1 > @permesso
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';

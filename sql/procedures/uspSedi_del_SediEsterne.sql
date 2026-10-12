@@ -196,6 +196,31 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Modulo Offerte e contratti: una sede indicata tra le variabili di un importo attivo
+			IF EXISTS (
+					SELECT 1
+					FROM dbo.tblImportiRifiuti r
+					INNER JOIN dbo.tblImporti i ON r.Id = i.Id
+					WHERE i.Lock = 0 AND @Id IN (r.IdProduttoreParent, r.IdProduttore, r.IdTrasportatore, r.IdDestinatario, r.IdIntermediario)
+				)
+				OR EXISTS (
+					SELECT 1
+					FROM dbo.tblImportiMagazzino m
+					INNER JOIN dbo.tblImporti i ON m.Id = i.Id
+					WHERE i.Lock = 0 AND @Id IN (m.IdMittenteParent, m.IdMittente, m.IdDestinatarioParent, m.IdDestinatario)
+				)
+				OR EXISTS (
+					SELECT 1
+					FROM dbo.tblImportiServizi v
+					INNER JOIN dbo.tblImporti i ON v.Id = i.Id
+					WHERE i.Lock = 0 AND @Id IN (v.IdRichiedenteParent, v.IdRichiedente, v.IdEsecutore)
+				)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede indicata in un importo non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
 			-- Modulo Anagrafica estesa: un soggetto con una scheda amministratore attiva, o
 			-- amministrato da un amministratore attivo
 			IF EXISTS (SELECT 1 FROM dbo.tblAmministratori WHERE IdSede = @Id AND Lock = 0)

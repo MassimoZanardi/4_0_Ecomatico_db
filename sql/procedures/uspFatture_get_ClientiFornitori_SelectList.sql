@@ -42,6 +42,14 @@ BEGIN
 			@Id = @IdSessione,
 			@IdFunzione = 'FTT',
 			@Permesso = @permesso OUTPUT;
+		-- Anche la scheda di un contratto o di un'offerta (OCC, modulo Offerte e contratti)
+		IF 1 > @permesso
+		BEGIN
+			EXEC dbo.uspSessione_get_FunzionePermesso
+				@Id = @IdSessione,
+				@IdFunzione = 'OCC',
+				@Permesso = @permesso OUTPUT;
+		END
 		IF 1 > @permesso
 		BEGIN
 			SET @returnValue = -1;

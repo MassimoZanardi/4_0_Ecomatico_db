@@ -10,6 +10,7 @@ CREATE TABLE [dbo].[tblPagine](
 	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[Url] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[Note] [varchar](100) COLLATE Latin1_General_CI_AS NULL,
+	[IdModulo] [char](3) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblPagine] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
@@ -23,4 +24,11 @@ REFERENCES [dbo].[tblFunzioni] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblPagine] CHECK CONSTRAINT [FK_tblPagine_tblFunzioni]
+GO
+
+ALTER TABLE [dbo].[tblPagine]  WITH CHECK ADD  CONSTRAINT [FK_tblPagine_tblModuli] FOREIGN KEY([IdModulo])
+REFERENCES [dbo].[tblModuli] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblPagine] CHECK CONSTRAINT [FK_tblPagine_tblModuli]
 GO

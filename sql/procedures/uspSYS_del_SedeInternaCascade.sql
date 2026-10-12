@@ -152,10 +152,74 @@ BEGIN
         SELECT Id, IdSede  INTO #AreeSediInterne FROM dbo.tblAreeSediInterne WHERE IdSede IN (SELECT Id FROM #Sedi);
         SELECT Id, IdOsepe INTO #AreeOsepe       FROM dbo.tblAreeOsepe       WHERE IdOsepe IN (SELECT Id FROM #OsepeIds);
 
+        -- Fatturazione: righe e rate delle fatture della cascata e pagamenti che potrebbero essere
+        -- cancellati (quelli dell'azienda o delle sue banche e casse, e quelli che coprono rate di
+        -- queste fatture), raccolti qui per la pulizia finale degli Id. Un pagamento che copre anche
+        -- rate di altre fatture non viene cancellato: la pulizia toglie solo gli Id dei pagamenti
+        -- che alla fine non esistono più
+        SELECT Id INTO #FattureRighe FROM dbo.tblFattureRighe WHERE IdFattura IN (SELECT Id FROM #Fatture);
+        SELECT Id INTO #FattureRate FROM dbo.tblFattureRate WHERE IdFattura IN (SELECT Id FROM #Fatture);
+        SELECT Id INTO #PagamentiCandidati FROM (
+            SELECT Id FROM dbo.tblPagamenti
+            WHERE IdBancaCassa IN (SELECT Id FROM #BancheCasse) OR IdSede IN (SELECT Id FROM #Sedi)
+            UNION
+            SELECT rp.IdPagamento FROM dbo.tblFattureRatePagamenti rp
+            WHERE rp.IdRata IN (SELECT Id FROM #FattureRate)
+        ) x;
+
+        -- Offerte e contratti: importi (con le righe) e offerte o contratti dell'azienda, o di una
+        -- scheda cliente della cascata
+        SELECT Id INTO #Importi FROM dbo.tblImporti WHERE IdSede IN (SELECT Id FROM #Sedi);
+        SELECT Id INTO #ImportiRighe FROM dbo.tblImportiRighe WHERE IdImporto IN (SELECT Id FROM #Importi);
+        SELECT Id INTO #OfferteContratti FROM dbo.tblOfferteContratti
+        WHERE IdSede IN (SELECT Id FROM #Sedi) OR IdClienteFornitore IN (SELECT Id FROM #ClientiFornitori);
+
         -- --------------------------------------------------------------------------------------
         -- Fase 2: cancellazione fisica, dalle foglie verso le radici
         -- --------------------------------------------------------------------------------------
         BEGIN TRANSACTION;
+
+            -- Offerte e contratti, per primi: referenziano fatture, schede cliente, conti, aliquote,
+            -- etichette, tipi e sedi cancellati più sotto. I documenti fatturabili (registrazioni,
+            -- movimenti di magazzino, servizi) hanno lo stesso Id del documento
+            DELETE FROM dbo.tblFattureDocumenti
+            WHERE
+                Id IN (SELECT Id FROM #RifiutiRegistrazioni)
+                OR Id IN (SELECT Id FROM #MagMovimenti)
+                OR Id IN (SELECT Id FROM #Servizi)
+                OR IdFattura IN (SELECT Id FROM #Fatture)
+                OR IdClienteFornitore IN (SELECT Id FROM #ClientiFornitori)
+                OR IdImporto IN (SELECT Id FROM #Importi)
+                OR IdOffertaContratto IN (SELECT Id FROM #OfferteContratti);
+            DELETE FROM dbo.tblOfferteContrattiImporti
+            WHERE IdOffertaContratto IN (SELECT Id FROM #OfferteContratti) OR IdImporto IN (SELECT Id FROM #Importi);
+            DELETE FROM dbo.tblOfferteContratti WHERE Id IN (SELECT Id FROM #OfferteContratti);
+            DELETE FROM dbo.tblImportiRigheDettagli WHERE Id IN (SELECT Id FROM #ImportiRighe);
+            DELETE FROM dbo.tblImportiRighe WHERE Id IN (SELECT Id FROM #ImportiRighe);
+            DELETE FROM dbo.tblImportiRifiuti WHERE Id IN (SELECT Id FROM #Importi);
+            DELETE FROM dbo.tblImportiMagazzino WHERE Id IN (SELECT Id FROM #Importi);
+            DELETE FROM dbo.tblImportiServizi WHERE Id IN (SELECT Id FROM #Importi);
+            DELETE FROM dbo.tblImporti WHERE Id IN (SELECT Id FROM #Importi);
+            -- Importi di ALTRE aziende che citano una sede, un'etichetta, un tipo, un conto o
+            -- un'aliquota della cascata (non previsto dalle regole): perdono solo il collegamento
+            UPDATE dbo.tblImportiRifiuti SET IdProduttoreParent = NULL WHERE IdProduttoreParent IN (SELECT Id FROM #Sedi);
+            UPDATE dbo.tblImportiRifiuti SET IdProduttore = NULL WHERE IdProduttore IN (SELECT Id FROM #Sedi);
+            UPDATE dbo.tblImportiRifiuti SET IdTrasportatore = NULL WHERE IdTrasportatore IN (SELECT Id FROM #Sedi);
+            UPDATE dbo.tblImportiRifiuti SET IdDestinatario = NULL WHERE IdDestinatario IN (SELECT Id FROM #Sedi);
+            UPDATE dbo.tblImportiRifiuti SET IdIntermediario = NULL WHERE IdIntermediario IN (SELECT Id FROM #Sedi);
+            UPDATE dbo.tblImportiRifiuti SET IdEtichetta = NULL WHERE IdEtichetta IN (SELECT Id FROM #Etichette);
+            UPDATE dbo.tblImportiMagazzino SET IdMittenteParent = NULL WHERE IdMittenteParent IN (SELECT Id FROM #Sedi);
+            UPDATE dbo.tblImportiMagazzino SET IdMittente = NULL WHERE IdMittente IN (SELECT Id FROM #Sedi);
+            UPDATE dbo.tblImportiMagazzino SET IdDestinatarioParent = NULL WHERE IdDestinatarioParent IN (SELECT Id FROM #Sedi);
+            UPDATE dbo.tblImportiMagazzino SET IdDestinatario = NULL WHERE IdDestinatario IN (SELECT Id FROM #Sedi);
+            UPDATE dbo.tblImportiMagazzino SET IdEtichetta = NULL WHERE IdEtichetta IN (SELECT Id FROM #Etichette);
+            UPDATE dbo.tblImportiServizi SET IdRichiedenteParent = NULL WHERE IdRichiedenteParent IN (SELECT Id FROM #Sedi);
+            UPDATE dbo.tblImportiServizi SET IdRichiedente = NULL WHERE IdRichiedente IN (SELECT Id FROM #Sedi);
+            UPDATE dbo.tblImportiServizi SET IdEsecutore = NULL WHERE IdEsecutore IN (SELECT Id FROM #Sedi);
+            UPDATE dbo.tblImportiServizi SET IdEtichetta = NULL WHERE IdEtichetta IN (SELECT Id FROM #Etichette);
+            UPDATE dbo.tblImportiServizi SET IdTipo = NULL WHERE IdTipo IN (SELECT Id FROM #Tipi);
+            UPDATE dbo.tblImportiRigheDettagli SET IdConto = NULL WHERE IdConto IN (SELECT Id FROM #FattureConti);
+            UPDATE dbo.tblImportiRigheDettagli SET IdAliquotaIva = NULL WHERE IdAliquotaIva IN (SELECT Id FROM #AliquoteIva);
 
             DELETE FROM dbo.tblRifiutiAutorizzazioniAttivita         WHERE Id IN (SELECT Id FROM #RifiutiAutorizzazioni);
             DELETE FROM dbo.tblRifiutiAutorizzazioniConducenti       WHERE Id IN (SELECT Id FROM #RifiutiAutorizzazioni);
@@ -421,6 +485,14 @@ BEGIN
                 UNION SELECT Id FROM #MagLotti
                 UNION SELECT Id FROM #MagMovimenti
                 UNION SELECT Id FROM #ClientiFornitori
+                UNION SELECT Id FROM #Fatture
+                UNION SELECT Id FROM #FattureRighe
+                UNION SELECT Id FROM #FattureRate
+                UNION SELECT Id FROM #FattureConti
+                UNION SELECT Id FROM #PagamentiCandidati WHERE Id NOT IN (SELECT Id FROM dbo.tblPagamenti)
+                UNION SELECT Id FROM #Importi
+                UNION SELECT Id FROM #ImportiRighe
+                UNION SELECT Id FROM #OfferteContratti
                 UNION SELECT Id FROM #Amministratori
                 UNION SELECT Id FROM #BancheCasse
                 UNION SELECT Id FROM #AliquoteIva

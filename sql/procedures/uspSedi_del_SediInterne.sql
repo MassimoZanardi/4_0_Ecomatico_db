@@ -235,6 +235,44 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Modulo Offerte e contratti: importi e offerte o contratti dell'azienda, e sedi indicate tra le
+			-- variabili di un importo attivo
+			IF EXISTS (SELECT 1 FROM dbo.tblImporti WHERE IdSede = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con importi associati non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+			IF EXISTS (SELECT 1 FROM dbo.tblOfferteContratti WHERE IdSede = @Id AND Lock = 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede con offerte o contratti associati non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+			IF EXISTS (
+					SELECT 1
+					FROM dbo.tblImportiRifiuti r
+					INNER JOIN dbo.tblImporti i ON r.Id = i.Id
+					WHERE i.Lock = 0 AND @Id IN (r.IdProduttoreParent, r.IdProduttore, r.IdTrasportatore, r.IdDestinatario, r.IdIntermediario)
+				)
+				OR EXISTS (
+					SELECT 1
+					FROM dbo.tblImportiMagazzino m
+					INNER JOIN dbo.tblImporti i ON m.Id = i.Id
+					WHERE i.Lock = 0 AND @Id IN (m.IdMittenteParent, m.IdMittente, m.IdDestinatarioParent, m.IdDestinatario)
+				)
+				OR EXISTS (
+					SELECT 1
+					FROM dbo.tblImportiServizi v
+					INNER JOIN dbo.tblImporti i ON v.Id = i.Id
+					WHERE i.Lock = 0 AND @Id IN (v.IdRichiedenteParent, v.IdRichiedente, v.IdEsecutore)
+				)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una sede indicata in un importo non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
 			-- Gestione EoW: stesso controllo del magazzino tradizionale, su lotti/allocazioni EoW
 			-- proprie della sede (IdSede è sempre la Sede Interna, non quella esterna condivisa)
 			IF EXISTS (SELECT 1

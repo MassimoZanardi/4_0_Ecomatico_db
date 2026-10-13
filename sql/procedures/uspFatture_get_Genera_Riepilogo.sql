@@ -15,7 +15,9 @@ GO
 --        per motivo (uno solo per documento, nell'ordine di ufnFattureGenera_get_Documenti.Esito).
 --   GiaFatturati: documenti del periodo già in una fattura (solo informativo: non rientrano).
 --   InPreFattura: documenti del periodo già in una pre-fattura, quando non si includono le pre-fatture.
--- @Rifiuti = 0: le registrazioni dei rifiuti non sono state scelte (tutto a zero, finché è l'unico modulo).
+--   DocumentiRifiuti, DocumentiMagazzino: i Documenti, divisi tra registrazioni dei rifiuti e DDT di magazzino.
+-- @Rifiuti, @Magazzino: da quali documenti generare (registrazioni dei rifiuti, DDT di magazzino). I DDT entrano
+-- solo con il modulo Magazzino attivo sul dominio.
 -- Senza azienda nel contesto tutto a zero.
 CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_Riepilogo
 	@IdSessione CHAR(16) = NULL,
@@ -23,6 +25,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_Riepilogo
 	@DataA DATE = NULL,
 	@IdClienteFornitore CHAR(16) = NULL,
 	@Rifiuti BIT = 1,
+	@Magazzino BIT = 0,
 	@IncludiPreFatture BIT = 0
 AS
 BEGIN
@@ -34,6 +37,7 @@ BEGIN
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdClienteFornitore = NULLIF(NULLIF(LTRIM(RTRIM(@IdClienteFornitore)), ''), REPLICATE('0', 16));
 		SET @Rifiuti = ISNULL(@Rifiuti, 1);
+		SET @Magazzino = ISNULL(@Magazzino, 0);
 		SET @IncludiPreFatture = ISNULL(@IncludiPreFatture, 0);
 
 		IF @IdSessione IS NULL
@@ -68,6 +72,10 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- I DDT entrano solo con il modulo Magazzino attivo sul dominio
+		IF ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('MAG', @IdSessione), 0) = 0
+			SET @Magazzino = 0;
+
 		DECLARE @idAzienda CHAR(16);
 		SELECT @idAzienda = IdAzienda
 		FROM dbo.tblSessioni
@@ -76,6 +84,7 @@ BEGIN
 		-- Documenti candidati, letti una volta sola
 		DECLARE @doc TABLE (
 			Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY,
+			IdModulo CHAR(3) COLLATE DATABASE_DEFAULT NOT NULL,
 			IdClienteFornitore CHAR(16) COLLATE DATABASE_DEFAULT NULL,
 			IdPreFattura CHAR(16) COLLATE DATABASE_DEFAULT NULL,
 			GruppoSede CHAR(16) COLLATE DATABASE_DEFAULT NULL,
@@ -84,9 +93,10 @@ BEGIN
 			Fatturabile BIT NOT NULL,
 			Esito CHAR(1) COLLATE DATABASE_DEFAULT NOT NULL
 		);
-		INSERT @doc (Id, IdClienteFornitore, IdPreFattura, GruppoSede, GruppoContratto, Imponibile, Fatturabile, Esito)
+		INSERT @doc (Id, IdModulo, IdClienteFornitore, IdPreFattura, GruppoSede, GruppoContratto, Imponibile, Fatturabile, Esito)
 		SELECT
 			d.Id,
+			d.IdModulo,
 			d.IdClienteFornitore,
 			d.IdPreFattura,
 			d.GruppoSede,
@@ -94,8 +104,7 @@ BEGIN
 			d.Imponibile,
 			d.Fatturabile,
 			d.Esito
-		FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, 0) d
-		WHERE @Rifiuti = 1
+		FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, @Magazzino) d
 		OPTION (RECOMPILE);
 
 		-- Documenti del periodo già in una fattura o in una pre-fattura (stessa platea dei candidati:
@@ -127,8 +136,28 @@ BEGIN
 			AND (@IdClienteFornitore IS NULL OR f.IdClienteFornitore = @IdClienteFornitore)
 		OPTION (RECOMPILE);
 
+		-- Lo stesso per i DDT di magazzino (stessa platea dei candidati: DDT emessi e confermati di un movimento di
+		-- scarico con una causale fatturabile, delle sedi che la sessione vede)
+		IF @Magazzino = 1
+			SELECT
+				@giaFatturati += ISNULL(SUM(IIF(f.IdTipo = 'TD00', 0, 1)), 0),
+				@inPreFattura += ISNULL(SUM(IIF(f.IdTipo = 'TD00', 1, 0)), 0)
+			FROM
+				dbo.ufnImportiMagazzino_get_Documenti(NULL, @idAzienda, @DataDa, @DataA) doc
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON doc.IdSedeDdt = x.Id
+				INNER JOIN dbo.tblFattureDocumenti fd ON doc.Id = fd.Id
+				INNER JOIN dbo.tblFatture f ON fd.IdFattura = f.Id
+			WHERE
+				doc.Lock = 0
+				AND doc.IsFatturabile = 1
+				AND f.Lock IN (0, 2)
+				AND (@IdClienteFornitore IS NULL OR f.IdClienteFornitore = @IdClienteFornitore)
+			OPTION (RECOMPILE);
+
 		SELECT
 			Documenti = COUNT(*),
+			DocumentiRifiuti = ISNULL(SUM(IIF(d.IdModulo = 'RIF', 1, 0)), 0),
+			DocumentiMagazzino = ISNULL(SUM(IIF(d.IdModulo = 'MAG', 1, 0)), 0),
 			Fatturabili = ISNULL(SUM(IIF(d.Fatturabile = 1, 1, 0)), 0),
 			Fatture = (
 				SELECT COUNT(*)

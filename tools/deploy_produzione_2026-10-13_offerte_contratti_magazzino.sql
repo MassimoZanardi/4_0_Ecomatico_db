@@ -22,8 +22,8 @@ L'importo di magazzino è un listino: si sceglie sul DDT (uno solo) e ha una rig
    _get_Materiali_SelectList, _get_Verifica, _get_Conflitti.
 5. Stored procedure modificate: uspImportiRighe_upd e _get_List (articolo o materiale della riga); uspFattureDocumenti_get,
    _get_Righe, _upd, _del_Fattura, _get_Clienti_List (anche per il modulo MAG); uspFatture_ins_Genera (un DDT con
-   @IdModulo = 'MAG', parametro @Magazzino); uspFatture_get_Genera_Riepilogo, _Fatture_List e _List (nuova firma
-   della funzione comune; i DDT nella procedura automatica non sono ancora in questo script);
+   @IdModulo = 'MAG', parametro @Magazzino); uspFatture_get_Genera_Riepilogo, _Fatture_List e _List (parametro
+   @Magazzino: i DDT nella procedura automatica, solo con il modulo Magazzino attivo);
    uspMagazziniArticoli_del, uspSedi_del_SediEsterne, uspSedi_del_SediInterne e le due cancellazioni a cascata di
    sviluppo.
 
@@ -3161,6 +3161,7 @@ GO
 -- generazione creerebbe con gli stessi criteri ("Visualizza" sulla riga delle fatture previste della finestra
 -- "Verifica"). Una riga per fattura: cliente, raggruppamento (la sede del produttore o il contratto, quando la
 -- scheda del cliente chiede una fattura per sede o per contratto), documenti, pre-fatture convertite, imponibile.
+-- La sede è quella del produttore per le registrazioni dei rifiuti, il destinatario per i DDT di magazzino.
 -- Stessi documenti e stessi gruppi di uspFatture_ins_Genera (ufnFattureGenera_get_Documenti).
 -- Al massimo @MaxRighe righe (predefinito 1000): RowsCount dice quante sono in tutto.
 CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_Fatture_List
@@ -3169,6 +3170,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_Fatture_List
 	@DataA DATE = NULL,
 	@IdClienteFornitore CHAR(16) = NULL,
 	@Rifiuti BIT = 1,
+	@Magazzino BIT = 0,
 	@IncludiPreFatture BIT = 0,
 	@MaxRighe INT = NULL
 AS
@@ -3181,6 +3183,7 @@ BEGIN
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdClienteFornitore = NULLIF(NULLIF(LTRIM(RTRIM(@IdClienteFornitore)), ''), REPLICATE('0', 16));
 		SET @Rifiuti = ISNULL(@Rifiuti, 1);
+		SET @Magazzino = ISNULL(@Magazzino, 0);
 		SET @IncludiPreFatture = ISNULL(@IncludiPreFatture, 0);
 		SET @MaxRighe = IIF(ISNULL(@MaxRighe, 0) < 1, 1000, @MaxRighe);
 
@@ -3216,6 +3219,10 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- I DDT entrano solo con il modulo Magazzino attivo sul dominio
+		IF ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('MAG', @IdSessione), 0) = 0
+			SET @Magazzino = 0;
+
 		DECLARE @idAzienda CHAR(16);
 		SELECT @idAzienda = IdAzienda
 		FROM dbo.tblSessioni
@@ -3245,10 +3252,9 @@ BEGIN
 					Documenti = COUNT(*),
 					PreFatture = COUNT(DISTINCT d.IdPreFattura),
 					Imponibile = SUM(ISNULL(d.Imponibile, 0))
-				FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, 0) d
+				FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, @Magazzino) d
 				WHERE
-					@Rifiuti = 1
-					AND d.Fatturabile = 1
+					d.Fatturabile = 1
 				GROUP BY d.IdClienteFornitore, d.GruppoSede, d.GruppoContratto
 			) t
 			LEFT JOIN dbo.tblClientiFornitori c ON t.IdClienteFornitore = c.Id
@@ -3281,11 +3287,12 @@ SET QUOTED_IDENTIFIER ON
 GO
 -- Fatturazione > Fatture clienti > Nuova > Tramite procedura automatica: elenco di dettaglio della verifica
 -- ("Visualizza" sulle righe della finestra "Verifica"; i conteggi sono in uspFatture_get_Genera_Riepilogo).
--- Elenca i documenti (per ora le registrazioni dei rifiuti) dell'azienda interna corrente della sessione con data
+-- Elenca i documenti (registrazioni dei rifiuti e DDT di magazzino) dell'azienda interna corrente della sessione con data
 -- nell'intervallo, con il cliente, l'importo e l'imponibile che la generazione userebbe e l'esito:
 -- Fatturabile = 1 entra in una fattura, altrimenti Avviso dice perché resta fuori. Stesse righe di
 -- uspFatture_ins_Genera (ufnFattureGenera_get_Documenti).
---   @Rifiuti = 0: le registrazioni dei rifiuti non sono state scelte (nessuna riga, finché è l'unico modulo).
+--   @Rifiuti, @Magazzino: da quali documenti generare (registrazioni dei rifiuti, DDT di magazzino). I DDT
+--        entrano solo con il modulo Magazzino attivo sul dominio; per un DDT Id è l'Id del movimento.
 --   @IdClienteFornitore: solo i documenti riconducibili a quel cliente.
 --   @IncludiPreFatture = 1: anche i documenti già in una pre-fattura, che verrà convertita in fattura con le
 --        sue righe; l'imponibile della pre-fattura è riportato sul suo primo documento.
@@ -3300,6 +3307,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_List
 	@IdClienteFornitore CHAR(16) = NULL,
 	@Esito CHAR(1) = NULL,
 	@Rifiuti BIT = 1,
+	@Magazzino BIT = 0,
 	@IncludiPreFatture BIT = 0,
 	@MaxRighe INT = NULL
 AS
@@ -3313,6 +3321,7 @@ BEGIN
 		SET @IdClienteFornitore = NULLIF(NULLIF(LTRIM(RTRIM(@IdClienteFornitore)), ''), REPLICATE('0', 16));
 		SET @Esito = NULLIF(UPPER(LTRIM(RTRIM(@Esito))), '');
 		SET @Rifiuti = ISNULL(@Rifiuti, 1);
+		SET @Magazzino = ISNULL(@Magazzino, 0);
 		SET @IncludiPreFatture = ISNULL(@IncludiPreFatture, 0);
 		SET @MaxRighe = IIF(ISNULL(@MaxRighe, 0) < 1, 1000, @MaxRighe);
 
@@ -3348,6 +3357,10 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- I DDT entrano solo con il modulo Magazzino attivo sul dominio
+		IF ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('MAG', @IdSessione), 0) = 0
+			SET @Magazzino = 0;
+
 		DECLARE @idAzienda CHAR(16);
 		SELECT @idAzienda = IdAzienda
 		FROM dbo.tblSessioni
@@ -3356,9 +3369,11 @@ BEGIN
 		-- Senza azienda nel contesto nessuna riga
 		SELECT TOP (@MaxRighe)
 			d.Id,
-			IdModulo = CAST('RIF' AS CHAR(3)),
-			Documento = CAST('Registrazione' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)), '')
-				+ ISNULL(' - EER ' + e.Nome + IIF(e.Pericoloso = 1, '*', ''), '') AS VARCHAR(100)),
+			d.IdModulo,
+			Documento = CAST(IIF(d.IdModulo = 'MAG',
+				'DDT' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)) + ISNULL('/' + dd.Sezionale, ''), '') + ISNULL(' - ' + sd.NomeCompleto, ''),
+				'Registrazione' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)), '')
+					+ ISNULL(' - EER ' + e.Nome + IIF(e.Pericoloso = 1, '*', ''), '')) AS VARCHAR(200)),
 			d.[Data],
 			d.Quantita,
 			UnitaMisura = d.IdUnitaMisura,
@@ -3374,23 +3389,28 @@ BEGIN
 				WHEN 'P' THEN 'In pre-fattura del ' + ISNULL(CONVERT(VARCHAR(10), f.DataEmissione, 103), '') + ': viene convertita in fattura con le sue righe'
 				WHEN 'S' THEN 'Contratto non valido alla data: applicato l''importo standard'
 				WHEN 'A' THEN 'Registrazione annullata'
-				WHEN 'N' THEN 'Indicata come non fatturabile'
-				WHEN 'I' THEN 'Nessun importo coincide'
-				WHEN 'C' THEN 'Cliente non determinato: il produttore non ha una scheda cliente'
+				WHEN 'N' THEN IIF(d.IdModulo = 'MAG', 'Indicato', 'Indicata') + ' come non fatturabile'
+				WHEN 'I' THEN IIF(d.IdModulo = 'MAG' AND d.IdImporto IS NOT NULL,
+					'L''importo "' + ISNULL(i.Nome, '') + '" non ha una riga per tutti gli articoli o i materiali del DDT',
+					IIF(d.IdModulo = 'MAG', 'Nessun importo coincide, o il DDT non ha righe di articoli o materiali', 'Nessun importo coincide'))
+				WHEN 'C' THEN 'Cliente non determinato: ' + IIF(d.IdModulo = 'MAG', 'il destinatario', 'il produttore') + ' non ha una scheda cliente'
 				WHEN 'R' THEN 'L''importo non ha righe applicabili'
 				WHEN 'V' THEN 'Aliquota IVA non indicata né sull''importo né sulla scheda del cliente'
-			END AS VARCHAR(200)),
+			END AS VARCHAR(300)),
 			RowsCount = COUNT(*) OVER ()
 		FROM
-			dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, 0) d
+			dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, @Magazzino) d
 			LEFT JOIN dbo.tblRifiutiEer e ON d.IdEer = e.Id
+			-- DDT: sezionale e destinatario (per un DDT d.Id è il movimento e d.IdProduttore il destinatario)
+			LEFT JOIN dbo.tblMagazziniDdt dd ON d.IdModulo = 'MAG'
+										  AND d.Id = dd.IdMovimento
+			LEFT JOIN dbo.tblSedi sd ON d.IdModulo = 'MAG'
+									 AND d.IdProduttore = sd.Id
 			LEFT JOIN dbo.tblClientiFornitori c ON d.IdClienteFornitore = c.Id
 			LEFT JOIN dbo.tblSedi sc ON c.IdSede = sc.Id
 			LEFT JOIN dbo.tblImporti i ON d.IdImporto = i.Id
 			LEFT JOIN dbo.tblFatture f ON d.IdPreFattura = f.Id
 		WHERE
-			@Rifiuti = 1
-			AND
 				(
 				@Esito IS NULL
 				OR (@Esito = 'F' AND d.Fatturabile = 1)
@@ -3433,7 +3453,9 @@ GO
 --        per motivo (uno solo per documento, nell'ordine di ufnFattureGenera_get_Documenti.Esito).
 --   GiaFatturati: documenti del periodo già in una fattura (solo informativo: non rientrano).
 --   InPreFattura: documenti del periodo già in una pre-fattura, quando non si includono le pre-fatture.
--- @Rifiuti = 0: le registrazioni dei rifiuti non sono state scelte (tutto a zero, finché è l'unico modulo).
+--   DocumentiRifiuti, DocumentiMagazzino: i Documenti, divisi tra registrazioni dei rifiuti e DDT di magazzino.
+-- @Rifiuti, @Magazzino: da quali documenti generare (registrazioni dei rifiuti, DDT di magazzino). I DDT entrano
+-- solo con il modulo Magazzino attivo sul dominio.
 -- Senza azienda nel contesto tutto a zero.
 CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_Riepilogo
 	@IdSessione CHAR(16) = NULL,
@@ -3441,6 +3463,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_Riepilogo
 	@DataA DATE = NULL,
 	@IdClienteFornitore CHAR(16) = NULL,
 	@Rifiuti BIT = 1,
+	@Magazzino BIT = 0,
 	@IncludiPreFatture BIT = 0
 AS
 BEGIN
@@ -3452,6 +3475,7 @@ BEGIN
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdClienteFornitore = NULLIF(NULLIF(LTRIM(RTRIM(@IdClienteFornitore)), ''), REPLICATE('0', 16));
 		SET @Rifiuti = ISNULL(@Rifiuti, 1);
+		SET @Magazzino = ISNULL(@Magazzino, 0);
 		SET @IncludiPreFatture = ISNULL(@IncludiPreFatture, 0);
 
 		IF @IdSessione IS NULL
@@ -3486,6 +3510,10 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- I DDT entrano solo con il modulo Magazzino attivo sul dominio
+		IF ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('MAG', @IdSessione), 0) = 0
+			SET @Magazzino = 0;
+
 		DECLARE @idAzienda CHAR(16);
 		SELECT @idAzienda = IdAzienda
 		FROM dbo.tblSessioni
@@ -3494,6 +3522,7 @@ BEGIN
 		-- Documenti candidati, letti una volta sola
 		DECLARE @doc TABLE (
 			Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY,
+			IdModulo CHAR(3) COLLATE DATABASE_DEFAULT NOT NULL,
 			IdClienteFornitore CHAR(16) COLLATE DATABASE_DEFAULT NULL,
 			IdPreFattura CHAR(16) COLLATE DATABASE_DEFAULT NULL,
 			GruppoSede CHAR(16) COLLATE DATABASE_DEFAULT NULL,
@@ -3502,9 +3531,10 @@ BEGIN
 			Fatturabile BIT NOT NULL,
 			Esito CHAR(1) COLLATE DATABASE_DEFAULT NOT NULL
 		);
-		INSERT @doc (Id, IdClienteFornitore, IdPreFattura, GruppoSede, GruppoContratto, Imponibile, Fatturabile, Esito)
+		INSERT @doc (Id, IdModulo, IdClienteFornitore, IdPreFattura, GruppoSede, GruppoContratto, Imponibile, Fatturabile, Esito)
 		SELECT
 			d.Id,
+			d.IdModulo,
 			d.IdClienteFornitore,
 			d.IdPreFattura,
 			d.GruppoSede,
@@ -3512,8 +3542,7 @@ BEGIN
 			d.Imponibile,
 			d.Fatturabile,
 			d.Esito
-		FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, 0) d
-		WHERE @Rifiuti = 1
+		FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, @Magazzino) d
 		OPTION (RECOMPILE);
 
 		-- Documenti del periodo già in una fattura o in una pre-fattura (stessa platea dei candidati:
@@ -3545,8 +3574,28 @@ BEGIN
 			AND (@IdClienteFornitore IS NULL OR f.IdClienteFornitore = @IdClienteFornitore)
 		OPTION (RECOMPILE);
 
+		-- Lo stesso per i DDT di magazzino (stessa platea dei candidati: DDT emessi e confermati di un movimento di
+		-- scarico con una causale fatturabile, delle sedi che la sessione vede)
+		IF @Magazzino = 1
+			SELECT
+				@giaFatturati += ISNULL(SUM(IIF(f.IdTipo = 'TD00', 0, 1)), 0),
+				@inPreFattura += ISNULL(SUM(IIF(f.IdTipo = 'TD00', 1, 0)), 0)
+			FROM
+				dbo.ufnImportiMagazzino_get_Documenti(NULL, @idAzienda, @DataDa, @DataA) doc
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON doc.IdSedeDdt = x.Id
+				INNER JOIN dbo.tblFattureDocumenti fd ON doc.Id = fd.Id
+				INNER JOIN dbo.tblFatture f ON fd.IdFattura = f.Id
+			WHERE
+				doc.Lock = 0
+				AND doc.IsFatturabile = 1
+				AND f.Lock IN (0, 2)
+				AND (@IdClienteFornitore IS NULL OR f.IdClienteFornitore = @IdClienteFornitore)
+			OPTION (RECOMPILE);
+
 		SELECT
 			Documenti = COUNT(*),
+			DocumentiRifiuti = ISNULL(SUM(IIF(d.IdModulo = 'RIF', 1, 0)), 0),
+			DocumentiMagazzino = ISNULL(SUM(IIF(d.IdModulo = 'MAG', 1, 0)), 0),
 			Fatturabili = ISNULL(SUM(IIF(d.Fatturabile = 1, 1, 0)), 0),
 			Fatture = (
 				SELECT COUNT(*)
@@ -3596,7 +3645,8 @@ GO
 --        documento. Se il documento non è fatturabile la SP lo rifiuta.
 --   Senza @Id: i documenti dell'azienda interna corrente della sessione con data tra @DataDa e @DataA,
 --        eventualmente riconducibili al solo cliente @IdClienteFornitore (Fatture clienti > Nuovo > Tramite
---        procedura automatica). @Rifiuti = 0: le registrazioni dei rifiuti non sono state scelte.
+--        procedura automatica). @Rifiuti e @Magazzino dicono da quali documenti generare (registrazioni dei
+--        rifiuti, DDT di magazzino).
 -- Entrano solo i documenti fatturabili, raggruppati come li mostra la verifica (ufnFattureGenera_get_Documenti).
 -- Una fattura per cliente; secondo il raggruppamento della scheda del cliente (tblClientiFornitori.
 -- IdRaggruppamento) una per sede del produttore (S) o una per contratto (T): solo in quest'ultimo caso la
@@ -3711,6 +3761,10 @@ BEGIN
 			SET @Magazzino = IIF(@IdModulo = 'MAG', 1, 0);
 			SET @IncludiPreFatture = 0;
 		END
+
+		-- Procedura automatica: i DDT entrano solo con il modulo Magazzino attivo sul dominio
+		IF @Id IS NULL AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('MAG', @IdSessione), 0) = 0
+			SET @Magazzino = 0;
 
 		-- Documenti da fatturare, con il raggruppamento della scheda del cliente
 		DECLARE @doc TABLE (

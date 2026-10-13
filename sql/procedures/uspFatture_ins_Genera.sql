@@ -9,7 +9,8 @@ GO
 --        documento. Se il documento non è fatturabile la SP lo rifiuta.
 --   Senza @Id: i documenti dell'azienda interna corrente della sessione con data tra @DataDa e @DataA,
 --        eventualmente riconducibili al solo cliente @IdClienteFornitore (Fatture clienti > Nuovo > Tramite
---        procedura automatica). @Rifiuti = 0: le registrazioni dei rifiuti non sono state scelte.
+--        procedura automatica). @Rifiuti e @Magazzino dicono da quali documenti generare (registrazioni dei
+--        rifiuti, DDT di magazzino).
 -- Entrano solo i documenti fatturabili, raggruppati come li mostra la verifica (ufnFattureGenera_get_Documenti).
 -- Una fattura per cliente; secondo il raggruppamento della scheda del cliente (tblClientiFornitori.
 -- IdRaggruppamento) una per sede del produttore (S) o una per contratto (T): solo in quest'ultimo caso la
@@ -124,6 +125,10 @@ BEGIN
 			SET @Magazzino = IIF(@IdModulo = 'MAG', 1, 0);
 			SET @IncludiPreFatture = 0;
 		END
+
+		-- Procedura automatica: i DDT entrano solo con il modulo Magazzino attivo sul dominio
+		IF @Id IS NULL AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('MAG', @IdSessione), 0) = 0
+			SET @Magazzino = 0;
 
 		-- Documenti da fatturare, con il raggruppamento della scheda del cliente
 		DECLARE @doc TABLE (

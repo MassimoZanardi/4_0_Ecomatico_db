@@ -35,18 +35,20 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		IF ISNULL(@IdModulo, '') <> 'RIF'
+		IF ISNULL(@IdModulo, '') NOT IN ('RIF', 'MAG')
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF';
+			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF o MAG';
 			GOTO BRANCH_END;
 		END
 
-		-- Permesso di modifica sulle registrazioni e modulo Offerte e contratti attivo sul dominio
+		-- Permesso di modifica sul documento (registrazioni dei rifiuti o gestione del magazzino) e modulo Offerte e
+		-- contratti attivo sul dominio
+		DECLARE @idFunzione CHAR(3) = IIF(@IdModulo = 'MAG', 'MAG', 'RRG');
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
-			@IdFunzione = 'RRG',
+			@IdFunzione = @idFunzione,
 			@Permesso = @permesso OUTPUT;
 		IF 2 > @permesso OR ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 0
 		BEGIN
@@ -57,14 +59,8 @@ BEGIN
 
 		-- Azienda del documento, se accessibile dalla sessione
 		DECLARE @idAzienda CHAR(16);
-		SELECT @idAzienda = s.IdAziendaInterna
-		FROM
-			dbo.tblRifiutiRegistrazioni r
-			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-			INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON g.IdSede = x.Id
-		WHERE r.Id = @Id;
+		SELECT @idAzienda = a.IdAzienda
+		FROM dbo.ufnFattureDocumenti_get_Documento(@Id, @IdModulo, @IdSessione) a;
 
 		IF @idAzienda IS NULL
 		BEGIN

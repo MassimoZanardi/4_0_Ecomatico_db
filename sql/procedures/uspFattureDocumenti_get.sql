@@ -6,7 +6,9 @@ GO
 -- rifiuti, DDT di magazzino e servizi): cliente indicato sul documento, spunta "Non fatturabile", fattura in
 -- cui è finito e l'anteprima di ciò che la generazione automatica userebbe ("Verifica importo e cliente":
 -- cliente, importo, contratto, totale e avvisi). Le righe dell'anteprima: uspFattureDocumenti_get_Righe.
--- @IdModulo: RIF registrazione dei rifiuti (MAG e SRV non ancora gestiti: nessuna riga).
+-- @IdModulo: RIF registrazione dei rifiuti, MAG movimento di magazzino con il suo DDT (SRV non ancora gestito:
+-- nessuna riga). Per il DDT il confronto è per riga: importo, priorità e contratto si vedono solo se sono gli
+-- stessi per tutte le righe.
 -- Sempre una riga al massimo; nessuna riga (e nessun errore) se il blocco non va mostrato: modulo Offerte e
 -- contratti non attivo sul dominio, documento non accessibile, operazione non fatturabile, rettifica. Così la
 -- scheda del documento non dipende da questo modulo.
@@ -132,6 +134,98 @@ BEGIN
 			WHERE
 				a.IsFatturabile = 1
 				AND a.IsRettifica = 0
+			OPTION (RECOMPILE);
+		END
+
+
+		-- DDT di magazzino (Id = movimento), con il modulo Offerte e contratti attivo sul dominio e almeno la
+		-- lettura dei movimenti. Il confronto con gli importi è per riga del DDT
+		DECLARE @permessoMag TINYINT = dbo.ufnFunzioni_get_PermessoBySessione('MAG', @IdSessione);
+		IF ISNULL(@IdModulo, '') = 'MAG'
+			AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 1
+			AND @permessoMag >= 1
+		BEGIN
+			SELECT
+				a.Id,
+				IdModulo = CAST('MAG' AS CHAR(3)),
+				Modificabile = CAST(IIF(@permessoMag >= 2 AND a.Lock = 0 AND a.IdFattura IS NULL, 1, 0) AS BIT),
+				IdClienteIndicato = a.IdClienteIndicato,
+				ClienteIndicato = si.NomeCompleto + ISNULL(' ' + si.IndirizzoCompleto, ''),
+				a.NonFatturabile,
+				a.IdFattura,
+				Fattura = IIF(a.IdFattura IS NULL, NULL, IIF(f.IdTipo = 'TD00', 'Pre-fattura', 'Fattura'))
+					+ ISNULL(' ' + CAST(f.Numero AS VARCHAR(10)) + ISNULL('/' + f.Sezionale, ''), '')
+					+ ISNULL(' del ' + CONVERT(VARCHAR(10), f.DataEmissione, 103), ''),
+				-- Anteprima
+				a.IdClienteFornitore,
+				Cliente = sc.NomeCompleto + ISNULL(' ' + sc.IndirizzoCompleto, ''),
+				a.ClienteOrigine,
+				ClienteOrigineDescrizione = CASE a.ClienteOrigine
+					WHEN 'D' THEN 'indicato sul DDT'
+					WHEN 'C' THEN 'dal contratto degli importi'
+					WHEN 'P' THEN 'destinatario del DDT (importi standard)'
+				END,
+				a.IdImporto,
+				Importo = CASE
+					WHEN a.Righe = 0 OR a.RigheSenzaImporto = a.Righe THEN NULL
+					WHEN a.IdImporto IS NOT NULL THEN i.Nome
+					ELSE 'Importi diversi per riga'
+				END,
+				Priorita = IIF(a.IdImporto IS NOT NULL, p.Nome, NULL),
+				Contratto = CASE
+					WHEN a.Righe = 0 OR a.RigheSenzaImporto = a.Righe THEN NULL
+					WHEN a.IdOffertaContratto IS NOT NULL THEN 'Contratto' + ISNULL(' ' + so.NomeCompleto, '')
+						+ ISNULL(' dal ' + CONVERT(VARCHAR(10), oc.DataInizio, 103), '')
+						+ ISNULL(' al ' + CONVERT(VARCHAR(10), oc.DataFine, 103), '')
+					WHEN a.ClienteOrigine = 'C' OR a.ClientiDiversi = 1 THEN 'Contratti diversi per riga'
+					ELSE 'Nessuno (importi standard)'
+				END,
+				Totale = t.Totale,
+				Fatturabile = CAST(IIF(
+					a.Lock = 0 AND a.NonFatturabile = 0 AND a.IdFattura IS NULL
+					AND a.Righe > 0 AND a.RigheSenzaImporto = 0 AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0, 1, 0) AS BIT),
+				Avvisi = CAST(STUFF(
+					IIF(a.Lock <> 0, '|Il DDT non è ancora salvato: salvarlo prima di fatturarlo', '')
+					+ IIF(a.IdFattura IS NOT NULL, '|Il DDT è già stato fatturato', '')
+					+ IIF(a.NonFatturabile = 1, '|Il DDT è indicato come non fatturabile', '')
+					+ IIF(a.Righe = 0, '|Il DDT non ha righe di articoli o di materiali: non viene fatturato', '')
+					+ IIF(a.RigheSenzaImporto > 0, '|Nessun importo coincide con ' + IIF(a.RigheSenzaImporto = 1, 'la riga ', 'le righe ') + ISNULL(n.Voci, '')
+						+ ': il DDT non viene fatturato', '')
+					+ IIF(a.RigheScartate > 0, '|Per ' + IIF(a.RigheScartate = 1, 'una riga', CAST(a.RigheScartate AS VARCHAR(10)) + ' righe')
+						+ ' coinciderebbe un importo il cui contratto non è valido alla data del DDT', '')
+					+ IIF(a.ClientiDiversi = 1, '|Le righe hanno importi di contratti di clienti diversi: indicare il cliente sul DDT', '')
+					+ IIF(a.IdClienteFornitore IS NULL AND a.ClientiDiversi = 0, '|Cliente non determinato: il destinatario non ha una scheda cliente. Indicare il cliente sul DDT', '')
+					+ IIF(a.IdClienteFornitore IS NOT NULL AND ISNULL(t.SenzaIva, 0) > 0, '|Aliquota IVA non indicata né sulle righe degli importi né sulla scheda del cliente', '')
+					+ IIF(a.Righe > 0 AND a.RigheSenzaImporto = 0 AND ISNULL(t.Righe, 0) = 0, '|Gli importi applicati non hanno righe: il DDT non genera righe in fattura', '')
+					, 1, 1, '') AS VARCHAR(2000))
+			FROM
+				dbo.ufnImportiMagazzino_get_Applicazione_List(@Id, NULL, NULL, NULL, 0) a
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeDdt = x.Id
+				LEFT JOIN dbo.tblClientiFornitori ci ON a.IdClienteIndicato = ci.Id
+				LEFT JOIN dbo.tblSedi si ON ci.IdSede = si.Id
+				LEFT JOIN dbo.tblClientiFornitori cc ON a.IdClienteFornitore = cc.Id
+				LEFT JOIN dbo.tblSedi sc ON cc.IdSede = sc.Id
+				LEFT JOIN dbo.tblFatture f ON a.IdFattura = f.Id
+				LEFT JOIN dbo.tblImporti i ON a.IdImporto = i.Id
+				LEFT JOIN dbo.tblImportiPriorita p ON i.IdPriorita = p.Id
+				LEFT JOIN dbo.tblOfferteContratti oc ON a.IdOffertaContratto = oc.Id
+				LEFT JOIN dbo.tblClientiFornitori co ON oc.IdClienteFornitore = co.Id
+				LEFT JOIN dbo.tblSedi so ON co.IdSede = so.Id
+				OUTER APPLY (
+					-- Righe che entrano in fattura
+					SELECT
+						Totale = SUM(ISNULL(g.Imponibile, 0)),
+						Righe = COUNT(*),
+						SenzaIva = SUM(IIF(g.SolaDescrizione = 0 AND g.IdAliquotaIva IS NULL, 1, 0))
+					FROM dbo.ufnImportiMagazzino_get_RigheFattura(@Id, a.IdClienteFornitore) g
+				) t
+				OUTER APPLY (
+					-- Righe del DDT senza un importo, per l'avviso
+					SELECT Voci = STRING_AGG(CAST('"' + ISNULL(r.Voce, '') + '"' AS VARCHAR(MAX)), ', ') WITHIN GROUP (ORDER BY ISNULL(r.Pos, 0), r.IdRiga)
+					FROM dbo.ufnImportiMagazzino_get_ApplicazioneRighe_List(@Id, NULL, NULL, NULL, 0) r
+					WHERE r.IdImporto IS NULL
+				) n
+			WHERE a.IsFatturabile = 1
 			OPTION (RECOMPILE);
 		END
 

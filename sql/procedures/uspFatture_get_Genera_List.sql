@@ -105,7 +105,7 @@ BEGIN
 			END AS VARCHAR(200)),
 			RowsCount = COUNT(*) OVER ()
 		FROM
-			dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture) d
+			dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, 0) d
 			LEFT JOIN dbo.tblRifiutiEer e ON d.IdEer = e.Id
 			LEFT JOIN dbo.tblClientiFornitori c ON d.IdClienteFornitore = c.Id
 			LEFT JOIN dbo.tblSedi sc ON c.IdSede = sc.Id

@@ -90,7 +90,7 @@ BEGIN
 					Documenti = COUNT(*),
 					PreFatture = COUNT(DISTINCT d.IdPreFattura),
 					Imponibile = SUM(ISNULL(d.Imponibile, 0))
-				FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture) d
+				FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, 0) d
 				WHERE
 					@Rifiuti = 1
 					AND d.Fatturabile = 1

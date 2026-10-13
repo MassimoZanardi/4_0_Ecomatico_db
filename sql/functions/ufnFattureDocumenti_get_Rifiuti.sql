@@ -47,6 +47,8 @@ RETURN
 		IdClienteFornitore = IIF(a.IsPreFattura = 1, a.IdClientePreFattura, a.IdClienteFornitore),
 		a.ClienteOrigine,
 		a.IdImportoScartato,
+		-- Nessun importo coincide (per i DDT di magazzino: con almeno una riga)
+		SenzaImporto = CAST(IIF(a.IdImporto IS NULL, 1, 0) AS BIT),
 		Righe = ISNULL(t.Righe, 0),
 		Totale = t.Totale,
 		SenzaIva = ISNULL(t.SenzaIva, 0),

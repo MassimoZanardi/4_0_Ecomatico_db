@@ -94,7 +94,7 @@ BEGIN
 			d.Imponibile,
 			d.Fatturabile,
 			d.Esito
-		FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture) d
+		FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, 0) d
 		WHERE @Rifiuti = 1
 		OPTION (RECOMPILE);
 

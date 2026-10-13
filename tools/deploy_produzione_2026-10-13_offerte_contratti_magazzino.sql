@@ -1,5 +1,5 @@
 ﻿/*
-Deploy produzione 2026-10-13 - Offerte e contratti, fase magazzino: importi dei DDT
+Deploy produzione 2026-10-13 - Offerte e contratti, fase magazzino: importi e fatturazione dei DDT
 
 Da eseguire DOPO deploy_produzione_2026-10-12_offerte_contratti.sql e
 deploy_produzione_2026-10-13_magazzino_etichette.sql. Rieseguibile.
@@ -7,15 +7,20 @@ Eseguire con sqlcmd -f 65001 -I (oppure da SSMS). Va deployato insieme all'app.
 
 1. Struttura: tblMagazziniCausali.IsFatturabile (solo Vendita); tblImportiMagazzino senza il mittente e con
    IdArticolo, IdMateriale e IdSede; indice IX_ImportiMagazzino_IdSede.
-2. Funzioni: ufnImportiMagazzino_get_List (elenco ed esportazione), ufnImportiMagazzino_get_Coincidenti (regola di
-   coincidenza per riga del DDT).
-3. Stored procedure nuove: uspImportiMagazzino_ins, _get, _upd, _get_List, _get_Esportazione, _get_Sedi_SelectList,
-   _get_Etichette_SelectList, _get_Articoli_SelectList, _get_Materiali_SelectList, _get_Verifica, _get_Conflitti.
-4. Stored procedure modificate: uspMagazziniArticoli_del (articolo indicato in un importo), uspSedi_del_SediEsterne,
-   uspSedi_del_SediInterne e le due cancellazioni a cascata di sviluppo (via il mittente dagli importi di magazzino).
-
-La fatturazione dei DDT (confronto con le righe, blocco nella scheda del movimento, procedura automatica) non è
-ancora in questo script.
+2. Funzioni degli importi di magazzino: elenco (ufnImportiMagazzino_get_List), regola di coincidenza per riga del
+   DDT (_get_Coincidenti), DDT considerati (_get_Documenti), importo per riga (_get_ApplicazioneRighe_List),
+   riepilogo e cliente per DDT (_get_Applicazione_List), righe di fattura (_get_RigheFattura).
+3. Funzioni della fatturazione: ufnFattureDocumenti_get_Magazzino (DDT candidati), ufnFattureDocumenti_get_Rifiuti
+   (colonna SenzaImporto), ufnFattureGenera_get_Documenti (rifiuti e magazzino insieme, colonna IdModulo, parametri
+   @Rifiuti e @Magazzino), ufnFattureDocumenti_get_Documento (documento del blocco "Cliente a cui fatturare").
+4. Stored procedure degli importi di magazzino: uspImportiMagazzino_ins, _get, _upd, _get_List, _get_Esportazione,
+   _get_Sedi_SelectList, _get_Etichette_SelectList, _get_Articoli_SelectList, _get_Materiali_SelectList,
+   _get_Verifica, _get_Conflitti.
+5. Stored procedure modificate: uspFattureDocumenti_get, _get_Righe, _upd, _del_Fattura, _get_Clienti_List (anche
+   per il modulo MAG); uspFatture_ins_Genera (un DDT con @IdModulo = 'MAG', parametro @Magazzino);
+   uspFatture_get_Genera_Riepilogo, _Fatture_List e _List (nuova firma della funzione comune; i DDT nella procedura
+   automatica non sono ancora in questo script); uspMagazziniArticoli_del, uspSedi_del_SediEsterne,
+   uspSedi_del_SediInterne e le due cancellazioni a cascata di sviluppo.
 
 Dopo il deploy: eseguire tools\verifica_crlf_accenti.sql, che deve dare 0 righe.
 */
@@ -279,6 +284,782 @@ RETURN
 		AND (ir.IdMateriale IS NULL OR ir.IdMateriale = @IdMateriale)
 		AND (ir.IdDestinatarioParent IS NULL OR ir.IdDestinatarioParent = @IdDestinatarioParent)
 		AND (ir.IdDestinatario IS NULL OR ir.IdDestinatario = @IdDestinatario)
+);
+GO
+GO
+
+PRINT 'sql/functions/ufnImportiMagazzino_get_Documenti.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Offerte e contratti, magazzino: i DDT che la fatturazione considera, uno per movimento. Il documento
+-- fatturabile è il movimento con il suo DDT: Id è l'Id del movimento (chiave di tblFattureDocumenti).
+--   @Id: un solo movimento; altrimenti i movimenti dell'azienda @IdAzienda con la data del DDT tra @DataDa e
+--        @DataA. Due rami distinti, ciascuno con il suo accesso (come ufnImportiRifiuti_get_Applicazione_List).
+-- Nessuna riga per un movimento senza DDT.
+-- IsFatturabile: DDT emesso (non ricevuto da un fornitore, sezionale R) di un movimento di scarico, con una
+-- causale fatturabile (tblMagazziniCausali.IsFatturabile, oggi la sola vendita).
+-- Lock: 0 solo se movimento e DDT sono confermati.
+-- Destinatario: IdDestinatario è l'anagrafica indicata sul DDT, IdDestinatarioParent il suo soggetto.
+CREATE OR ALTER FUNCTION dbo.ufnImportiMagazzino_get_Documenti (
+	@Id CHAR(16),
+	@IdAzienda CHAR(16),
+	@DataDa DATE,
+	@DataA DATE)
+RETURNS TABLE
+AS
+RETURN
+(
+	WITH ids AS (
+		SELECT m.Id
+		FROM dbo.tblMagazziniMovimenti m
+		WHERE m.Id = @Id
+
+		UNION ALL
+
+		SELECT m.Id
+		FROM
+			dbo.tblMagazziniMovimenti m
+			INNER JOIN dbo.tblMagazziniDdt d ON m.Id = d.IdMovimento
+		WHERE
+			@Id IS NULL
+			AND m.IdSede = @IdAzienda
+			AND d.[Data] >= @DataDa
+			AND d.[Data] <= @DataA
+	)
+	SELECT
+		m.Id,
+		IdDdt = d.Id,
+		d.[Data],
+		d.Numero,
+		d.Sezionale,
+		Lock = CAST(IIF(m.Lock = 0 AND d.Lock = 0, 0, IIF(m.Lock = 4 OR d.Lock = 4, 4, 2)) AS TINYINT),
+		IdAzienda = m.IdSede,
+		IdSedeDdt = d.IdSede,
+		IsFatturabile = CAST(IIF(ISNULL(ca.IsFatturabile, 0) = 1 AND ISNULL(d.Sezionale, '') <> 'R' AND m.IdOperazione = 'S', 1, 0) AS BIT),
+		d.IdDestinatario,
+		IdDestinatarioParent = ISNULL(sd.IdParent, sd.Id),
+		d.IdDestinazione
+	FROM
+		ids k
+		INNER JOIN dbo.tblMagazziniMovimenti m ON k.Id = m.Id
+		INNER JOIN dbo.tblMagazziniDdt d ON m.Id = d.IdMovimento
+		LEFT JOIN dbo.tblMagazziniCausali ca ON d.IdCausale = ca.Id
+		LEFT JOIN dbo.tblSedi sd ON d.IdDestinatario = sd.Id
+);
+GO
+GO
+
+PRINT 'sql/functions/ufnImportiMagazzino_get_ApplicazioneRighe_List.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Offerte e contratti, magazzino: importo che la fatturazione applica a ogni riga dei DDT (regole O5M di
+-- docs/regole/offerte-contratti.md). Il confronto è per riga: una riga per ogni riga articolo o EoW del DDT,
+-- anche se nessun importo coincide (IdImporto NULL). Le righe descrittive del DDT non entrano.
+--   Parametri: quelli di ufnImportiMagazzino_get_Documenti. @SoloFatturabili = 1: solo i DDT confermati e
+--        fatturabili; il confronto non viene fatto per gli altri.
+-- Importo: tra gli importi di magazzino attivi dell'azienda, il primo le cui variabili coincidono con la riga
+-- (ufnImportiMagazzino_get_Coincidenti: articolo o materiale, destinatario; l'etichetta è una di quelle del
+-- DDT), in ordine di priorità decrescente e, a parità, prima quello di un contratto e poi quello standard. La
+-- validità del contratto è alla data del DDT.
+-- Riga articolo: unità di misura dell'articolo. Riga EoW: chilogrammi.
+-- IdImportoScartato: importo di un contratto che coinciderebbe ma non è valido alla data del DDT.
+CREATE OR ALTER FUNCTION dbo.ufnImportiMagazzino_get_ApplicazioneRighe_List (
+	@Id CHAR(16),
+	@IdAzienda CHAR(16),
+	@DataDa DATE,
+	@DataA DATE,
+	@SoloFatturabili BIT)
+RETURNS TABLE
+AS
+RETURN
+(
+	WITH righe AS (
+		SELECT
+			IdMovimento = doc.Id,
+			doc.IdDdt,
+			doc.[Data],
+			doc.IdAzienda,
+			doc.IdDestinatario,
+			doc.IdDestinatarioParent,
+			IdRiga = r.Id,
+			IsEoW = CAST(0 AS BIT),
+			r.Pos,
+			r.IdArticolo,
+			IdMateriale = CAST(NULL AS CHAR(2)),
+			Voce = CAST(a.Nome + ISNULL(' (' + a.Codice + ')', '') AS VARCHAR(200)),
+			r.Quantita,
+			IdUnitaMisura = a.IdUnitaMisura
+		FROM
+			dbo.ufnImportiMagazzino_get_Documenti(@Id, @IdAzienda, @DataDa, @DataA) doc
+			INNER JOIN dbo.tblMagazziniMovimentiRighe r ON doc.Id = r.IdMovimento
+			INNER JOIN dbo.tblMagazziniArticoli a ON r.IdArticolo = a.Id
+		WHERE
+			r.Lock <= 2
+			AND (ISNULL(@SoloFatturabili, 0) = 0 OR (doc.Lock = 0 AND doc.IsFatturabile = 1))
+
+		UNION ALL
+
+		SELECT
+			IdMovimento = doc.Id,
+			doc.IdDdt,
+			doc.[Data],
+			doc.IdAzienda,
+			doc.IdDestinatario,
+			doc.IdDestinatarioParent,
+			IdRiga = r.Id,
+			IsEoW = CAST(1 AS BIT),
+			r.Pos,
+			IdArticolo = CAST(NULL AS CHAR(16)),
+			r.IdMateriale,
+			Voce = CAST(ma.Nome AS VARCHAR(200)),
+			r.Quantita,
+			IdUnitaMisura = CAST('KG' AS CHAR(2))
+		FROM
+			dbo.ufnImportiMagazzino_get_Documenti(@Id, @IdAzienda, @DataDa, @DataA) doc
+			INNER JOIN dbo.tblMagazziniMovimentiRigheEoW r ON doc.Id = r.IdMovimento
+			LEFT JOIN dbo.tblRifiutiMateriali ma ON r.IdMateriale = ma.Id
+		WHERE
+			r.Lock <= 2
+			AND (ISNULL(@SoloFatturabili, 0) = 0 OR (doc.Lock = 0 AND doc.IsFatturabile = 1))
+	),
+	scelta AS (
+		-- Per ogni riga gli importi che coincidono: N = 1 è il primo candidato (classe V) in ordine di scelta, o
+		-- una riga senza candidato; IdImportoScartato il primo degli scartati (classe S). Un importo che indica
+		-- un'etichetta che il DDT non ha non coincide: passa alla classe X
+		SELECT
+			g.IdMovimento,
+			g.IdRiga,
+			g.IsEoW,
+			g.Pos,
+			g.IdArticolo,
+			g.IdMateriale,
+			g.Voce,
+			g.Quantita,
+			g.IdUnitaMisura,
+			IdImporto = IIF(q.Classe = 'V', c.IdImporto, NULL),
+			IdOffertaContratto = IIF(q.Classe = 'V', c.IdOffertaContratto, NULL),
+			IdClienteContratto = IIF(q.Classe = 'V', c.IdClienteContratto, NULL),
+			IdImportoScartato = FIRST_VALUE(IIF(q.Classe = 'S', c.IdImporto, NULL)) OVER (
+				PARTITION BY g.IdRiga
+				ORDER BY IIF(q.Classe = 'S', 0, 1), c.IdPriorita DESC, c.IdImporto
+				ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW),
+			N = ROW_NUMBER() OVER (
+				PARTITION BY g.IdRiga
+				ORDER BY IIF(q.Classe = 'V', 0, 1), c.IdPriorita DESC, c.Standard, c.IdImporto)
+		FROM
+			righe g
+			OUTER APPLY dbo.ufnImportiMagazzino_get_Coincidenti(g.IdAzienda, g.[Data], g.IdDestinatarioParent, g.IdDestinatario, g.IdArticolo, g.IdMateriale) c
+			-- Al massimo una riga: (Id, IdEtichetta) è la chiave primaria
+			LEFT JOIN dbo.tblMagazziniDdtEtichette e ON e.Id = g.IdDdt
+													 AND e.IdEtichetta = c.IdEtichetta
+			CROSS APPLY (SELECT Classe = IIF(c.IdEtichetta IS NOT NULL AND e.Id IS NULL, 'X', c.Classe)) q
+	)
+	SELECT
+		t.IdMovimento,
+		t.IdRiga,
+		t.IsEoW,
+		t.Pos,
+		t.IdArticolo,
+		t.IdMateriale,
+		t.Voce,
+		t.Quantita,
+		t.IdUnitaMisura,
+		t.IdImporto,
+		t.IdOffertaContratto,
+		t.IdClienteContratto,
+		t.IdImportoScartato
+	FROM scelta t
+	WHERE t.N = 1
+);
+GO
+GO
+
+PRINT 'sql/functions/ufnImportiMagazzino_get_Applicazione_List.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Offerte e contratti, magazzino: per ogni DDT, il riepilogo degli importi applicati alle sue righe
+-- (ufnImportiMagazzino_get_ApplicazioneRighe_List) e il cliente a cui fatturarlo. Una riga per movimento con
+-- un DDT; è l'analogo di ufnImportiRifiuti_get_Applicazione_List, con il confronto fatto per riga.
+--   Parametri: quelli di ufnImportiMagazzino_get_ApplicazioneRighe_List.
+-- Righe: righe articolo ed EoW del DDT. RigheSenzaImporto: quelle a cui nessun importo coincide: se ce n'è
+-- anche una sola il DDT intero non viene fatturato (non si fattura una parte del DDT).
+-- IdImporto, IdOffertaContratto: l'importo e il contratto applicati, solo se sono gli stessi per tutte le righe
+-- (altrimenti NULL): servono al legame in tblFattureDocumenti e al raggruppamento per contratto.
+-- Cliente (ClienteOrigine): D quello indicato sul DDT (tblFattureDocumenti), altrimenti C quello dei contratti
+-- degli importi applicati, altrimenti P la scheda cliente attiva del soggetto destinatario. ClientiDiversi = 1:
+-- le righe hanno importi di contratti di clienti diversi e sul DDT non è indicato un cliente: va indicato.
+-- IdFattura: solo se la fattura non è cancellata. IsPreFattura, IdClientePreFattura: come per i rifiuti.
+CREATE OR ALTER FUNCTION dbo.ufnImportiMagazzino_get_Applicazione_List (
+	@Id CHAR(16),
+	@IdAzienda CHAR(16),
+	@DataDa DATE,
+	@DataA DATE,
+	@SoloFatturabili BIT)
+RETURNS TABLE
+AS
+RETURN
+(
+	SELECT
+		doc.Id,
+		doc.IdDdt,
+		doc.[Data],
+		doc.Numero,
+		doc.Sezionale,
+		doc.Lock,
+		doc.IdAzienda,
+		doc.IdSedeDdt,
+		doc.IsFatturabile,
+		doc.IdDestinatario,
+		doc.IdDestinatarioParent,
+		doc.IdDestinazione,
+		IdClienteIndicato = d.IdClienteFornitore,
+		NonFatturabile = CAST(ISNULL(d.NonFatturabile, 0) AS BIT),
+		IdFattura = f.Id,
+		IsPreFattura = CAST(IIF(f.IdTipo = 'TD00', 1, 0) AS BIT),
+		IdClientePreFattura = IIF(f.IdTipo = 'TD00', f.IdClienteFornitore, NULL),
+		Righe = ISNULL(g.Righe, 0),
+		RigheSenzaImporto = ISNULL(g.RigheSenzaImporto, 0),
+		RigheScartate = ISNULL(g.RigheScartate, 0),
+		IdImporto = IIF(g.ImportoMin = g.ImportoMax AND g.RigheSenzaImporto = 0, g.ImportoMin, NULL),
+		IdOffertaContratto = IIF(g.ContrattoMin = g.ContrattoMax AND g.RigheStandard = 0 AND g.RigheSenzaImporto = 0, g.ContrattoMin, NULL),
+		IdClienteFornitore = COALESCE(d.IdClienteFornitore, IIF(g.ClienteMin = g.ClienteMax, g.ClienteMin, NULL), IIF(g.ClienteMin IS NULL, cp.Id, NULL)),
+		ClienteOrigine = CAST(CASE
+			WHEN d.IdClienteFornitore IS NOT NULL THEN 'D'
+			WHEN g.ClienteMin = g.ClienteMax THEN 'C'
+			WHEN g.ClienteMin IS NULL AND cp.Id IS NOT NULL THEN 'P'
+		END AS CHAR(1)),
+		ClientiDiversi = CAST(IIF(d.IdClienteFornitore IS NULL AND g.ClienteMin <> g.ClienteMax, 1, 0) AS BIT)
+	FROM
+		dbo.ufnImportiMagazzino_get_Documenti(@Id, @IdAzienda, @DataDa, @DataA) doc
+		LEFT JOIN dbo.tblFattureDocumenti d ON doc.Id = d.Id
+		LEFT JOIN dbo.tblFatture f ON d.IdFattura = f.Id
+								  AND f.Lock IN (0, 2)
+		LEFT JOIN (
+			SELECT
+				r.IdMovimento,
+				Righe = COUNT(*),
+				RigheSenzaImporto = SUM(IIF(r.IdImporto IS NULL, 1, 0)),
+				RigheScartate = SUM(IIF(r.IdImportoScartato IS NOT NULL, 1, 0)),
+				RigheStandard = SUM(IIF(r.IdImporto IS NOT NULL AND r.IdOffertaContratto IS NULL, 1, 0)),
+				ImportoMin = MIN(r.IdImporto),
+				ImportoMax = MAX(r.IdImporto),
+				ContrattoMin = MIN(r.IdOffertaContratto),
+				ContrattoMax = MAX(r.IdOffertaContratto),
+				ClienteMin = MIN(r.IdClienteContratto),
+				ClienteMax = MAX(r.IdClienteContratto)
+			FROM dbo.ufnImportiMagazzino_get_ApplicazioneRighe_List(@Id, @IdAzienda, @DataDa, @DataA, @SoloFatturabili) r
+			GROUP BY r.IdMovimento
+		) g ON doc.Id = g.IdMovimento
+		OUTER APPLY (
+			SELECT TOP (1) c.Id
+			FROM dbo.tblClientiFornitori c
+			WHERE
+				c.IdSede = doc.IdDestinatarioParent
+				AND c.IdAziendaInterna = doc.IdAzienda
+				AND c.Tipo = 'C'
+				AND c.Lock = 0
+			ORDER BY c.Id
+		) cp
+	WHERE
+		ISNULL(@SoloFatturabili, 0) = 0
+		OR (doc.Lock = 0 AND doc.IsFatturabile = 1)
+);
+GO
+GO
+
+PRINT 'sql/functions/ufnImportiMagazzino_get_RigheFattura.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Offerte e contratti, magazzino: righe di fattura che gli importi applicati alle righe del DDT del movimento
+-- @Id generano, nell'ordine delle righe del DDT e, per ciascuna, delle righe dell'importo. Funzione in linea: si
+-- può usare con CROSS APPLY su più DDT. Nessuna riga per le righe del DDT senza importo.
+--
+-- Riga dell'importo a quantità (tipo MA): una per ogni riga del DDT a cui l'importo è applicato, con la quantità
+-- e l'unità di misura di quella riga (riga articolo: unità dell'articolo; riga EoW: chilogrammi).
+-- Riga per movimento (tipo MM) e riga di sola descrizione (importo NULL): una sola volta per DDT e per importo,
+-- sulla prima riga del DDT a cui quell'importo è applicato, con quantità 1 (unità NR) se ha un importo.
+-- Minimo fatturabile (al massimo una riga per importo): è il minimo da fatturare per il DDT con quell'importo. Si
+-- confronta con la somma degli imponibili delle altre sue righe (se la riga del minimo è di tipo MM, di tutte;
+-- altrimenti di quelle a quantità): se il minimo è maggiore la riga entra, una volta, con quantità 1 e importo
+-- pari alla differenza, altrimenti non entra.
+-- Testo: i segnaposto #1 articolo o materiale della riga del DDT, #2 numero del DDT, #3 data del DDT,
+-- #4 destinatario, #5 destinazione (se non indicata, il destinatario) vengono sostituiti.
+-- Aliquota IVA: quella della riga dell'importo, altrimenti quella della scheda del cliente @IdClienteFornitore.
+CREATE OR ALTER FUNCTION dbo.ufnImportiMagazzino_get_RigheFattura (
+	@Id CHAR(16),
+	@IdClienteFornitore CHAR(16))
+RETURNS TABLE
+AS
+RETURN
+(
+	WITH a AS (
+		SELECT
+			x.IdRiga,
+			PosDdt = ISNULL(x.Pos, 0),
+			x.IdImporto,
+			x.Voce,
+			x.Quantita,
+			x.IdUnitaMisura,
+			-- Prima riga del DDT con questo importo: porta le righe "una volta per DDT"
+			Prima = CAST(IIF(ROW_NUMBER() OVER (PARTITION BY x.IdImporto ORDER BY ISNULL(x.Pos, 0), x.IdRiga) = 1, 1, 0) AS BIT),
+			IdAliquotaIvaCliente = c.IdAliquotaIva,
+			DdtNumero = CAST(CAST(doc.Numero AS VARCHAR(10)) + ISNULL('/' + doc.Sezionale, '') AS VARCHAR(20)),
+			DdtData = CONVERT(VARCHAR(10), doc.[Data], 103),
+			Destinatario = sd.NomeCompleto + ISNULL(' ' + sd.IndirizzoCompleto, ''),
+			Destinazione = ISNULL(sz.NomeCompleto + ISNULL(' ' + sz.IndirizzoCompleto, ''), sd.NomeCompleto + ISNULL(' ' + sd.IndirizzoCompleto, ''))
+		FROM
+			dbo.ufnImportiMagazzino_get_ApplicazioneRighe_List(@Id, NULL, NULL, NULL, 0) x
+			INNER JOIN dbo.ufnImportiMagazzino_get_Documenti(@Id, NULL, NULL, NULL) doc ON x.IdMovimento = doc.Id
+			LEFT JOIN dbo.tblClientiFornitori c ON c.Id = @IdClienteFornitore
+			LEFT JOIN dbo.tblSedi sd ON doc.IdDestinatario = sd.Id
+			LEFT JOIN dbo.tblSedi sz ON doc.IdDestinazione = sz.Id
+		WHERE x.IdImporto IS NOT NULL
+	),
+	righe AS (
+		SELECT
+			a.IdRiga,
+			a.PosDdt,
+			a.IdImporto,
+			g.Id,
+			g.Pos,
+			g.IdTipo,
+			MinimoFatturabile = CAST(ISNULL(g.MinimoFatturabile, 0) AS BIT),
+			Prezzo = g.Importo,
+			Quantita = CAST(CASE
+				WHEN g.Importo IS NULL THEN NULL
+				WHEN g.IdTipo = 'MM' THEN 1
+				WHEN g.IdTipo = 'MA' THEN a.Quantita
+			END AS DECIMAL(18, 4)),
+			IdUnitaMisura = CAST(CASE
+				WHEN g.Importo IS NULL THEN NULL
+				WHEN g.IdTipo = 'MM' THEN 'NR'
+				WHEN g.IdTipo = 'MA' THEN a.IdUnitaMisura
+			END AS CHAR(2)),
+			Descrizione = CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(d.Descrizione, ''),
+				'#1', ISNULL(a.Voce, '')),
+				'#2', ISNULL(a.DdtNumero, '')),
+				'#3', ISNULL(a.DdtData, '__/__/____')),
+				'#4', ISNULL(a.Destinatario, '')),
+				'#5', ISNULL(a.Destinazione, '')) AS VARCHAR(1000)),
+			IdAliquotaIva = ISNULL(d.IdAliquotaIva, a.IdAliquotaIvaCliente),
+			d.IdConto
+		FROM
+			a
+			INNER JOIN dbo.tblImportiRighe g ON a.IdImporto = g.IdImporto
+			LEFT JOIN dbo.tblImportiRigheDettagli d ON g.Id = d.Id
+		WHERE
+			-- A quantità: per ogni riga del DDT; le altre (per movimento, sola descrizione, minimo): una volta
+			a.Prima = 1
+			OR (g.Importo IS NOT NULL AND g.IdTipo = 'MA' AND ISNULL(g.MinimoFatturabile, 0) = 0)
+	),
+	minimo AS (
+		-- Per ogni importo, somma degli imponibili delle righe con cui si confronta il suo minimo fatturabile
+		SELECT
+			m.IdImporto,
+			Altre = ISNULL((
+				SELECT SUM(ROUND(x.Prezzo * x.Quantita, 2))
+				FROM righe x
+				WHERE
+					x.IdImporto = m.IdImporto
+					AND x.MinimoFatturabile = 0
+					AND x.Quantita IS NOT NULL
+					AND (m.IdTipo = 'MM' OR x.IdTipo <> 'MM')
+			), 0)
+		FROM righe m
+		WHERE
+			m.MinimoFatturabile = 1
+			AND m.Prezzo IS NOT NULL
+	)
+	SELECT
+		t.IdRiga,
+		t.PosDdt,
+		t.IdImporto,
+		t.Id,
+		t.Pos,
+		t.IdTipo,
+		t.MinimoFatturabile,
+		SolaDescrizione = CAST(IIF(t.Prezzo IS NULL, 1, 0) AS BIT),
+		t.Descrizione,
+		Quantita = CAST(IIF(t.MinimoFatturabile = 1, 1, t.Quantita) AS DECIMAL(18, 4)),
+		IdUnitaMisura = CAST(IIF(t.MinimoFatturabile = 1, 'NR', t.IdUnitaMisura) AS CHAR(2)),
+		Importo = CAST(IIF(t.MinimoFatturabile = 1, t.Prezzo - n.Altre, t.Prezzo) AS DECIMAL(18, 4)),
+		Imponibile = CAST(ROUND(IIF(t.MinimoFatturabile = 1, t.Prezzo - n.Altre, t.Prezzo * t.Quantita), 2) AS DECIMAL(18, 2)),
+		t.IdAliquotaIva,
+		t.IdConto
+	FROM
+		righe t
+		LEFT JOIN minimo n ON t.MinimoFatturabile = 1
+						  AND t.IdImporto = n.IdImporto
+	WHERE
+		-- Sola descrizione: sempre
+		t.Prezzo IS NULL
+		-- Riga normale: solo se ha una quantità
+		OR (t.MinimoFatturabile = 0 AND t.Quantita IS NOT NULL)
+		-- Minimo fatturabile: solo per la differenza non raggiunta dalle altre righe
+		OR (t.MinimoFatturabile = 1 AND t.Prezzo > n.Altre)
+);
+GO
+GO
+
+PRINT 'sql/functions/ufnFattureDocumenti_get_Rifiuti.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Generazione automatica delle fatture: registrazioni dei rifiuti candidate, con l'importo e il cliente che
+-- verrebbero applicati (ufnImportiRifiuti_get_Applicazione_List: il confronto con gli importi è fatto una volta
+-- per tutte le registrazioni; le righe si leggono con ufnImportiRifiuti_get_RigheImporto) e l'esito. Serve sia alla verifica
+-- (uspFatture_get_Genera_List) sia alla generazione (uspFatture_ins_Genera), così leggono le stesse righe.
+--   @Id: una sola registrazione ("Genera la fattura" dalla scheda); altrimenti @IdAzienda e l'intervallo di date.
+--   @IdClienteFornitore: solo i documenti riconducibili a quel cliente (quelli che gli verrebbero fatturati).
+--   @IncludiPreFatture = 1: rientrano anche i documenti già in una pre-fattura (IdPreFattura), che verrà
+--        convertita: in fattura vanno le righe della pre-fattura, non quelle ricalcolate dagli importi, e il
+--        cliente è quello della pre-fattura.
+-- Candidate: registrazioni confermate (Lock = 0) di un'operazione fatturabile, non rettifiche, di un registro
+-- di una sede che la sessione vede (titolarità), non ancora in una fattura (le pre-fatture non contano come
+-- fattura quando si includono).
+-- Fatturabile = 1: non annullata, non "Non fatturabile", con un importo che coincide, un
+-- cliente determinato, almeno una riga e l'aliquota IVA su ogni riga con importo (della riga o della scheda del
+-- cliente). Stessa condizione di uspFattureDocumenti_get ("Verifica importo e
+-- cliente" sulla scheda): vanno tenute allineate. Un documento in una pre-fattura inclusa è sempre fatturabile.
+CREATE OR ALTER FUNCTION dbo.ufnFattureDocumenti_get_Rifiuti (
+	@IdSessione CHAR(16),
+	@IdAzienda CHAR(16),
+	@Id CHAR(16),
+	@DataDa DATE,
+	@DataA DATE,
+	@IdClienteFornitore CHAR(16),
+	@IncludiPreFatture BIT)
+RETURNS TABLE
+AS
+RETURN
+(
+	SELECT
+		a.Id,
+		a.[Data],
+		a.Numero,
+		a.IdAzienda,
+		a.IdProduttore,
+		a.IdEer,
+		a.IdUnitaMisura,
+		a.Quantita,
+		a.IsAnnullata,
+		a.NonFatturabile,
+		IdPreFattura = IIF(a.IsPreFattura = 1, a.IdFattura, NULL),
+		a.IdImporto,
+		a.IdOffertaContratto,
+		IdClienteFornitore = IIF(a.IsPreFattura = 1, a.IdClientePreFattura, a.IdClienteFornitore),
+		a.ClienteOrigine,
+		a.IdImportoScartato,
+		-- Nessun importo coincide (per i DDT di magazzino: con almeno una riga)
+		SenzaImporto = CAST(IIF(a.IdImporto IS NULL, 1, 0) AS BIT),
+		Righe = ISNULL(t.Righe, 0),
+		Totale = t.Totale,
+		SenzaIva = ISNULL(t.SenzaIva, 0),
+		Fatturabile = CAST(CASE
+			WHEN a.IsPreFattura = 1 THEN 1
+			WHEN a.IsAnnullata = 0 AND a.NonFatturabile = 0
+				AND a.IdImporto IS NOT NULL AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0 THEN 1
+			ELSE 0
+		END AS BIT)
+	FROM
+		-- Registrazioni confermate di un'operazione fatturabile, non rettifiche, di @Id o dell'azienda nel
+		-- periodo, con l'importo e il cliente applicati: il confronto è fatto una volta per tutte
+		dbo.ufnImportiRifiuti_get_Applicazione_List(@Id, @IdAzienda, @DataDa, @DataA, 1) a
+		INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeRegistro = x.Id
+		OUTER APPLY (
+			SELECT
+				Totale = SUM(ISNULL(q.Imponibile, 0)),
+				Righe = COUNT(*),
+				SenzaIva = SUM(IIF(q.SolaDescrizione = 0 AND q.IdAliquotaIva IS NULL, 1, 0))
+			FROM dbo.ufnImportiRifiuti_get_RigheImporto(a.Id, a.IdImporto, a.IdClienteFornitore) q
+		) t
+	WHERE
+		-- Non ancora in una fattura; in una pre-fattura solo se si includono
+			(
+			a.IdFattura IS NULL
+			OR (a.IsPreFattura = 1 AND @IncludiPreFatture = 1)
+			)
+		AND
+			(
+			@IdClienteFornitore IS NULL
+			OR IIF(a.IsPreFattura = 1, a.IdClientePreFattura, a.IdClienteFornitore) = @IdClienteFornitore
+			)
+);
+GO
+GO
+
+PRINT 'sql/functions/ufnFattureDocumenti_get_Magazzino.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Generazione automatica delle fatture: DDT di magazzino candidati, con gli importi e il cliente che verrebbero
+-- applicati (ufnImportiMagazzino_get_Applicazione_List, con il confronto per riga del DDT) e l'esito. Stesse
+-- colonne e stessi parametri di ufnFattureDocumenti_get_Rifiuti: le due si leggono insieme in
+-- ufnFattureGenera_get_Documenti. Id è l'Id del movimento, Data e Numero quelli del DDT.
+--   @Id: un solo movimento ("Genera la fattura" dalla scheda); altrimenti @IdAzienda e l'intervallo di date.
+-- Candidati: DDT emessi e confermati di un movimento di scarico con una causale fatturabile, di una sede che la
+-- sessione vede, non ancora in una fattura (le pre-fatture non contano come fattura quando si includono).
+-- IdProduttore: qui è il destinatario del DDT, la sede per il raggruppamento "una fattura per sede".
+-- IdImporto, IdOffertaContratto: solo se sono gli stessi per tutte le righe del DDT.
+-- SenzaImporto = 1: il DDT non ha righe, oppure almeno una riga non ha un importo che coincide.
+-- Fatturabile = 1: non "Non fatturabile", tutte le righe con un importo, un cliente determinato, almeno una riga
+-- di fattura e l'aliquota IVA su ogni riga con importo. Stessa condizione di uspFattureDocumenti_get: vanno tenute
+-- allineate. Un DDT in una pre-fattura inclusa è sempre fatturabile.
+CREATE OR ALTER FUNCTION dbo.ufnFattureDocumenti_get_Magazzino (
+	@IdSessione CHAR(16),
+	@IdAzienda CHAR(16),
+	@Id CHAR(16),
+	@DataDa DATE,
+	@DataA DATE,
+	@IdClienteFornitore CHAR(16),
+	@IncludiPreFatture BIT)
+RETURNS TABLE
+AS
+RETURN
+(
+	SELECT
+		a.Id,
+		a.[Data],
+		a.Numero,
+		a.IdAzienda,
+		IdProduttore = a.IdDestinatario,
+		IdEer = CAST(NULL AS CHAR(6)),
+		IdUnitaMisura = CAST(NULL AS CHAR(2)),
+		Quantita = CAST(NULL AS DECIMAL(18, 2)),
+		IsAnnullata = CAST(0 AS BIT),
+		a.NonFatturabile,
+		IdPreFattura = IIF(a.IsPreFattura = 1, a.IdFattura, NULL),
+		a.IdImporto,
+		a.IdOffertaContratto,
+		IdClienteFornitore = IIF(a.IsPreFattura = 1, a.IdClientePreFattura, a.IdClienteFornitore),
+		a.ClienteOrigine,
+		IdImportoScartato = CAST(NULL AS CHAR(16)),
+		SenzaImporto = CAST(IIF(a.Righe = 0 OR a.RigheSenzaImporto > 0, 1, 0) AS BIT),
+		Righe = ISNULL(t.Righe, 0),
+		Totale = t.Totale,
+		SenzaIva = ISNULL(t.SenzaIva, 0),
+		Fatturabile = CAST(CASE
+			WHEN a.IsPreFattura = 1 THEN 1
+			WHEN a.NonFatturabile = 0 AND a.Righe > 0 AND a.RigheSenzaImporto = 0
+				AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0 THEN 1
+			ELSE 0
+		END AS BIT)
+	FROM
+		dbo.ufnImportiMagazzino_get_Applicazione_List(@Id, @IdAzienda, @DataDa, @DataA, 1) a
+		INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeDdt = x.Id
+		OUTER APPLY (
+			SELECT
+				Totale = SUM(ISNULL(q.Imponibile, 0)),
+				Righe = COUNT(*),
+				SenzaIva = SUM(IIF(q.SolaDescrizione = 0 AND q.IdAliquotaIva IS NULL, 1, 0))
+			FROM dbo.ufnImportiMagazzino_get_RigheFattura(a.Id, a.IdClienteFornitore) q
+		) t
+	WHERE
+		-- Non ancora in una fattura; in una pre-fattura solo se si includono
+			(
+			a.IdFattura IS NULL
+			OR (a.IsPreFattura = 1 AND @IncludiPreFatture = 1)
+			)
+		AND
+			(
+			@IdClienteFornitore IS NULL
+			OR IIF(a.IsPreFattura = 1, a.IdClientePreFattura, a.IdClienteFornitore) = @IdClienteFornitore
+			)
+);
+GO
+GO
+
+PRINT 'sql/functions/ufnFattureGenera_get_Documenti.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Generazione automatica delle fatture: i documenti candidati, cioè le registrazioni dei rifiuti
+-- (ufnFattureDocumenti_get_Rifiuti, con @Rifiuti = 1) e i DDT di magazzino (ufnFattureDocumenti_get_Magazzino,
+-- con @Magazzino = 1), con in più ciò che serve a raggrupparli in fatture e a riepilogarli. IdModulo dice da
+-- quale dei due viene il documento (RIF, MAG): per un DDT, Id è l'Id del movimento.
+-- La leggono il riepilogo (uspFatture_get_Genera_Riepilogo), l'anteprima delle fatture
+-- (uspFatture_get_Genera_Fatture_List), l'elenco di dettaglio (uspFatture_get_Genera_List) e la generazione
+-- (uspFatture_ins_Genera): così contano, mostrano e generano le stesse cose.
+--   GruppoSede, GruppoContratto: con il cliente dicono in quale fattura va il documento, secondo il
+--        raggruppamento della scheda del cliente (tblClientiFornitori.IdRaggruppamento): S una fattura per sede
+--        del produttore, T una per contratto, altrimenti una per cliente (entrambi NULL). I documenti di una
+--        stessa pre-fattura restano insieme: prendono il gruppo del suo primo documento (data, numero).
+--   PrimoDellaPreFattura: il primo documento della sua pre-fattura, che ne porta le righe e l'imponibile.
+--   Imponibile: quello delle righe dell'importo applicato; per una pre-fattura il suo imponibile, una volta
+--        sola, sul primo documento (NULL sugli altri).
+--   Esito: F fatturabile; S fatturabile con l'importo standard perché il contratto non è valido alla data;
+--        P in una pre-fattura che verrà convertita; A annullata; N indicata come non fatturabile; I nessun
+--        importo coincide; C cliente non determinato; R l'importo non ha righe applicabili; V manca
+--        l'aliquota IVA. F, S e P entrano in una fattura (Fatturabile = 1).
+CREATE OR ALTER FUNCTION dbo.ufnFattureGenera_get_Documenti (
+	@IdSessione CHAR(16),
+	@IdAzienda CHAR(16),
+	@Id CHAR(16),
+	@DataDa DATE,
+	@DataA DATE,
+	@IdClienteFornitore CHAR(16),
+	@IncludiPreFatture BIT,
+	@Rifiuti BIT,
+	@Magazzino BIT)
+RETURNS TABLE
+AS
+RETURN
+(
+	SELECT
+		t.Id,
+		t.IdModulo,
+		t.[Data],
+		t.Numero,
+		t.IdAzienda,
+		t.IdProduttore,
+		t.IdEer,
+		t.IdUnitaMisura,
+		t.Quantita,
+		t.IsAnnullata,
+		t.NonFatturabile,
+		t.IdPreFattura,
+		t.IdImporto,
+		t.IdOffertaContratto,
+		t.IdClienteFornitore,
+		t.ClienteOrigine,
+		t.IdImportoScartato,
+		t.Righe,
+		t.Totale,
+		t.SenzaIva,
+		t.Fatturabile,
+		PrimoDellaPreFattura = CAST(IIF(t.IdPreFattura IS NOT NULL AND t.N = 1, 1, 0) AS BIT),
+		GruppoSede = IIF(t.IdPreFattura IS NULL, t.GruppoSedeProprio,
+			FIRST_VALUE(t.GruppoSedeProprio) OVER (PARTITION BY t.IdPreFattura ORDER BY t.[Data], t.Numero, t.Id)),
+		GruppoContratto = IIF(t.IdPreFattura IS NULL, t.GruppoContrattoProprio,
+			FIRST_VALUE(t.GruppoContrattoProprio) OVER (PARTITION BY t.IdPreFattura ORDER BY t.[Data], t.Numero, t.Id)),
+		Imponibile = CASE
+			WHEN t.IdPreFattura IS NULL THEN t.Totale
+			WHEN t.N = 1 THEN pf.Imponibile
+		END,
+		Esito = CAST(CASE
+			WHEN t.IdPreFattura IS NOT NULL THEN 'P'
+			WHEN t.Fatturabile = 1 AND t.IdImportoScartato IS NOT NULL AND t.IdOffertaContratto IS NULL THEN 'S'
+			WHEN t.Fatturabile = 1 THEN 'F'
+			WHEN t.IsAnnullata = 1 THEN 'A'
+			WHEN t.NonFatturabile = 1 THEN 'N'
+			WHEN t.SenzaImporto = 1 THEN 'I'
+			WHEN t.IdClienteFornitore IS NULL THEN 'C'
+			WHEN t.Righe = 0 THEN 'R'
+			ELSE 'V'
+		END AS CHAR(1))
+	FROM
+		(
+			SELECT
+				d.Id,
+				d.IdModulo,
+				d.[Data],
+				d.Numero,
+				d.IdAzienda,
+				d.IdProduttore,
+				d.IdEer,
+				d.IdUnitaMisura,
+				d.Quantita,
+				d.IsAnnullata,
+				d.NonFatturabile,
+				d.IdPreFattura,
+				d.IdImporto,
+				d.IdOffertaContratto,
+				d.IdClienteFornitore,
+				d.ClienteOrigine,
+				d.IdImportoScartato,
+				d.SenzaImporto,
+				d.Righe,
+				d.Totale,
+				d.SenzaIva,
+				d.Fatturabile,
+				GruppoSedeProprio = IIF(c.IdRaggruppamento = 'S', d.IdProduttore, NULL),
+				GruppoContrattoProprio = IIF(c.IdRaggruppamento = 'T', d.IdOffertaContratto, NULL),
+				-- Posizione del documento nella sua pre-fattura (conta solo dove IdPreFattura non è NULL)
+				N = ROW_NUMBER() OVER (PARTITION BY d.IdPreFattura ORDER BY d.[Data], d.Numero, d.Id)
+			FROM
+				(
+					SELECT IdModulo = CAST('RIF' AS CHAR(3)), Id, [Data], Numero, IdAzienda, IdProduttore, IdEer, IdUnitaMisura, Quantita, IsAnnullata, NonFatturabile, IdPreFattura, IdImporto, IdOffertaContratto, IdClienteFornitore, ClienteOrigine, IdImportoScartato, SenzaImporto, Righe, Totale, SenzaIva, Fatturabile
+					FROM dbo.ufnFattureDocumenti_get_Rifiuti(@IdSessione, @IdAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture)
+					WHERE @Rifiuti = 1
+
+					UNION ALL
+
+					SELECT IdModulo = CAST('MAG' AS CHAR(3)), Id, [Data], Numero, IdAzienda, IdProduttore, IdEer, IdUnitaMisura, Quantita, IsAnnullata, NonFatturabile, IdPreFattura, IdImporto, IdOffertaContratto, IdClienteFornitore, ClienteOrigine, IdImportoScartato, SenzaImporto, Righe, Totale, SenzaIva, Fatturabile
+					FROM dbo.ufnFattureDocumenti_get_Magazzino(@IdSessione, @IdAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture)
+					WHERE @Magazzino = 1
+				) d
+				LEFT JOIN dbo.tblClientiFornitori c ON d.IdClienteFornitore = c.Id
+		) t
+		OUTER APPLY dbo.ufnFatture_get_Totali(IIF(t.N = 1, t.IdPreFattura, NULL)) pf
+);
+GO
+GO
+
+PRINT 'sql/functions/ufnFattureDocumenti_get_Documento.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Blocco "Cliente a cui fatturare": il documento @Id del modulo @IdModulo (RIF registrazione dei rifiuti, MAG
+-- movimento di magazzino con il suo DDT), se la sessione lo vede (titolarità sulla sede del registro o del DDT).
+-- Una riga al massimo. Serve alle SP uspFattureDocumenti_*, così permessi e dati di base del documento sono
+-- letti nello stesso modo per ogni modulo.
+-- IsFatturabile: registrazione di un'operazione fatturabile e non rettifica; DDT emesso di un movimento di
+-- scarico con una causale fatturabile. Lock: 0 se il documento è confermato.
+CREATE OR ALTER FUNCTION dbo.ufnFattureDocumenti_get_Documento (
+	@Id CHAR(16),
+	@IdModulo CHAR(3),
+	@IdSessione CHAR(16))
+RETURNS TABLE
+AS
+RETURN
+(
+	SELECT
+		a.Id,
+		IdModulo = CAST('RIF' AS CHAR(3)),
+		a.IdAzienda,
+		Lock = CAST(a.Lock AS TINYINT),
+		IsFatturabile = CAST(IIF(a.IsFatturabile = 1 AND a.IsRettifica = 0, 1, 0) AS BIT),
+		a.IdFattura,
+		a.IdClienteIndicato
+	FROM
+		dbo.ufnImportiRifiuti_get_Applicazione(@Id) a
+		INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeRegistro = x.Id
+	WHERE @IdModulo = 'RIF'
+
+	UNION ALL
+
+	SELECT
+		a.Id,
+		IdModulo = CAST('MAG' AS CHAR(3)),
+		a.IdAzienda,
+		a.Lock,
+		a.IsFatturabile,
+		a.IdFattura,
+		a.IdClienteIndicato
+	FROM
+		dbo.ufnImportiMagazzino_get_Applicazione_List(@Id, NULL, NULL, NULL, 0) a
+		INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeDdt = x.Id
+	WHERE @IdModulo = 'MAG'
 );
 GO
 GO
@@ -1841,6 +2622,1688 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 
+END;
+GO
+GO
+
+PRINT 'sql/procedures/uspFatture_get_Genera_Fatture_List.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Fatturazione > Fatture clienti > Nuova > Tramite procedura automatica: anteprima delle fatture che la
+-- generazione creerebbe con gli stessi criteri ("Visualizza" sulla riga delle fatture previste della finestra
+-- "Verifica"). Una riga per fattura: cliente, raggruppamento (la sede del produttore o il contratto, quando la
+-- scheda del cliente chiede una fattura per sede o per contratto), documenti, pre-fatture convertite, imponibile.
+-- Stessi documenti e stessi gruppi di uspFatture_ins_Genera (ufnFattureGenera_get_Documenti).
+-- Al massimo @MaxRighe righe (predefinito 1000): RowsCount dice quante sono in tutto.
+CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_Fatture_List
+	@IdSessione CHAR(16) = NULL,
+	@DataDa DATE = NULL,
+	@DataA DATE = NULL,
+	@IdClienteFornitore CHAR(16) = NULL,
+	@Rifiuti BIT = 1,
+	@IncludiPreFatture BIT = 0,
+	@MaxRighe INT = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdClienteFornitore = NULLIF(NULLIF(LTRIM(RTRIM(@IdClienteFornitore)), ''), REPLICATE('0', 16));
+		SET @Rifiuti = ISNULL(@Rifiuti, 1);
+		SET @IncludiPreFatture = ISNULL(@IncludiPreFatture, 0);
+		SET @MaxRighe = IIF(ISNULL(@MaxRighe, 0) < 1, 1000, @MaxRighe);
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @DataDa IS NULL OR @DataA IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare il periodo dei documenti da fatturare';
+			GOTO BRANCH_END;
+		END
+		IF @DataA < @DataDa
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La data di fine del periodo non può precedere quella di inizio';
+			GOTO BRANCH_END;
+		END
+
+		-- Permesso sulle fatture e modulo Offerte e contratti attivo sul dominio
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'FTT',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso OR ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idAzienda CHAR(16);
+		SELECT @idAzienda = IdAzienda
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
+		-- Senza azienda nel contesto nessuna riga
+		SELECT TOP (@MaxRighe)
+			Id = t.IdClienteFornitore,
+			Cliente = sc.NomeCompleto,
+			Raggruppamento = CAST(CASE
+				WHEN t.GruppoSede IS NOT NULL THEN 'Sede: ' + sp.NomeCompleto
+				WHEN t.GruppoContratto IS NOT NULL THEN 'Contratto'
+					+ ISNULL(' ' + NULLIF(oc.Protocollo, ''), '')
+					+ ISNULL(' del ' + CONVERT(VARCHAR(10), oc.DataInizio, 103), '')
+					+ ISNULL(' - ' + NULLIF(oc.Descrizione, ''), '')
+			END AS VARCHAR(300)),
+			t.Documenti,
+			t.PreFatture,
+			t.Imponibile,
+			RowsCount = COUNT(*) OVER ()
+		FROM
+			(
+				SELECT
+					d.IdClienteFornitore,
+					d.GruppoSede,
+					d.GruppoContratto,
+					Documenti = COUNT(*),
+					PreFatture = COUNT(DISTINCT d.IdPreFattura),
+					Imponibile = SUM(ISNULL(d.Imponibile, 0))
+				FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, 0) d
+				WHERE
+					@Rifiuti = 1
+					AND d.Fatturabile = 1
+				GROUP BY d.IdClienteFornitore, d.GruppoSede, d.GruppoContratto
+			) t
+			LEFT JOIN dbo.tblClientiFornitori c ON t.IdClienteFornitore = c.Id
+			LEFT JOIN dbo.tblSedi sc ON c.IdSede = sc.Id
+			LEFT JOIN dbo.tblSedi sp ON t.GruppoSede = sp.Id
+			LEFT JOIN dbo.tblOfferteContratti oc ON t.GruppoContratto = oc.Id
+		ORDER BY sc.NomeCompleto, t.IdClienteFornitore, t.GruppoSede, t.GruppoContratto
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+GO
+
+PRINT 'sql/procedures/uspFatture_get_Genera_List.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Fatturazione > Fatture clienti > Nuova > Tramite procedura automatica: elenco di dettaglio della verifica
+-- ("Visualizza" sulle righe della finestra "Verifica"; i conteggi sono in uspFatture_get_Genera_Riepilogo).
+-- Elenca i documenti (per ora le registrazioni dei rifiuti) dell'azienda interna corrente della sessione con data
+-- nell'intervallo, con il cliente, l'importo e l'imponibile che la generazione userebbe e l'esito:
+-- Fatturabile = 1 entra in una fattura, altrimenti Avviso dice perché resta fuori. Stesse righe di
+-- uspFatture_ins_Genera (ufnFattureGenera_get_Documenti).
+--   @Rifiuti = 0: le registrazioni dei rifiuti non sono state scelte (nessuna riga, finché è l'unico modulo).
+--   @IdClienteFornitore: solo i documenti riconducibili a quel cliente.
+--   @IncludiPreFatture = 1: anche i documenti già in una pre-fattura, che verrà convertita in fattura con le
+--        sue righe; l'imponibile della pre-fattura è riportato sul suo primo documento.
+--   @Esito: solo i documenti con quell'esito (codici di ufnFattureGenera_get_Documenti.Esito); F = tutti quelli
+--        che entrano in una fattura (F, S e P). NULL: tutti.
+-- I documenti già in una fattura non compaiono; quelli annullati sì, con il loro avviso.
+-- Al massimo @MaxRighe righe (predefinito 1000): RowsCount dice quante sono in tutto.
+CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_List
+	@IdSessione CHAR(16) = NULL,
+	@DataDa DATE = NULL,
+	@DataA DATE = NULL,
+	@IdClienteFornitore CHAR(16) = NULL,
+	@Esito CHAR(1) = NULL,
+	@Rifiuti BIT = 1,
+	@IncludiPreFatture BIT = 0,
+	@MaxRighe INT = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdClienteFornitore = NULLIF(NULLIF(LTRIM(RTRIM(@IdClienteFornitore)), ''), REPLICATE('0', 16));
+		SET @Esito = NULLIF(UPPER(LTRIM(RTRIM(@Esito))), '');
+		SET @Rifiuti = ISNULL(@Rifiuti, 1);
+		SET @IncludiPreFatture = ISNULL(@IncludiPreFatture, 0);
+		SET @MaxRighe = IIF(ISNULL(@MaxRighe, 0) < 1, 1000, @MaxRighe);
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @DataDa IS NULL OR @DataA IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare il periodo dei documenti da fatturare';
+			GOTO BRANCH_END;
+		END
+		IF @DataA < @DataDa
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La data di fine del periodo non può precedere quella di inizio';
+			GOTO BRANCH_END;
+		END
+
+		-- Permesso sulle fatture e modulo Offerte e contratti attivo sul dominio
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'FTT',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso OR ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idAzienda CHAR(16);
+		SELECT @idAzienda = IdAzienda
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
+		-- Senza azienda nel contesto nessuna riga
+		SELECT TOP (@MaxRighe)
+			d.Id,
+			IdModulo = CAST('RIF' AS CHAR(3)),
+			Documento = CAST('Registrazione' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)), '')
+				+ ISNULL(' - EER ' + e.Nome + IIF(e.Pericoloso = 1, '*', ''), '') AS VARCHAR(100)),
+			d.[Data],
+			d.Quantita,
+			UnitaMisura = d.IdUnitaMisura,
+			Cliente = sc.NomeCompleto,
+			Importo = CAST(IIF(d.IdPreFattura IS NULL, i.Nome, 'Righe della pre-fattura') AS VARCHAR(50)),
+			Contratto = CAST(IIF(d.IdPreFattura IS NULL AND d.IdOffertaContratto IS NOT NULL, 1, 0) AS BIT),
+			PreFattura = CAST(IIF(d.IdPreFattura IS NULL, 0, 1) AS BIT),
+			-- Pre-fattura: il suo imponibile una volta sola, sul primo dei suoi documenti
+			Totale = d.Imponibile,
+			d.Fatturabile,
+			d.Esito,
+			Avviso = CAST(CASE d.Esito
+				WHEN 'P' THEN 'In pre-fattura del ' + ISNULL(CONVERT(VARCHAR(10), f.DataEmissione, 103), '') + ': viene convertita in fattura con le sue righe'
+				WHEN 'S' THEN 'Contratto non valido alla data: applicato l''importo standard'
+				WHEN 'A' THEN 'Registrazione annullata'
+				WHEN 'N' THEN 'Indicata come non fatturabile'
+				WHEN 'I' THEN 'Nessun importo coincide'
+				WHEN 'C' THEN 'Cliente non determinato: il produttore non ha una scheda cliente'
+				WHEN 'R' THEN 'L''importo non ha righe applicabili'
+				WHEN 'V' THEN 'Aliquota IVA non indicata né sull''importo né sulla scheda del cliente'
+			END AS VARCHAR(200)),
+			RowsCount = COUNT(*) OVER ()
+		FROM
+			dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, 0) d
+			LEFT JOIN dbo.tblRifiutiEer e ON d.IdEer = e.Id
+			LEFT JOIN dbo.tblClientiFornitori c ON d.IdClienteFornitore = c.Id
+			LEFT JOIN dbo.tblSedi sc ON c.IdSede = sc.Id
+			LEFT JOIN dbo.tblImporti i ON d.IdImporto = i.Id
+			LEFT JOIN dbo.tblFatture f ON d.IdPreFattura = f.Id
+		WHERE
+			@Rifiuti = 1
+			AND
+				(
+				@Esito IS NULL
+				OR (@Esito = 'F' AND d.Fatturabile = 1)
+				OR (@Esito <> 'F' AND d.Esito = @Esito)
+				)
+		ORDER BY d.Fatturabile DESC, sc.NomeCompleto, d.[Data], d.Numero, d.Id
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+GO
+
+PRINT 'sql/procedures/uspFatture_get_Genera_Riepilogo.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Fatturazione > Fatture clienti > Nuova > Tramite procedura automatica: riepilogo della verifica, mostrato nella
+-- finestra "Verifica" prima di generare. Una riga con i conteggi di ciò che la generazione farebbe con gli stessi
+-- criteri (stessi documenti e stessi gruppi di uspFatture_ins_Genera: ufnFattureGenera_get_Documenti), calcolati
+-- su tutti i documenti, senza limite di righe.
+--   Documenti: documenti del periodo non ancora fatturati (con @IncludiPreFatture anche quelli in pre-fattura).
+--   Fatturabili, Fatture, Clienti, Imponibile: documenti che entrano in una fattura, fatture previste (una per
+--        cliente e, secondo la scheda del cliente, per sede o per contratto), clienti e imponibile totale.
+--   PreFatture, DocumentiPreFatture: pre-fatture che verrebbero convertite e loro documenti nel periodo.
+--   ImportoStandard: fatturabili con l'importo standard perché il contratto non è valido alla data.
+--   Annullati, NonFatturabili, SenzaImporto, SenzaCliente, SenzaRighe, SenzaIva: documenti che restano fuori,
+--        per motivo (uno solo per documento, nell'ordine di ufnFattureGenera_get_Documenti.Esito).
+--   GiaFatturati: documenti del periodo già in una fattura (solo informativo: non rientrano).
+--   InPreFattura: documenti del periodo già in una pre-fattura, quando non si includono le pre-fatture.
+-- @Rifiuti = 0: le registrazioni dei rifiuti non sono state scelte (tutto a zero, finché è l'unico modulo).
+-- Senza azienda nel contesto tutto a zero.
+CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_Riepilogo
+	@IdSessione CHAR(16) = NULL,
+	@DataDa DATE = NULL,
+	@DataA DATE = NULL,
+	@IdClienteFornitore CHAR(16) = NULL,
+	@Rifiuti BIT = 1,
+	@IncludiPreFatture BIT = 0
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdClienteFornitore = NULLIF(NULLIF(LTRIM(RTRIM(@IdClienteFornitore)), ''), REPLICATE('0', 16));
+		SET @Rifiuti = ISNULL(@Rifiuti, 1);
+		SET @IncludiPreFatture = ISNULL(@IncludiPreFatture, 0);
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @DataDa IS NULL OR @DataA IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare il periodo dei documenti da fatturare';
+			GOTO BRANCH_END;
+		END
+		IF @DataA < @DataDa
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La data di fine del periodo non può precedere quella di inizio';
+			GOTO BRANCH_END;
+		END
+
+		-- Permesso sulle fatture e modulo Offerte e contratti attivo sul dominio
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'FTT',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso OR ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idAzienda CHAR(16);
+		SELECT @idAzienda = IdAzienda
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
+		-- Documenti candidati, letti una volta sola
+		DECLARE @doc TABLE (
+			Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY,
+			IdClienteFornitore CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			IdPreFattura CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			GruppoSede CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			GruppoContratto CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			Imponibile DECIMAL(18, 2) NULL,
+			Fatturabile BIT NOT NULL,
+			Esito CHAR(1) COLLATE DATABASE_DEFAULT NOT NULL
+		);
+		INSERT @doc (Id, IdClienteFornitore, IdPreFattura, GruppoSede, GruppoContratto, Imponibile, Fatturabile, Esito)
+		SELECT
+			d.Id,
+			d.IdClienteFornitore,
+			d.IdPreFattura,
+			d.GruppoSede,
+			d.GruppoContratto,
+			d.Imponibile,
+			d.Fatturabile,
+			d.Esito
+		FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, 0) d
+		WHERE @Rifiuti = 1
+		OPTION (RECOMPILE);
+
+		-- Documenti del periodo già in una fattura o in una pre-fattura (stessa platea dei candidati:
+		-- registrazioni confermate di un'operazione fatturabile, non rettifiche, dei registri che la sessione vede)
+		DECLARE @giaFatturati INT = 0;
+		DECLARE @inPreFattura INT = 0;
+		SELECT
+			@giaFatturati = ISNULL(SUM(IIF(f.IdTipo = 'TD00', 0, 1)), 0),
+			@inPreFattura = ISNULL(SUM(IIF(f.IdTipo = 'TD00', 1, 0)), 0)
+		FROM
+			dbo.tblRifiutiRegistrazioni r
+			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
+			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+			INNER JOIN dbo.tblSedi sr ON g.IdSede = sr.Id
+			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON g.IdSede = x.Id
+			INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
+			INNER JOIN dbo.tblFattureDocumenti fd ON r.Id = fd.Id
+			INNER JOIN dbo.tblFatture f ON fd.IdFattura = f.Id
+		WHERE
+			@Rifiuti = 1
+			AND r.Lock = 0
+			AND o.IsFatturabile = 1
+			AND v.IsRettifica = 0
+			AND f.Lock IN (0, 2)
+			AND sr.IdAziendaInterna = @idAzienda
+			AND r.[Data] >= @DataDa
+			AND r.[Data] <= @DataA
+			AND (@IdClienteFornitore IS NULL OR f.IdClienteFornitore = @IdClienteFornitore)
+		OPTION (RECOMPILE);
+
+		SELECT
+			Documenti = COUNT(*),
+			Fatturabili = ISNULL(SUM(IIF(d.Fatturabile = 1, 1, 0)), 0),
+			Fatture = (
+				SELECT COUNT(*)
+				FROM (SELECT DISTINCT IdClienteFornitore, GruppoSede, GruppoContratto FROM @doc WHERE Fatturabile = 1) q
+			),
+			Clienti = COUNT(DISTINCT IIF(d.Fatturabile = 1, d.IdClienteFornitore, NULL)),
+			Imponibile = ISNULL(SUM(IIF(d.Fatturabile = 1, ISNULL(d.Imponibile, 0), 0)), 0),
+			PreFatture = COUNT(DISTINCT d.IdPreFattura),
+			DocumentiPreFatture = ISNULL(SUM(IIF(d.Esito = 'P', 1, 0)), 0),
+			ImportoStandard = ISNULL(SUM(IIF(d.Esito = 'S', 1, 0)), 0),
+			Annullati = ISNULL(SUM(IIF(d.Esito = 'A', 1, 0)), 0),
+			NonFatturabili = ISNULL(SUM(IIF(d.Esito = 'N', 1, 0)), 0),
+			SenzaImporto = ISNULL(SUM(IIF(d.Esito = 'I', 1, 0)), 0),
+			SenzaCliente = ISNULL(SUM(IIF(d.Esito = 'C', 1, 0)), 0),
+			SenzaRighe = ISNULL(SUM(IIF(d.Esito = 'R', 1, 0)), 0),
+			SenzaIva = ISNULL(SUM(IIF(d.Esito = 'V', 1, 0)), 0),
+			GiaFatturati = @giaFatturati,
+			-- Con le pre-fatture incluse quei documenti sono già tra i candidati
+			InPreFattura = IIF(@IncludiPreFatture = 1, 0, @inPreFattura)
+		FROM @doc d;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+GO
+
+PRINT 'sql/procedures/uspFatture_ins_Genera.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Generazione automatica delle fatture clienti dai documenti fatturabili (registrazioni dei rifiuti e DDT di magazzino),
+-- con gli importi del modulo Offerte e contratti (regole O5 e O6 di docs/regole/offerte-contratti.md).
+--   @Id (con @IdModulo = 'RIF' o 'MAG'): un solo documento, registrazione dei rifiuti o DDT di magazzino
+--        ("Genera la fattura" dalla scheda); l'azienda è quella del
+--        documento. Se il documento non è fatturabile la SP lo rifiuta.
+--   Senza @Id: i documenti dell'azienda interna corrente della sessione con data tra @DataDa e @DataA,
+--        eventualmente riconducibili al solo cliente @IdClienteFornitore (Fatture clienti > Nuovo > Tramite
+--        procedura automatica). @Rifiuti = 0: le registrazioni dei rifiuti non sono state scelte.
+-- Entrano solo i documenti fatturabili, raggruppati come li mostra la verifica (ufnFattureGenera_get_Documenti).
+-- Una fattura per cliente; secondo il raggruppamento della scheda del cliente (tblClientiFornitori.
+-- IdRaggruppamento) una per sede del produttore (S) o una per contratto (T): solo in quest'ultimo caso la
+-- fattura riporta ordine, data dell'ordine, CIG e CUP del contratto.
+-- Fattura: tipo TD01 (TD00, pre-fattura senza numero, con @PreFattura = 1), stato Generata, attiva; data di
+-- emissione e di registrazione @DataEmissione (oggi se non indicata); condizioni di pagamento, banca, IBAN,
+-- valuta e split payment dalla scheda del cliente; numero successivo dell'anno senza sezionale, assegnato con
+-- lo stesso blocco di uspFatture_upd. Righe: quelle dell'importo applicato a ogni documento, nell'ordine dei
+-- documenti (data, numero); ritenuta d'acconto della scheda del cliente. Rate: uspFattureRate_ins_Genera.
+-- Pre-fatture (@IncludiPreFatture = 1): i documenti già in una pre-fattura rientrano e la pre-fattura viene
+-- convertita PER INTERO: le sue righe (non ricalcolate dagli importi, con aliquota, conto e ritenuta che hanno)
+-- vanno nella fattura del suo cliente insieme agli altri documenti, al posto del suo primo documento, e tutti i
+-- suoi documenti, anche quelli fuori dal periodo, passano alla nuova fattura. Con @RimuoviPreFatture = 1 la
+-- pre-fattura viene poi cancellata (Lock 4), altrimenti resta in elenco senza più documenti collegati.
+-- Ogni documento resta legato alla fattura (tblFattureDocumenti, con importo e contratto applicati) e non
+-- viene fatturato due volte: un documento fatturato nel frattempo da un'altra sessione fa saltare la sua fattura.
+-- Una transazione per fattura. Restituisce Fatture, Documenti e IdFattura (l'ultima generata).
+CREATE OR ALTER PROCEDURE dbo.uspFatture_ins_Genera
+	@IdSessione CHAR(16) = NULL,
+	@Id CHAR(16) = NULL,
+	@IdModulo CHAR(3) = NULL,
+	@DataDa DATE = NULL,
+	@DataA DATE = NULL,
+	@IdClienteFornitore CHAR(16) = NULL,
+	@DataEmissione DATE = NULL,
+	@PreFattura BIT = 0,
+	@Rifiuti BIT = 1,
+	@Magazzino BIT = 0,
+	@IncludiPreFatture BIT = 0,
+	@RimuoviPreFatture BIT = 0
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Id = NULLIF(NULLIF(LTRIM(RTRIM(@Id)), ''), REPLICATE('0', 16));
+		SET @IdModulo = NULLIF(UPPER(LTRIM(RTRIM(@IdModulo))), '');
+		SET @IdClienteFornitore = NULLIF(NULLIF(LTRIM(RTRIM(@IdClienteFornitore)), ''), REPLICATE('0', 16));
+		SET @DataEmissione = ISNULL(@DataEmissione, CAST(GETDATE() AS DATE));
+		SET @PreFattura = ISNULL(@PreFattura, 0);
+		SET @Rifiuti = ISNULL(@Rifiuti, 1);
+		SET @Magazzino = ISNULL(@Magazzino, 0);
+		SET @IncludiPreFatture = ISNULL(@IncludiPreFatture, 0);
+		SET @RimuoviPreFatture = ISNULL(@RimuoviPreFatture, 0);
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @Id IS NOT NULL AND ISNULL(@IdModulo, '') NOT IN ('RIF', 'MAG')
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF o MAG';
+			GOTO BRANCH_END;
+		END
+		IF @Id IS NULL AND (@DataDa IS NULL OR @DataA IS NULL)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare il periodo dei documenti da fatturare';
+			GOTO BRANCH_END;
+		END
+		IF @Id IS NULL AND @DataA < @DataDa
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La data di fine del periodo non può precedere quella di inizio';
+			GOTO BRANCH_END;
+		END
+		-- Convertire le pre-fatture in altre pre-fatture non ha senso
+		IF @PreFattura = 1 AND @IncludiPreFatture = 1
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Per includere le pre-fatture togliere la spunta "Genera come pre-fatture"';
+			GOTO BRANCH_END;
+		END
+
+		-- Permesso di modifica sulle fatture e modulo Offerte e contratti attivo sul dominio
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'FTT',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso OR ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari per generare le fatture';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idAzienda CHAR(16);
+		IF @Id IS NULL
+		BEGIN
+			SELECT @idAzienda = IdAzienda
+			FROM dbo.tblSessioni
+			WHERE Id = @IdSessione;
+
+			IF @idAzienda IS NULL
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Selezionare l''azienda';
+				GOTO BRANCH_END;
+			END
+		END
+		ELSE
+		BEGIN
+			-- Un solo documento, del suo modulo (registrazione dei rifiuti o DDT di magazzino), senza pre-fatture
+			SET @Rifiuti = IIF(@IdModulo = 'RIF', 1, 0);
+			SET @Magazzino = IIF(@IdModulo = 'MAG', 1, 0);
+			SET @IncludiPreFatture = 0;
+		END
+
+		-- Documenti da fatturare, con il raggruppamento della scheda del cliente
+		DECLARE @doc TABLE (
+			Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY,
+			IdModulo CHAR(3) COLLATE DATABASE_DEFAULT NOT NULL,
+			[Data] DATE NULL,
+			Numero INT NULL,
+			IdAzienda CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL,
+			IdImporto CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			IdOffertaContratto CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			IdClienteFornitore CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL,
+			IdPreFattura CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			-- Primo documento della sua pre-fattura: porta le righe della pre-fattura e decide il gruppo
+			PrimoDellaPreFattura BIT NOT NULL,
+			GruppoSede CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			GruppoContratto CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			Fatturabile BIT NOT NULL
+		);
+		INSERT @doc (Id, IdModulo, [Data], Numero, IdAzienda, IdImporto, IdOffertaContratto, IdClienteFornitore, IdPreFattura, PrimoDellaPreFattura, GruppoSede, GruppoContratto, Fatturabile)
+		SELECT
+			d.Id,
+			d.IdModulo,
+			d.[Data],
+			d.Numero,
+			d.IdAzienda,
+			d.IdImporto,
+			d.IdOffertaContratto,
+			ISNULL(d.IdClienteFornitore, REPLICATE('0', 16)),
+			d.IdPreFattura,
+			d.PrimoDellaPreFattura,
+			d.GruppoSede,
+			d.GruppoContratto,
+			d.Fatturabile
+		FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, @Magazzino) d
+		WHERE
+			(@Id IS NOT NULL OR d.Fatturabile = 1)
+		OPTION (RECOMPILE);
+
+		IF @Id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM @doc WHERE Fatturabile = 1)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il documento non è fatturabile: usare "Verifica importo e cliente" per vedere il motivo';
+			GOTO BRANCH_END;
+		END
+
+		-- Righe di fattura di ogni documento, calcolate ora una volta per tutte: quelle dell'importo applicato
+		-- oppure, per il primo documento di una pre-fattura, le righe della pre-fattura così come sono
+		DECLARE @righe TABLE (
+			N INT IDENTITY(1, 1) NOT NULL PRIMARY KEY,
+			IdDocumento CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL,
+			IdRiga CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			Descrizione VARCHAR(1000) NULL,
+			SolaDescrizione BIT NOT NULL,
+			Quantita DECIMAL(18, 4) NULL,
+			IdUnitaMisura CHAR(2) COLLATE DATABASE_DEFAULT NULL,
+			Importo DECIMAL(18, 4) NULL,
+			IdAliquotaIva CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			IdConto CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			-- NULL: la ritenuta è quella della scheda del cliente
+			RitenutaAcconto INT NULL
+		);
+		INSERT @righe (IdDocumento, Descrizione, SolaDescrizione, Quantita, IdUnitaMisura, Importo, IdAliquotaIva, IdConto, RitenutaAcconto)
+		SELECT
+			t.IdDocumento,
+			t.Descrizione,
+			t.SolaDescrizione,
+			t.Quantita,
+			t.IdUnitaMisura,
+			t.Importo,
+			t.IdAliquotaIva,
+			t.IdConto,
+			t.RitenutaAcconto
+		FROM
+			(
+				SELECT
+					IdDocumento = d.Id,
+					d.[Data],
+					d.Numero,
+					Pos = ISNULL(g.Pos, 0),
+					Ordine = g.Id,
+					g.Descrizione,
+					g.SolaDescrizione,
+					g.Quantita,
+					g.IdUnitaMisura,
+					g.Importo,
+					g.IdAliquotaIva,
+					g.IdConto,
+					RitenutaAcconto = CAST(NULL AS INT)
+				FROM
+					@doc d
+					CROSS APPLY dbo.ufnImportiRifiuti_get_RigheImporto(d.Id, d.IdImporto, d.IdClienteFornitore) g
+				WHERE
+					d.Fatturabile = 1
+					AND d.IdPreFattura IS NULL
+					AND d.IdModulo = 'RIF'
+
+				UNION ALL
+
+				-- DDT di magazzino: le righe degli importi applicati alle sue righe, nell'ordine del DDT
+				SELECT
+					IdDocumento = d.Id,
+					d.[Data],
+					d.Numero,
+					Pos = g.PosDdt * 10000 + ISNULL(g.Pos, 0),
+					Ordine = g.Id,
+					g.Descrizione,
+					g.SolaDescrizione,
+					g.Quantita,
+					g.IdUnitaMisura,
+					g.Importo,
+					g.IdAliquotaIva,
+					g.IdConto,
+					RitenutaAcconto = CAST(NULL AS INT)
+				FROM
+					@doc d
+					CROSS APPLY dbo.ufnImportiMagazzino_get_RigheFattura(d.Id, d.IdClienteFornitore) g
+				WHERE
+					d.Fatturabile = 1
+					AND d.IdPreFattura IS NULL
+					AND d.IdModulo = 'MAG'
+
+				UNION ALL
+
+				SELECT
+					IdDocumento = d.Id,
+					d.[Data],
+					d.Numero,
+					Pos = ISNULL(r.Pos, 0),
+					Ordine = r.Id,
+					r.Descrizione,
+					SolaDescrizione = CAST(IIF(i.Id IS NULL, 1, 0) AS BIT),
+					i.Quantita,
+					i.IdUnitaMisura,
+					i.Importo,
+					i.IdAliquotaIva,
+					i.IdConto,
+					RitenutaAcconto = ISNULL(i.RitenutaAcconto, 0)
+				FROM
+					@doc d
+					INNER JOIN dbo.tblFattureRighe r ON d.IdPreFattura = r.IdFattura
+					LEFT JOIN dbo.tblFattureRigheImporti i ON r.Id = i.Id
+				WHERE
+					d.Fatturabile = 1
+					AND d.PrimoDellaPreFattura = 1
+			) t
+		ORDER BY t.[Data], t.Numero, t.IdDocumento, t.Pos, t.Ordine;
+
+		-- Una fattura per ogni gruppo: cliente e, secondo il raggruppamento, sede del produttore o contratto
+		DECLARE @gruppi TABLE (
+			N INT IDENTITY(1, 1) NOT NULL PRIMARY KEY,
+			IdAzienda CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL,
+			IdClienteFornitore CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL,
+			GruppoSede CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			GruppoContratto CHAR(16) COLLATE DATABASE_DEFAULT NULL
+		);
+		INSERT @gruppi (IdAzienda, IdClienteFornitore, GruppoSede, GruppoContratto)
+		SELECT
+			t.IdAzienda,
+			t.IdClienteFornitore,
+			t.GruppoSede,
+			t.GruppoContratto
+		FROM
+			(
+				SELECT DISTINCT IdAzienda, IdClienteFornitore, GruppoSede, GruppoContratto
+				FROM @doc
+				WHERE Fatturabile = 1
+			) t
+			LEFT JOIN dbo.tblClientiFornitori c ON t.IdClienteFornitore = c.Id
+			LEFT JOIN dbo.tblSedi s ON c.IdSede = s.Id
+		ORDER BY s.NomeCompleto, t.IdClienteFornitore, t.GruppoSede, t.GruppoContratto;
+
+		DECLARE @fatture INT = 0;
+		DECLARE @documenti INT = 0;
+		DECLARE @idUltima CHAR(16) = NULL;
+		DECLARE @n INT = 1;
+		DECLARE @gruppiTotale INT = (SELECT COUNT(*) FROM @gruppi);
+		DECLARE @gAzienda CHAR(16), @gCliente CHAR(16), @gSede CHAR(16), @gContratto CHAR(16);
+		DECLARE @idFattura CHAR(16), @idRiga CHAR(16), @r INT, @numero INT;
+		DECLARE @annoInizio DATE = DATEFROMPARTS(YEAR(@DataEmissione), 1, 1);
+		DECLARE @annoFine DATE = DATEADD(YEAR, 1, @annoInizio);
+		DECLARE @gDoc TABLE (Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY);
+		DECLARE @gPre TABLE (Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY);
+
+		WHILE @n <= @gruppiTotale
+		BEGIN
+			SELECT
+				@gAzienda = IdAzienda,
+				@gCliente = IdClienteFornitore,
+				@gSede = GruppoSede,
+				@gContratto = GruppoContratto
+			FROM @gruppi
+			WHERE N = @n;
+
+			DELETE @gDoc;
+			INSERT @gDoc (Id)
+			SELECT Id
+			FROM @doc
+			WHERE
+				Fatturabile = 1
+				AND IdAzienda = @gAzienda
+				AND IdClienteFornitore = @gCliente
+				AND ISNULL(GruppoSede, '') = ISNULL(@gSede, '')
+				AND ISNULL(GruppoContratto, '') = ISNULL(@gContratto, '');
+
+			-- Pre-fatture del gruppo, da convertire
+			DELETE @gPre;
+			INSERT @gPre (Id)
+			SELECT DISTINCT IdPreFattura
+			FROM @doc
+			WHERE
+				Id IN (SELECT Id FROM @gDoc)
+				AND IdPreFattura IS NOT NULL;
+
+			-- Id della fattura e delle sue righe: uspId_get FUORI dalla transazione
+			SET @idFattura = NULL;
+			EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @idFattura OUTPUT;
+
+			SET @r = (SELECT MIN(N) FROM @righe WHERE IdDocumento IN (SELECT Id FROM @gDoc));
+			WHILE @r IS NOT NULL
+			BEGIN
+				SET @idRiga = NULL;
+				EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @idRiga OUTPUT;
+				UPDATE @righe SET IdRiga = @idRiga WHERE N = @r;
+				SET @r = (SELECT MIN(N) FROM @righe WHERE N > @r AND IdDocumento IN (SELECT Id FROM @gDoc));
+			END
+
+			BEGIN TRANSACTION;
+				-- Un documento fatturato nel frattempo da un'altra sessione (in una fattura che non è una delle
+				-- pre-fatture da convertire), o una pre-fattura nel frattempo cancellata o diventata fattura:
+				-- questa fattura non si genera
+				IF EXISTS (
+						SELECT 1
+						FROM
+							dbo.tblFattureDocumenti fd WITH (UPDLOCK, HOLDLOCK)
+							INNER JOIN dbo.tblFatture f ON fd.IdFattura = f.Id
+						WHERE
+							fd.Id IN (SELECT Id FROM @gDoc)
+							AND f.Lock IN (0, 2)
+							AND f.Id NOT IN (SELECT Id FROM @gPre)
+					)
+					OR EXISTS (
+						SELECT 1
+						FROM
+							@gPre p
+							LEFT JOIN dbo.tblFatture f WITH (UPDLOCK, HOLDLOCK) ON p.Id = f.Id
+																			  AND f.Lock IN (0, 2)
+																			  AND f.IdTipo = 'TD00'
+						WHERE f.Id IS NULL
+					)
+				BEGIN
+					ROLLBACK TRANSACTION;
+
+					-- Gli Id presi per la fattura e per le sue righe non servono più
+					DELETE dbo.tblIdLog
+					WHERE Id = @idFattura OR Id IN (SELECT IdRiga FROM @righe WHERE IdDocumento IN (SELECT Id FROM @gDoc));
+					DELETE dbo.tblId
+					WHERE Id = @idFattura OR Id IN (SELECT IdRiga FROM @righe WHERE IdDocumento IN (SELECT Id FROM @gDoc));
+				END
+				ELSE
+				BEGIN
+					-- Numero: successivo al più alto tra le fatture cliente attive dell'azienda nell'anno della data
+					-- di emissione, senza sezionale (stessa lettura con blocco di uspFatture_upd). La pre-fattura
+					-- non ha numero
+					SET @numero = NULL;
+					IF @PreFattura = 0
+						SELECT @numero = ISNULL(MAX(Numero), 0) + 1
+						FROM dbo.tblFatture WITH (UPDLOCK, HOLDLOCK)
+						WHERE
+							IdSede = @gAzienda
+							AND Tipo = 'C'
+							AND Lock = 0
+							AND ISNULL(Sezionale, '') = ''
+							AND DataEmissione >= @annoInizio
+							AND DataEmissione < @annoFine;
+
+					INSERT dbo.tblFatture (
+						Id, IdSede, IdClienteFornitore, IdTipo, IdStato, IdModalita, IdRata, IdRataInizio, IdValuta, IdBancaCassa,
+						Tipo, Numero, DataRegistrazione, DataEmissione, Iban, RataGiorniInizio, Ordine, DataOrdine,
+						SplitPayment, Bollo, CodiceCig, CodiceCup, SolaLettura, Lock)
+					SELECT
+						@idFattura, @gAzienda, c.Id, IIF(@PreFattura = 1, 'TD00', 'TD01'), 'G', c.IdModalita, c.IdRata, ISNULL(c.IdRataInizio, 'DF'), ISNULL(c.IdValuta, 'EUR'), c.IdBancaCassa,
+						'C', @numero, @DataEmissione, @DataEmissione, c.Iban, ISNULL(c.RataGiorniInizio, 0), oc.Ordine, oc.DataOrdine,
+						ISNULL(c.SplitPayment, 0), 0, oc.CodiceCig, oc.CodiceCup, 0, 0
+					FROM
+						dbo.tblClientiFornitori c
+						LEFT JOIN dbo.tblOfferteContratti oc ON oc.Id = @gContratto
+					WHERE c.Id = @gCliente;
+
+					INSERT dbo.tblFattureRighe (Id, IdFattura, Descrizione, Pos)
+					SELECT
+						g.IdRiga,
+						@idFattura,
+						g.Descrizione,
+						ROW_NUMBER() OVER (ORDER BY g.N)
+					FROM @righe g
+					WHERE g.IdDocumento IN (SELECT Id FROM @gDoc);
+
+					INSERT dbo.tblFattureRigheImporti (Id, IdAliquotaIva, IdConto, IdUnitaMisura, Quantita, Importo, RitenutaAcconto)
+					SELECT
+						g.IdRiga,
+						g.IdAliquotaIva,
+						g.IdConto,
+						g.IdUnitaMisura,
+						g.Quantita,
+						g.Importo,
+						ISNULL(g.RitenutaAcconto, ISNULL(c.RitenutaAcconto, 0))
+					FROM
+						@righe g
+						INNER JOIN dbo.tblClientiFornitori c ON c.Id = @gCliente
+					WHERE
+						g.IdDocumento IN (SELECT Id FROM @gDoc)
+						AND g.SolaDescrizione = 0;
+
+					-- Pre-fatture convertite: tutti i loro documenti, anche quelli fuori dal periodo, passano alla
+					-- nuova fattura (le righe della pre-fattura non si possono dividere per documento); importo e
+					-- contratto applicati restano quelli già registrati
+					UPDATE dbo.tblFattureDocumenti
+					SET IdFattura = @idFattura
+					WHERE IdFattura IN (SELECT Id FROM @gPre);
+
+					IF @RimuoviPreFatture = 1
+						UPDATE dbo.tblFatture
+						SET Lock = 4
+						WHERE Id IN (SELECT Id FROM @gPre);
+
+					-- Legame degli altri documenti con la fattura, con l'importo e il contratto applicati; cliente
+					-- indicato e spunta restano quelli già presenti
+					UPDATE fd
+					SET
+						IdFattura = @idFattura,
+						IdImporto = d.IdImporto,
+						IdOffertaContratto = d.IdOffertaContratto
+					FROM
+						dbo.tblFattureDocumenti fd
+						INNER JOIN @doc d ON fd.Id = d.Id
+					WHERE
+						d.Id IN (SELECT Id FROM @gDoc)
+						AND d.IdPreFattura IS NULL;
+
+					INSERT dbo.tblFattureDocumenti (Id, IdModulo, IdFattura, IdImporto, IdOffertaContratto, NonFatturabile)
+					SELECT d.Id, d.IdModulo, @idFattura, d.IdImporto, d.IdOffertaContratto, 0
+					FROM @doc d
+					WHERE
+						d.Id IN (SELECT Id FROM @gDoc)
+						AND NOT EXISTS (SELECT 1 FROM dbo.tblFattureDocumenti x WHERE x.Id = d.Id);
+
+					COMMIT TRANSACTION;
+
+					SET @fatture += 1;
+					SET @documenti += (SELECT COUNT(*) FROM @gDoc);
+					SET @idUltima = @idFattura;
+
+					-- Rate dalle condizioni di pagamento della fattura. Una fattura senza importo da pagare non
+					-- ha rate: quell'errore applicativo non ferma la generazione
+					BEGIN TRY
+						EXEC dbo.uspFattureRate_ins_Genera @IdFattura = @idFattura, @IdSessione = @IdSessione, @Interno = 1;
+					END TRY
+					BEGIN CATCH
+						IF ERROR_NUMBER() <> 50001
+							THROW;
+					END CATCH
+				END
+
+			SET @n += 1;
+		END
+
+		SELECT
+			Fatture = @fatture,
+			Documenti = @documenti,
+			IdFattura = @idUltima;
+
+	END TRY
+	BEGIN CATCH
+		IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+GO
+
+PRINT 'sql/procedures/uspFattureDocumenti_get.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Fatturazione di un documento (blocco "Cliente a cui fatturare", comune alle schede di registrazioni dei
+-- rifiuti, DDT di magazzino e servizi): cliente indicato sul documento, spunta "Non fatturabile", fattura in
+-- cui è finito e l'anteprima di ciò che la generazione automatica userebbe ("Verifica importo e cliente":
+-- cliente, importo, contratto, totale e avvisi). Le righe dell'anteprima: uspFattureDocumenti_get_Righe.
+-- @IdModulo: RIF registrazione dei rifiuti, MAG movimento di magazzino con il suo DDT (SRV non ancora gestito:
+-- nessuna riga). Per il DDT il confronto è per riga: importo, priorità e contratto si vedono solo se sono gli
+-- stessi per tutte le righe.
+-- Sempre una riga al massimo; nessuna riga (e nessun errore) se il blocco non va mostrato: modulo Offerte e
+-- contratti non attivo sul dominio, documento non accessibile, operazione non fatturabile, rettifica. Così la
+-- scheda del documento non dipende da questo modulo.
+--   Modificabile: permesso di modifica sul documento, documento confermato e non ancora fatturato.
+--   Fatturabile: la generazione automatica lo fatturerebbe (nessun avviso bloccante).
+--   Avvisi: testi separati da '|'.
+-- L'azienda è quella del documento (per i rifiuti, del registro), non quella del contesto della sessione.
+CREATE OR ALTER PROCEDURE dbo.uspFattureDocumenti_get
+	@Id CHAR(16) = NULL,
+	@IdModulo CHAR(3) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdModulo = NULLIF(UPPER(LTRIM(RTRIM(@IdModulo))), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Solo registrazioni dei rifiuti, con il modulo Offerte e contratti attivo sul dominio e almeno la
+		-- lettura delle registrazioni
+		DECLARE @permesso TINYINT = dbo.ufnFunzioni_get_PermessoBySessione('RRG', @IdSessione);
+		IF ISNULL(@IdModulo, '') = 'RIF'
+			AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 1
+			AND @permesso >= 1
+		BEGIN
+			SELECT
+				a.Id,
+				IdModulo = CAST('RIF' AS CHAR(3)),
+				Modificabile = CAST(IIF(@permesso >= 2 AND a.Lock = 0 AND a.IdFattura IS NULL, 1, 0) AS BIT),
+				IdClienteIndicato = a.IdClienteIndicato,
+				ClienteIndicato = si.NomeCompleto + ISNULL(' ' + si.IndirizzoCompleto, ''),
+				a.NonFatturabile,
+				a.IdFattura,
+				Fattura = IIF(a.IdFattura IS NULL, NULL, IIF(f.IdTipo = 'TD00', 'Pre-fattura', 'Fattura'))
+					+ ISNULL(' ' + CAST(f.Numero AS VARCHAR(10)) + ISNULL('/' + f.Sezionale, ''), '')
+					+ ISNULL(' del ' + CONVERT(VARCHAR(10), f.DataEmissione, 103), ''),
+				-- Anteprima
+				a.IdClienteFornitore,
+				Cliente = sc.NomeCompleto + ISNULL(' ' + sc.IndirizzoCompleto, ''),
+				a.ClienteOrigine,
+				ClienteOrigineDescrizione = CASE a.ClienteOrigine
+					WHEN 'D' THEN 'indicato sulla registrazione'
+					WHEN 'C' THEN 'dal contratto dell''importo'
+					WHEN 'P' THEN 'produttore del rifiuto (importo standard)'
+				END,
+				a.IdImporto,
+				Importo = i.Nome,
+				Priorita = p.Nome,
+				Contratto = CASE
+					WHEN a.IdImporto IS NULL THEN NULL
+					WHEN a.IdOffertaContratto IS NULL THEN 'Nessuno (importo standard)'
+					ELSE 'Contratto' + ISNULL(' ' + so.NomeCompleto, '')
+						+ ISNULL(' dal ' + CONVERT(VARCHAR(10), oc.DataInizio, 103), '')
+						+ ISNULL(' al ' + CONVERT(VARCHAR(10), oc.DataFine, 103), '')
+				END,
+				Totale = t.Totale,
+				Fatturabile = CAST(IIF(
+					a.Lock = 0 AND a.IsAnnullata = 0 AND a.NonFatturabile = 0 AND a.IdFattura IS NULL
+					AND a.IdImporto IS NOT NULL AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0, 1, 0) AS BIT),
+				Avvisi = CAST(STUFF(
+					IIF(a.Lock <> 0, '|La registrazione non è ancora salvata: salvarla prima di fatturarla', '')
+					+ IIF(a.IdFattura IS NOT NULL, '|La registrazione è già stata fatturata', '')
+					+ IIF(a.NonFatturabile = 1, '|La registrazione è indicata come non fatturabile', '')
+					+ IIF(a.IsAnnullata = 1, '|La registrazione è annullata: non viene fatturata', '')
+					+ IIF(a.IdImporto IS NULL, '|Nessun importo coincide con la registrazione: non viene fatturata', '')
+					+ IIF(a.IdImportoScartato IS NOT NULL, '|L''importo "' + ISNULL(isc.Nome, '') + '" coincide con la registrazione, ma il suo contratto non è valido alla data della registrazione'
+						+ IIF(a.IdImporto IS NOT NULL AND a.IdOffertaContratto IS NULL, ': è stato applicato l''importo standard', ''), '')
+					+ IIF(a.IdClienteFornitore IS NULL, '|Cliente non determinato: il produttore non ha una scheda cliente. Indicare il cliente sulla registrazione', '')
+					+ IIF(a.IdClienteFornitore IS NOT NULL AND ISNULL(t.SenzaIva, 0) > 0, '|Aliquota IVA non indicata né sulle righe dell''importo né sulla scheda del cliente', '')
+					+ IIF(a.IdImporto IS NOT NULL AND ISNULL(t.Righe, 0) = 0, '|L''importo non ha righe applicabili a questa registrazione', '')
+					+ IIF(a.IdImporto IS NOT NULL AND q.RigheQuantita > 0 AND ISNULL(t.RigheQuantita, 0) = 0, '|L''importo non ha righe per l''unità di misura della registrazione (' + ISNULL(a.IdUnitaMisura, 'non indicata') + ')', '')
+					, 1, 1, '') AS VARCHAR(2000))
+			FROM
+				dbo.ufnImportiRifiuti_get_Applicazione(@Id) a
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeRegistro = x.Id
+				LEFT JOIN dbo.tblClientiFornitori ci ON a.IdClienteIndicato = ci.Id
+				LEFT JOIN dbo.tblSedi si ON ci.IdSede = si.Id
+				LEFT JOIN dbo.tblClientiFornitori cc ON a.IdClienteFornitore = cc.Id
+				LEFT JOIN dbo.tblSedi sc ON cc.IdSede = sc.Id
+				LEFT JOIN dbo.tblFatture f ON a.IdFattura = f.Id
+				LEFT JOIN dbo.tblImporti i ON a.IdImporto = i.Id
+				LEFT JOIN dbo.tblImportiPriorita p ON i.IdPriorita = p.Id
+				LEFT JOIN dbo.tblImporti isc ON a.IdImportoScartato = isc.Id
+				LEFT JOIN dbo.tblOfferteContratti oc ON a.IdOffertaContratto = oc.Id
+				LEFT JOIN dbo.tblClientiFornitori co ON oc.IdClienteFornitore = co.Id
+				LEFT JOIN dbo.tblSedi so ON co.IdSede = so.Id
+				OUTER APPLY (
+					-- Righe che entrano in fattura: totale, numero, e quante sono a quantità (KG, T, L)
+					SELECT
+						Totale = SUM(ISNULL(g.Imponibile, 0)),
+						Righe = COUNT(*),
+						SenzaIva = SUM(IIF(g.SolaDescrizione = 0 AND g.IdAliquotaIva IS NULL, 1, 0)),
+						RigheQuantita = SUM(IIF(g.SolaDescrizione = 0 AND g.MinimoFatturabile = 0 AND g.IdTipo <> 'RM', 1, 0))
+					FROM dbo.ufnImportiRifiuti_get_ApplicazioneRighe(@Id) g
+				) t
+				OUTER APPLY (
+					-- Righe a quantità dell'importo, comprese quelle che non valgono per l'unità della registrazione
+					SELECT RigheQuantita = COUNT(*)
+					FROM dbo.tblImportiRighe g
+					WHERE
+						g.IdImporto = a.IdImporto
+						AND g.Importo IS NOT NULL
+						AND ISNULL(g.MinimoFatturabile, 0) = 0
+						AND g.IdTipo <> 'RM'
+				) q
+			WHERE
+				a.IsFatturabile = 1
+				AND a.IsRettifica = 0
+			OPTION (RECOMPILE);
+		END
+
+
+		-- DDT di magazzino (Id = movimento), con il modulo Offerte e contratti attivo sul dominio e almeno la
+		-- lettura dei movimenti. Il confronto con gli importi è per riga del DDT
+		DECLARE @permessoMag TINYINT = dbo.ufnFunzioni_get_PermessoBySessione('MAG', @IdSessione);
+		IF ISNULL(@IdModulo, '') = 'MAG'
+			AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 1
+			AND @permessoMag >= 1
+		BEGIN
+			SELECT
+				a.Id,
+				IdModulo = CAST('MAG' AS CHAR(3)),
+				Modificabile = CAST(IIF(@permessoMag >= 2 AND a.Lock = 0 AND a.IdFattura IS NULL, 1, 0) AS BIT),
+				IdClienteIndicato = a.IdClienteIndicato,
+				ClienteIndicato = si.NomeCompleto + ISNULL(' ' + si.IndirizzoCompleto, ''),
+				a.NonFatturabile,
+				a.IdFattura,
+				Fattura = IIF(a.IdFattura IS NULL, NULL, IIF(f.IdTipo = 'TD00', 'Pre-fattura', 'Fattura'))
+					+ ISNULL(' ' + CAST(f.Numero AS VARCHAR(10)) + ISNULL('/' + f.Sezionale, ''), '')
+					+ ISNULL(' del ' + CONVERT(VARCHAR(10), f.DataEmissione, 103), ''),
+				-- Anteprima
+				a.IdClienteFornitore,
+				Cliente = sc.NomeCompleto + ISNULL(' ' + sc.IndirizzoCompleto, ''),
+				a.ClienteOrigine,
+				ClienteOrigineDescrizione = CASE a.ClienteOrigine
+					WHEN 'D' THEN 'indicato sul DDT'
+					WHEN 'C' THEN 'dal contratto degli importi'
+					WHEN 'P' THEN 'destinatario del DDT (importi standard)'
+				END,
+				a.IdImporto,
+				Importo = CASE
+					WHEN a.Righe = 0 OR a.RigheSenzaImporto = a.Righe THEN NULL
+					WHEN a.IdImporto IS NOT NULL THEN i.Nome
+					ELSE 'Importi diversi per riga'
+				END,
+				Priorita = IIF(a.IdImporto IS NOT NULL, p.Nome, NULL),
+				Contratto = CASE
+					WHEN a.Righe = 0 OR a.RigheSenzaImporto = a.Righe THEN NULL
+					WHEN a.IdOffertaContratto IS NOT NULL THEN 'Contratto' + ISNULL(' ' + so.NomeCompleto, '')
+						+ ISNULL(' dal ' + CONVERT(VARCHAR(10), oc.DataInizio, 103), '')
+						+ ISNULL(' al ' + CONVERT(VARCHAR(10), oc.DataFine, 103), '')
+					WHEN a.ClienteOrigine = 'C' OR a.ClientiDiversi = 1 THEN 'Contratti diversi per riga'
+					ELSE 'Nessuno (importi standard)'
+				END,
+				Totale = t.Totale,
+				Fatturabile = CAST(IIF(
+					a.Lock = 0 AND a.NonFatturabile = 0 AND a.IdFattura IS NULL
+					AND a.Righe > 0 AND a.RigheSenzaImporto = 0 AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0, 1, 0) AS BIT),
+				Avvisi = CAST(STUFF(
+					IIF(a.Lock <> 0, '|Il DDT non è ancora salvato: salvarlo prima di fatturarlo', '')
+					+ IIF(a.IdFattura IS NOT NULL, '|Il DDT è già stato fatturato', '')
+					+ IIF(a.NonFatturabile = 1, '|Il DDT è indicato come non fatturabile', '')
+					+ IIF(a.Righe = 0, '|Il DDT non ha righe di articoli o di materiali: non viene fatturato', '')
+					+ IIF(a.RigheSenzaImporto > 0, '|Nessun importo coincide con ' + IIF(a.RigheSenzaImporto = 1, 'la riga ', 'le righe ') + ISNULL(n.Voci, '')
+						+ ': il DDT non viene fatturato', '')
+					+ IIF(a.RigheScartate > 0, '|Per ' + IIF(a.RigheScartate = 1, 'una riga', CAST(a.RigheScartate AS VARCHAR(10)) + ' righe')
+						+ ' coinciderebbe un importo il cui contratto non è valido alla data del DDT', '')
+					+ IIF(a.ClientiDiversi = 1, '|Le righe hanno importi di contratti di clienti diversi: indicare il cliente sul DDT', '')
+					+ IIF(a.IdClienteFornitore IS NULL AND a.ClientiDiversi = 0, '|Cliente non determinato: il destinatario non ha una scheda cliente. Indicare il cliente sul DDT', '')
+					+ IIF(a.IdClienteFornitore IS NOT NULL AND ISNULL(t.SenzaIva, 0) > 0, '|Aliquota IVA non indicata né sulle righe degli importi né sulla scheda del cliente', '')
+					+ IIF(a.Righe > 0 AND a.RigheSenzaImporto = 0 AND ISNULL(t.Righe, 0) = 0, '|Gli importi applicati non hanno righe: il DDT non genera righe in fattura', '')
+					, 1, 1, '') AS VARCHAR(2000))
+			FROM
+				dbo.ufnImportiMagazzino_get_Applicazione_List(@Id, NULL, NULL, NULL, 0) a
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeDdt = x.Id
+				LEFT JOIN dbo.tblClientiFornitori ci ON a.IdClienteIndicato = ci.Id
+				LEFT JOIN dbo.tblSedi si ON ci.IdSede = si.Id
+				LEFT JOIN dbo.tblClientiFornitori cc ON a.IdClienteFornitore = cc.Id
+				LEFT JOIN dbo.tblSedi sc ON cc.IdSede = sc.Id
+				LEFT JOIN dbo.tblFatture f ON a.IdFattura = f.Id
+				LEFT JOIN dbo.tblImporti i ON a.IdImporto = i.Id
+				LEFT JOIN dbo.tblImportiPriorita p ON i.IdPriorita = p.Id
+				LEFT JOIN dbo.tblOfferteContratti oc ON a.IdOffertaContratto = oc.Id
+				LEFT JOIN dbo.tblClientiFornitori co ON oc.IdClienteFornitore = co.Id
+				LEFT JOIN dbo.tblSedi so ON co.IdSede = so.Id
+				OUTER APPLY (
+					-- Righe che entrano in fattura
+					SELECT
+						Totale = SUM(ISNULL(g.Imponibile, 0)),
+						Righe = COUNT(*),
+						SenzaIva = SUM(IIF(g.SolaDescrizione = 0 AND g.IdAliquotaIva IS NULL, 1, 0))
+					FROM dbo.ufnImportiMagazzino_get_RigheFattura(@Id, a.IdClienteFornitore) g
+				) t
+				OUTER APPLY (
+					-- Righe del DDT senza un importo, per l'avviso
+					SELECT Voci = STRING_AGG(CAST('"' + ISNULL(r.Voce, '') + '"' AS VARCHAR(MAX)), ', ') WITHIN GROUP (ORDER BY ISNULL(r.Pos, 0), r.IdRiga)
+					FROM dbo.ufnImportiMagazzino_get_ApplicazioneRighe_List(@Id, NULL, NULL, NULL, 0) r
+					WHERE r.IdImporto IS NULL
+				) n
+			WHERE a.IsFatturabile = 1
+			OPTION (RECOMPILE);
+		END
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+GO
+
+PRINT 'sql/procedures/uspFattureDocumenti_get_Righe.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- "Verifica importo e cliente": righe di fattura che la generazione automatica creerebbe per il documento, con
+-- l'importo che gli viene applicato (ufnImportiRifiuti_get_ApplicazioneRighe). Stessi controlli di accesso di
+-- uspFattureDocumenti_get: senza accesso, o per un modulo non gestito, nessuna riga e nessun errore.
+CREATE OR ALTER PROCEDURE dbo.uspFattureDocumenti_get_Righe
+	@Id CHAR(16) = NULL,
+	@IdModulo CHAR(3) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdModulo = NULLIF(UPPER(LTRIM(RTRIM(@IdModulo))), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		IF ISNULL(@IdModulo, '') = 'RIF'
+			AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 1
+			AND dbo.ufnFunzioni_get_PermessoBySessione('RRG', @IdSessione) >= 1
+		BEGIN
+			SELECT
+				g.Id,
+				g.Pos,
+				g.Descrizione,
+				g.SolaDescrizione,
+				g.MinimoFatturabile,
+				g.Quantita,
+				UnitaMisura = g.IdUnitaMisura,
+				g.Importo,
+				g.Imponibile,
+				AliquotaIvaNome = v.Nome,
+				ContoNome = ISNULL(c.Codice + ' - ', '') + c.Nome
+			FROM
+				dbo.ufnImportiRifiuti_get_Applicazione(@Id) a
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeRegistro = x.Id
+				CROSS APPLY dbo.ufnImportiRifiuti_get_ApplicazioneRighe(a.Id) g
+				LEFT JOIN dbo.tblAliquoteIva v ON g.IdAliquotaIva = v.Id
+				LEFT JOIN dbo.tblFattureConti c ON g.IdConto = c.Id
+			WHERE
+				a.IsFatturabile = 1
+				AND a.IsRettifica = 0
+			ORDER BY ISNULL(g.Pos, 0), g.Id
+			OPTION (RECOMPILE);
+		END
+
+
+		-- DDT di magazzino: le righe degli importi applicati alle righe del DDT, nell'ordine del DDT
+		IF ISNULL(@IdModulo, '') = 'MAG'
+			AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 1
+			AND dbo.ufnFunzioni_get_PermessoBySessione('MAG', @IdSessione) >= 1
+		BEGIN
+			SELECT
+				g.Id,
+				Pos = CAST(ROW_NUMBER() OVER (ORDER BY g.PosDdt, g.IdRiga, ISNULL(g.Pos, 0), g.Id) AS INT),
+				g.Descrizione,
+				g.SolaDescrizione,
+				g.MinimoFatturabile,
+				g.Quantita,
+				UnitaMisura = g.IdUnitaMisura,
+				g.Importo,
+				g.Imponibile,
+				AliquotaIvaNome = v.Nome,
+				ContoNome = ISNULL(c.Codice + ' - ', '') + c.Nome
+			FROM
+				dbo.ufnImportiMagazzino_get_Applicazione_List(@Id, NULL, NULL, NULL, 0) a
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeDdt = x.Id
+				CROSS APPLY dbo.ufnImportiMagazzino_get_RigheFattura(a.Id, a.IdClienteFornitore) g
+				LEFT JOIN dbo.tblAliquoteIva v ON g.IdAliquotaIva = v.Id
+				LEFT JOIN dbo.tblFattureConti c ON g.IdConto = c.Id
+			WHERE a.IsFatturabile = 1
+			ORDER BY g.PosDdt, g.IdRiga, ISNULL(g.Pos, 0), g.Id
+			OPTION (RECOMPILE);
+		END
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+GO
+
+PRINT 'sql/procedures/uspFattureDocumenti_upd.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Salva sul documento (registrazione dei rifiuti; DDT e servizi non ancora gestiti) il cliente a cui fatturarlo
+-- e la spunta "Non fatturabile". Si salvano da soli, senza il "Salva" della scheda: valgono anche per una
+-- registrazione già inviata al RENTRI, che non si può più modificare, perché non fanno parte del registro.
+--   @IdClienteFornitore NULL: nessun cliente indicato (lo decide l'importo applicato).
+-- Serve il permesso di modifica sul documento; il documento deve essere confermato e non ancora fatturato.
+-- Senza cliente e senza spunta la riga di tblFattureDocumenti viene tolta.
+CREATE OR ALTER PROCEDURE dbo.uspFattureDocumenti_upd
+	@Id CHAR(16) = NULL,
+	@IdModulo CHAR(3) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@IdClienteFornitore CHAR(16) = NULL,
+	@NonFatturabile BIT = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdModulo = NULLIF(UPPER(LTRIM(RTRIM(@IdModulo))), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdClienteFornitore = NULLIF(NULLIF(LTRIM(RTRIM(@IdClienteFornitore)), ''), REPLICATE('0', 16));
+		SET @NonFatturabile = ISNULL(@NonFatturabile, 0);
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF ISNULL(@IdModulo, '') NOT IN ('RIF', 'MAG')
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF o MAG';
+			GOTO BRANCH_END;
+		END
+
+		-- Permesso di modifica sul documento (registrazioni dei rifiuti o gestione del magazzino) e modulo Offerte e
+		-- contratti attivo sul dominio
+		DECLARE @idFunzione CHAR(3) = IIF(@IdModulo = 'MAG', 'MAG', 'RRG');
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = @idFunzione,
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso OR ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Il documento: accessibile dalla sessione e fatturabile (ufnFattureDocumenti_get_Documento)
+		DECLARE @idAzienda CHAR(16);
+		DECLARE @lock INT;
+		DECLARE @idFattura CHAR(16);
+		DECLARE @idClienteAttuale CHAR(16);
+		SELECT
+			@idAzienda = a.IdAzienda,
+			@lock = a.Lock,
+			@idFattura = a.IdFattura,
+			@idClienteAttuale = a.IdClienteIndicato
+		FROM
+			dbo.ufnFattureDocumenti_get_Documento(@Id, @IdModulo, @IdSessione) a
+		WHERE a.IsFatturabile = 1;
+
+		IF @idAzienda IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari, o il documento non è fatturabile';
+			GOTO BRANCH_END;
+		END
+		IF @lock <> 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Salvare il documento prima di indicare il cliente';
+			GOTO BRANCH_END;
+		END
+		IF @idFattura IS NOT NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il documento è già stato fatturato: cliente e spunta non si possono più modificare';
+			GOTO BRANCH_END;
+		END
+
+		-- Cliente: una scheda cliente attiva dell'azienda del documento; quella già indicata resta valida
+		IF @IdClienteFornitore IS NOT NULL AND NOT EXISTS (
+			SELECT 1
+			FROM dbo.tblClientiFornitori
+			WHERE
+				Id = @IdClienteFornitore
+				AND IdAziendaInterna = @idAzienda
+				AND Tipo = 'C'
+				AND (Lock = 0 OR Id = @idClienteAttuale)
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il cliente indicato non esiste';
+			GOTO BRANCH_END;
+		END
+
+		BEGIN TRANSACTION;
+			IF @IdClienteFornitore IS NULL AND @NonFatturabile = 0
+			BEGIN
+				-- Nulla da ricordare: la riga resta solo se porta ancora il legame con una fattura cancellata
+				DELETE dbo.tblFattureDocumenti
+				WHERE
+					Id = @Id
+					AND IdFattura IS NULL;
+
+				UPDATE dbo.tblFattureDocumenti
+				SET
+					IdClienteFornitore = NULL,
+					NonFatturabile = 0
+				WHERE Id = @Id;
+			END
+			ELSE
+			BEGIN
+				UPDATE dbo.tblFattureDocumenti WITH (UPDLOCK, HOLDLOCK)
+				SET
+					IdClienteFornitore = @IdClienteFornitore,
+					NonFatturabile = @NonFatturabile
+				WHERE Id = @Id;
+
+				IF @@ROWCOUNT = 0
+					INSERT dbo.tblFattureDocumenti (Id, IdModulo, IdClienteFornitore, NonFatturabile)
+					VALUES (@Id, @IdModulo, @IdClienteFornitore, @NonFatturabile);
+			END
+		COMMIT TRANSACTION;
+
+		SELECT ReturnValue = @returnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+GO
+
+PRINT 'sql/procedures/uspFattureDocumenti_del_Fattura.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- "Togli la fattura": scollega il documento (registrazione dei rifiuti; DDT e servizi non ancora gestiti) dalla
+-- fattura in cui è stato fatturato. La fattura NON viene cancellata né modificata: le sue righe restano come
+-- sono. Il documento torna fatturabile, quindi una nuova generazione lo fatturerebbe di nuovo.
+-- Cliente indicato e spunta "Non fatturabile" restano; importo e contratto applicati alla generazione vengono
+-- azzerati. Serve il permesso di modifica sul documento. Un documento non fatturato non è un errore.
+CREATE OR ALTER PROCEDURE dbo.uspFattureDocumenti_del_Fattura
+	@Id CHAR(16) = NULL,
+	@IdModulo CHAR(3) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdModulo = NULLIF(UPPER(LTRIM(RTRIM(@IdModulo))), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF ISNULL(@IdModulo, '') NOT IN ('RIF', 'MAG')
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF o MAG';
+			GOTO BRANCH_END;
+		END
+
+		-- Permesso di modifica sul documento (registrazioni dei rifiuti o gestione del magazzino) e modulo Offerte e
+		-- contratti attivo sul dominio
+		DECLARE @idFunzione CHAR(3) = IIF(@IdModulo = 'MAG', 'MAG', 'RRG');
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = @idFunzione,
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso OR ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Il documento deve essere accessibile dalla sessione (ufnFattureDocumenti_get_Documento)
+		IF NOT EXISTS (SELECT 1 FROM dbo.ufnFattureDocumenti_get_Documento(@Id, @IdModulo, @IdSessione))
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		BEGIN TRANSACTION;
+			UPDATE dbo.tblFattureDocumenti
+			SET
+				IdFattura = NULL,
+				IdImporto = NULL,
+				IdOffertaContratto = NULL
+			WHERE Id = @Id;
+
+			-- Nulla da ricordare: né cliente indicato né spunta
+			DELETE dbo.tblFattureDocumenti
+			WHERE
+				Id = @Id
+				AND IdClienteFornitore IS NULL
+				AND ISNULL(NonFatturabile, 0) = 0;
+		COMMIT TRANSACTION;
+
+		SELECT ReturnValue = @returnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+GO
+
+PRINT 'sql/procedures/uspFattureDocumenti_get_Clienti_List.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Clienti tra cui scegliere quello a cui fatturare un documento (link "Seleziona" del blocco "Cliente a cui
+-- fatturare"): schede cliente attive dell'azienda del documento (per i rifiuti, quella del registro: non
+-- quella del contesto della sessione), al massimo 50, filtrabili per nome, partita IVA o codice fiscale.
+-- Si legge con il permesso sul documento, senza quello sulle anagrafiche dei clienti.
+CREATE OR ALTER PROCEDURE dbo.uspFattureDocumenti_get_Clienti_List
+	@Id CHAR(16) = NULL,
+	@IdModulo CHAR(3) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@Search VARCHAR(50) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdModulo = NULLIF(UPPER(LTRIM(RTRIM(@IdModulo))), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF ISNULL(@IdModulo, '') NOT IN ('RIF', 'MAG')
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF o MAG';
+			GOTO BRANCH_END;
+		END
+
+		-- Permesso di modifica sul documento (registrazioni dei rifiuti o gestione del magazzino) e modulo Offerte e
+		-- contratti attivo sul dominio
+		DECLARE @idFunzione CHAR(3) = IIF(@IdModulo = 'MAG', 'MAG', 'RRG');
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = @idFunzione,
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso OR ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Azienda del documento, se accessibile dalla sessione
+		DECLARE @idAzienda CHAR(16);
+		SELECT @idAzienda = a.IdAzienda
+		FROM dbo.ufnFattureDocumenti_get_Documento(@Id, @IdModulo, @IdSessione) a;
+
+		IF @idAzienda IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		SELECT TOP (50)
+			c.Id,
+			[Text] = CAST(s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, '') AS VARCHAR(500)),
+			Selected = CAST(0 AS BIT)
+		FROM
+			dbo.tblClientiFornitori c
+			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
+		WHERE
+			c.IdAziendaInterna = @idAzienda
+			AND c.Tipo = 'C'
+			AND c.Lock = 0
+			AND ISNULL(s.Disabilitata, 0) = 0
+			AND
+				(
+				@Search IS NULL
+				OR s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, '') LIKE '%' + @Search + '%'
+				OR s.PartitaIva LIKE '%' + @Search + '%'
+				OR s.CodiceFiscale LIKE '%' + @Search + '%'
+				)
+		ORDER BY s.NomeCompleto, c.Id
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
 END;
 GO
 GO

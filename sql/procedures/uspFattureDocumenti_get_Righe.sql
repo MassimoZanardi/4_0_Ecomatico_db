@@ -62,6 +62,35 @@ BEGIN
 			OPTION (RECOMPILE);
 		END
 
+
+		-- DDT di magazzino: le righe degli importi applicati alle righe del DDT, nell'ordine del DDT
+		IF ISNULL(@IdModulo, '') = 'MAG'
+			AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 1
+			AND dbo.ufnFunzioni_get_PermessoBySessione('MAG', @IdSessione) >= 1
+		BEGIN
+			SELECT
+				g.Id,
+				Pos = CAST(ROW_NUMBER() OVER (ORDER BY g.PosDdt, g.IdRiga, ISNULL(g.Pos, 0), g.Id) AS INT),
+				g.Descrizione,
+				g.SolaDescrizione,
+				g.MinimoFatturabile,
+				g.Quantita,
+				UnitaMisura = g.IdUnitaMisura,
+				g.Importo,
+				g.Imponibile,
+				AliquotaIvaNome = v.Nome,
+				ContoNome = ISNULL(c.Codice + ' - ', '') + c.Nome
+			FROM
+				dbo.ufnImportiMagazzino_get_Applicazione_List(@Id, NULL, NULL, NULL, 0) a
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeDdt = x.Id
+				CROSS APPLY dbo.ufnImportiMagazzino_get_RigheFattura(a.Id, a.IdClienteFornitore) g
+				LEFT JOIN dbo.tblAliquoteIva v ON g.IdAliquotaIva = v.Id
+				LEFT JOIN dbo.tblFattureConti c ON g.IdConto = c.Id
+			WHERE a.IsFatturabile = 1
+			ORDER BY g.PosDdt, g.IdRiga, ISNULL(g.Pos, 0), g.Id
+			OPTION (RECOMPILE);
+		END
+
 	END TRY
 	BEGIN CATCH
 		THROW;

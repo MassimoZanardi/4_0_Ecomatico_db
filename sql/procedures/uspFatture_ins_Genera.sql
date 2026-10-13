@@ -2,9 +2,10 @@
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Generazione automatica delle fatture clienti dai documenti fatturabili (per ora le registrazioni dei rifiuti),
+-- Generazione automatica delle fatture clienti dai documenti fatturabili (registrazioni dei rifiuti e DDT di magazzino),
 -- con gli importi del modulo Offerte e contratti (regole O5 e O6 di docs/regole/offerte-contratti.md).
---   @Id (con @IdModulo = 'RIF'): un solo documento ("Genera la fattura" dalla scheda); l'azienda è quella del
+--   @Id (con @IdModulo = 'RIF' o 'MAG'): un solo documento, registrazione dei rifiuti o DDT di magazzino
+--        ("Genera la fattura" dalla scheda); l'azienda è quella del
 --        documento. Se il documento non è fatturabile la SP lo rifiuta.
 --   Senza @Id: i documenti dell'azienda interna corrente della sessione con data tra @DataDa e @DataA,
 --        eventualmente riconducibili al solo cliente @IdClienteFornitore (Fatture clienti > Nuovo > Tramite
@@ -36,6 +37,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_ins_Genera
 	@DataEmissione DATE = NULL,
 	@PreFattura BIT = 0,
 	@Rifiuti BIT = 1,
+	@Magazzino BIT = 0,
 	@IncludiPreFatture BIT = 0,
 	@RimuoviPreFatture BIT = 0
 AS
@@ -52,6 +54,7 @@ BEGIN
 		SET @DataEmissione = ISNULL(@DataEmissione, CAST(GETDATE() AS DATE));
 		SET @PreFattura = ISNULL(@PreFattura, 0);
 		SET @Rifiuti = ISNULL(@Rifiuti, 1);
+		SET @Magazzino = ISNULL(@Magazzino, 0);
 		SET @IncludiPreFatture = ISNULL(@IncludiPreFatture, 0);
 		SET @RimuoviPreFatture = ISNULL(@RimuoviPreFatture, 0);
 
@@ -61,10 +64,10 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		IF @Id IS NOT NULL AND ISNULL(@IdModulo, '') <> 'RIF'
+		IF @Id IS NOT NULL AND ISNULL(@IdModulo, '') NOT IN ('RIF', 'MAG')
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF';
+			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF o MAG';
 			GOTO BRANCH_END;
 		END
 		IF @Id IS NULL AND (@DataDa IS NULL OR @DataA IS NULL)
@@ -116,14 +119,16 @@ BEGIN
 		END
 		ELSE
 		BEGIN
-			-- Un solo documento: sempre i rifiuti, senza pre-fatture
-			SET @Rifiuti = 1;
+			-- Un solo documento, del suo modulo (registrazione dei rifiuti o DDT di magazzino), senza pre-fatture
+			SET @Rifiuti = IIF(@IdModulo = 'RIF', 1, 0);
+			SET @Magazzino = IIF(@IdModulo = 'MAG', 1, 0);
 			SET @IncludiPreFatture = 0;
 		END
 
 		-- Documenti da fatturare, con il raggruppamento della scheda del cliente
 		DECLARE @doc TABLE (
 			Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY,
+			IdModulo CHAR(3) COLLATE DATABASE_DEFAULT NOT NULL,
 			[Data] DATE NULL,
 			Numero INT NULL,
 			IdAzienda CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL,
@@ -137,9 +142,10 @@ BEGIN
 			GruppoContratto CHAR(16) COLLATE DATABASE_DEFAULT NULL,
 			Fatturabile BIT NOT NULL
 		);
-		INSERT @doc (Id, [Data], Numero, IdAzienda, IdImporto, IdOffertaContratto, IdClienteFornitore, IdPreFattura, PrimoDellaPreFattura, GruppoSede, GruppoContratto, Fatturabile)
+		INSERT @doc (Id, IdModulo, [Data], Numero, IdAzienda, IdImporto, IdOffertaContratto, IdClienteFornitore, IdPreFattura, PrimoDellaPreFattura, GruppoSede, GruppoContratto, Fatturabile)
 		SELECT
 			d.Id,
+			d.IdModulo,
 			d.[Data],
 			d.Numero,
 			d.IdAzienda,
@@ -151,10 +157,9 @@ BEGIN
 			d.GruppoSede,
 			d.GruppoContratto,
 			d.Fatturabile
-		FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture) d
+		FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, @Magazzino) d
 		WHERE
-			@Rifiuti = 1
-			AND (@Id IS NOT NULL OR d.Fatturabile = 1)
+			(@Id IS NOT NULL OR d.Fatturabile = 1)
 		OPTION (RECOMPILE);
 
 		IF @Id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM @doc WHERE Fatturabile = 1)
@@ -213,6 +218,32 @@ BEGIN
 				WHERE
 					d.Fatturabile = 1
 					AND d.IdPreFattura IS NULL
+					AND d.IdModulo = 'RIF'
+
+				UNION ALL
+
+				-- DDT di magazzino: le righe degli importi applicati alle sue righe, nell'ordine del DDT
+				SELECT
+					IdDocumento = d.Id,
+					d.[Data],
+					d.Numero,
+					Pos = g.PosDdt * 10000 + ISNULL(g.Pos, 0),
+					Ordine = g.Id,
+					g.Descrizione,
+					g.SolaDescrizione,
+					g.Quantita,
+					g.IdUnitaMisura,
+					g.Importo,
+					g.IdAliquotaIva,
+					g.IdConto,
+					RitenutaAcconto = CAST(NULL AS INT)
+				FROM
+					@doc d
+					CROSS APPLY dbo.ufnImportiMagazzino_get_RigheFattura(d.Id, d.IdClienteFornitore) g
+				WHERE
+					d.Fatturabile = 1
+					AND d.IdPreFattura IS NULL
+					AND d.IdModulo = 'MAG'
 
 				UNION ALL
 
@@ -433,7 +464,7 @@ BEGIN
 						AND d.IdPreFattura IS NULL;
 
 					INSERT dbo.tblFattureDocumenti (Id, IdModulo, IdFattura, IdImporto, IdOffertaContratto, NonFatturabile)
-					SELECT d.Id, 'RIF', @idFattura, d.IdImporto, d.IdOffertaContratto, 0
+					SELECT d.Id, d.IdModulo, @idFattura, d.IdImporto, d.IdOffertaContratto, 0
 					FROM @doc d
 					WHERE
 						d.Id IN (SELECT Id FROM @gDoc)

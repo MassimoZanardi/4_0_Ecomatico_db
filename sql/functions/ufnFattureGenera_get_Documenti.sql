@@ -2,8 +2,10 @@
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Generazione automatica delle fatture: i documenti candidati (ufnFattureDocumenti_get_Rifiuti, stessi parametri;
--- per ora le sole registrazioni dei rifiuti) con in più ciò che serve a raggrupparli in fatture e a riepilogarli.
+-- Generazione automatica delle fatture: i documenti candidati, cioè le registrazioni dei rifiuti
+-- (ufnFattureDocumenti_get_Rifiuti, con @Rifiuti = 1) e i DDT di magazzino (ufnFattureDocumenti_get_Magazzino,
+-- con @Magazzino = 1), con in più ciò che serve a raggrupparli in fatture e a riepilogarli. IdModulo dice da
+-- quale dei due viene il documento (RIF, MAG): per un DDT, Id è l'Id del movimento.
 -- La leggono il riepilogo (uspFatture_get_Genera_Riepilogo), l'anteprima delle fatture
 -- (uspFatture_get_Genera_Fatture_List), l'elenco di dettaglio (uspFatture_get_Genera_List) e la generazione
 -- (uspFatture_ins_Genera): così contano, mostrano e generano le stesse cose.
@@ -25,13 +27,16 @@ CREATE OR ALTER FUNCTION dbo.ufnFattureGenera_get_Documenti (
 	@DataDa DATE,
 	@DataA DATE,
 	@IdClienteFornitore CHAR(16),
-	@IncludiPreFatture BIT)
+	@IncludiPreFatture BIT,
+	@Rifiuti BIT,
+	@Magazzino BIT)
 RETURNS TABLE
 AS
 RETURN
 (
 	SELECT
 		t.Id,
+		t.IdModulo,
 		t.[Data],
 		t.Numero,
 		t.IdAzienda,
@@ -66,7 +71,7 @@ RETURN
 			WHEN t.Fatturabile = 1 THEN 'F'
 			WHEN t.IsAnnullata = 1 THEN 'A'
 			WHEN t.NonFatturabile = 1 THEN 'N'
-			WHEN t.IdImporto IS NULL THEN 'I'
+			WHEN t.SenzaImporto = 1 THEN 'I'
 			WHEN t.IdClienteFornitore IS NULL THEN 'C'
 			WHEN t.Righe = 0 THEN 'R'
 			ELSE 'V'
@@ -75,6 +80,7 @@ RETURN
 		(
 			SELECT
 				d.Id,
+				d.IdModulo,
 				d.[Data],
 				d.Numero,
 				d.IdAzienda,
@@ -90,6 +96,7 @@ RETURN
 				d.IdClienteFornitore,
 				d.ClienteOrigine,
 				d.IdImportoScartato,
+				d.SenzaImporto,
 				d.Righe,
 				d.Totale,
 				d.SenzaIva,
@@ -99,7 +106,17 @@ RETURN
 				-- Posizione del documento nella sua pre-fattura (conta solo dove IdPreFattura non è NULL)
 				N = ROW_NUMBER() OVER (PARTITION BY d.IdPreFattura ORDER BY d.[Data], d.Numero, d.Id)
 			FROM
-				dbo.ufnFattureDocumenti_get_Rifiuti(@IdSessione, @IdAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture) d
+				(
+					SELECT IdModulo = CAST('RIF' AS CHAR(3)), Id, [Data], Numero, IdAzienda, IdProduttore, IdEer, IdUnitaMisura, Quantita, IsAnnullata, NonFatturabile, IdPreFattura, IdImporto, IdOffertaContratto, IdClienteFornitore, ClienteOrigine, IdImportoScartato, SenzaImporto, Righe, Totale, SenzaIva, Fatturabile
+					FROM dbo.ufnFattureDocumenti_get_Rifiuti(@IdSessione, @IdAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture)
+					WHERE @Rifiuti = 1
+
+					UNION ALL
+
+					SELECT IdModulo = CAST('MAG' AS CHAR(3)), Id, [Data], Numero, IdAzienda, IdProduttore, IdEer, IdUnitaMisura, Quantita, IsAnnullata, NonFatturabile, IdPreFattura, IdImporto, IdOffertaContratto, IdClienteFornitore, ClienteOrigine, IdImportoScartato, SenzaImporto, Righe, Totale, SenzaIva, Fatturabile
+					FROM dbo.ufnFattureDocumenti_get_Magazzino(@IdSessione, @IdAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture)
+					WHERE @Magazzino = 1
+				) d
 				LEFT JOIN dbo.tblClientiFornitori c ON d.IdClienteFornitore = c.Id
 		) t
 		OUTER APPLY dbo.ufnFatture_get_Totali(IIF(t.N = 1, t.IdPreFattura, NULL)) pf

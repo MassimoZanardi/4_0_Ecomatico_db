@@ -39,18 +39,20 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		IF ISNULL(@IdModulo, '') <> 'RIF'
+		IF ISNULL(@IdModulo, '') NOT IN ('RIF', 'MAG')
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF';
+			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF o MAG';
 			GOTO BRANCH_END;
 		END
 
-		-- Permesso di modifica sulle registrazioni e modulo Offerte e contratti attivo sul dominio
+		-- Permesso di modifica sul documento (registrazioni dei rifiuti o gestione del magazzino) e modulo Offerte e
+		-- contratti attivo sul dominio
+		DECLARE @idFunzione CHAR(3) = IIF(@IdModulo = 'MAG', 'MAG', 'RRG');
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
-			@IdFunzione = 'RRG',
+			@IdFunzione = @idFunzione,
 			@Permesso = @permesso OUTPUT;
 		IF 2 > @permesso OR ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 0
 		BEGIN
@@ -59,8 +61,7 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Il documento: accessibile dalla sessione (titolarità sulla sede del registro), di un'operazione
-		-- fatturabile, non una rettifica
+		-- Il documento: accessibile dalla sessione e fatturabile (ufnFattureDocumenti_get_Documento)
 		DECLARE @idAzienda CHAR(16);
 		DECLARE @lock INT;
 		DECLARE @idFattura CHAR(16);
@@ -71,28 +72,25 @@ BEGIN
 			@idFattura = a.IdFattura,
 			@idClienteAttuale = a.IdClienteIndicato
 		FROM
-			dbo.ufnImportiRifiuti_get_Applicazione(@Id) a
-			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeRegistro = x.Id
-		WHERE
-			a.IsFatturabile = 1
-			AND a.IsRettifica = 0;
+			dbo.ufnFattureDocumenti_get_Documento(@Id, @IdModulo, @IdSessione) a
+		WHERE a.IsFatturabile = 1;
 
 		IF @idAzienda IS NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Non si dispone dei diritti necessari, o la registrazione non è fatturabile';
+			SET @returnMessage = 'Non si dispone dei diritti necessari, o il documento non è fatturabile';
 			GOTO BRANCH_END;
 		END
 		IF @lock <> 0
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Salvare la registrazione prima di indicare il cliente';
+			SET @returnMessage = 'Salvare il documento prima di indicare il cliente';
 			GOTO BRANCH_END;
 		END
 		IF @idFattura IS NOT NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'La registrazione è già stata fatturata: cliente e spunta non si possono più modificare';
+			SET @returnMessage = 'Il documento è già stato fatturato: cliente e spunta non si possono più modificare';
 			GOTO BRANCH_END;
 		END
 
@@ -137,7 +135,7 @@ BEGIN
 
 				IF @@ROWCOUNT = 0
 					INSERT dbo.tblFattureDocumenti (Id, IdModulo, IdClienteFornitore, NonFatturabile)
-					VALUES (@Id, 'RIF', @IdClienteFornitore, @NonFatturabile);
+					VALUES (@Id, @IdModulo, @IdClienteFornitore, @NonFatturabile);
 			END
 		COMMIT TRANSACTION;
 

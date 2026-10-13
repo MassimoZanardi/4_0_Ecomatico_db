@@ -1482,7 +1482,9 @@ GO
 -- RM, di tutte; altrimenti di quelle a quantità, senza le righe RM): se il minimo è maggiore la riga entra con
 -- quantità 1 e importo pari alla differenza, altrimenti non entra.
 -- Testo: i segnaposto #1 codice EER, #2 numero del formulario, #3 data del formulario, #4 produttore,
--- #5 destinatario vengono sostituiti con i dati della registrazione.
+-- #5 destinatario vengono sostituiti con i dati della registrazione. La data del formulario esiste solo se il
+-- formulario è in Ecomatico (emesso o acquisito): con il solo numero digitato sulla registrazione manca, e dal
+-- testo si toglie anche il " del " che precede #3 ("Formulario Nr: #2 del #3" diventa "Formulario Nr: 123").
 -- Aliquota IVA: quella della riga dell'importo, altrimenti quella della scheda del cliente @IdClienteFornitore.
 CREATE OR ALTER FUNCTION dbo.ufnImportiRifiuti_get_RigheImporto (
 	@Id CHAR(16),
@@ -1539,7 +1541,8 @@ RETURN
 				WHEN g.IdTipo = 'RT' THEN 'TN'
 				WHEN g.IdTipo = 'RL' THEN 'LT'
 			END AS CHAR(2)),
-			Descrizione = CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(d.Descrizione, ''),
+			Descrizione = CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+				IIF(a.FormularioData IS NULL, REPLACE(ISNULL(d.Descrizione, ''), ' del #3', ''), ISNULL(d.Descrizione, '')),
 				'#1', ISNULL(a.Eer, '')),
 				'#2', ISNULL(a.FormularioNumero, '')),
 				'#3', ISNULL(a.FormularioData, '')),

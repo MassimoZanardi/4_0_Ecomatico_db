@@ -85,6 +85,22 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Modulo Offerte e contratti: un articolo indicato tra le variabili di un importo attivo
+			IF EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblImportiMagazzino m
+					INNER JOIN dbo.tblImporti i ON m.Id = i.Id
+				WHERE
+					m.IdArticolo = @Id
+					AND i.Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un articolo indicato in un importo non può essere cancellato';
+				GOTO BRANCH_END;
+			END
+
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblMagazziniArticoli
 				SET Lock = 4

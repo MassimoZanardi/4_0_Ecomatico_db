@@ -6,16 +6,29 @@ GO
 
 CREATE TABLE [dbo].[tblImportiMagazzino](
 	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
-	[IdMittenteParent] [char](16) COLLATE Latin1_General_CI_AS NULL,
-	[IdMittente] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdDestinatarioParent] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdDestinatario] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdEtichetta] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdArticolo] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdMateriale] [char](2) COLLATE Latin1_General_CI_AS NULL,
+	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblImportiMagazzino] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
+
+GO
+
+SET ANSI_PADDING ON
+
+GO
+
+CREATE NONCLUSTERED INDEX [IX_ImportiMagazzino_IdSede] ON [dbo].[tblImportiMagazzino]
+(
+	[IdSede] ASC
+)
+INCLUDE([IdDestinatarioParent],[IdDestinatario],[IdArticolo],[IdMateriale],[IdEtichetta]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 
 GO
 
@@ -33,6 +46,20 @@ GO
 ALTER TABLE [dbo].[tblImportiMagazzino] CHECK CONSTRAINT [FK_tblImportiMagazzino_tblImporti]
 GO
 
+ALTER TABLE [dbo].[tblImportiMagazzino]  WITH CHECK ADD  CONSTRAINT [FK_tblImportiMagazzino_tblMagazziniArticoli] FOREIGN KEY([IdArticolo])
+REFERENCES [dbo].[tblMagazziniArticoli] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblImportiMagazzino] CHECK CONSTRAINT [FK_tblImportiMagazzino_tblMagazziniArticoli]
+GO
+
+ALTER TABLE [dbo].[tblImportiMagazzino]  WITH CHECK ADD  CONSTRAINT [FK_tblImportiMagazzino_tblRifiutiMateriali] FOREIGN KEY([IdMateriale])
+REFERENCES [dbo].[tblRifiutiMateriali] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblImportiMagazzino] CHECK CONSTRAINT [FK_tblImportiMagazzino_tblRifiutiMateriali]
+GO
+
 ALTER TABLE [dbo].[tblImportiMagazzino]  WITH CHECK ADD  CONSTRAINT [FK_tblImportiMagazzino_tblSedi_IdDestinatario] FOREIGN KEY([IdDestinatario])
 REFERENCES [dbo].[tblSedi] ([Id])
 GO
@@ -45,18 +72,4 @@ REFERENCES [dbo].[tblSedi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblImportiMagazzino] CHECK CONSTRAINT [FK_tblImportiMagazzino_tblSedi_IdDestinatarioParent]
-GO
-
-ALTER TABLE [dbo].[tblImportiMagazzino]  WITH CHECK ADD  CONSTRAINT [FK_tblImportiMagazzino_tblSedi_IdMittente] FOREIGN KEY([IdMittente])
-REFERENCES [dbo].[tblSedi] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblImportiMagazzino] CHECK CONSTRAINT [FK_tblImportiMagazzino_tblSedi_IdMittente]
-GO
-
-ALTER TABLE [dbo].[tblImportiMagazzino]  WITH CHECK ADD  CONSTRAINT [FK_tblImportiMagazzino_tblSedi_IdMittenteParent] FOREIGN KEY([IdMittenteParent])
-REFERENCES [dbo].[tblSedi] ([Id])
-GO
-
-ALTER TABLE [dbo].[tblImportiMagazzino] CHECK CONSTRAINT [FK_tblImportiMagazzino_tblSedi_IdMittenteParent]
 GO

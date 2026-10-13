@@ -7,6 +7,7 @@ GO
 CREATE TABLE [dbo].[tblMagazziniCausali](
 	[Id] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+	[IsFatturabile] [bit] NULL,
  CONSTRAINT [PK_tblMagazziniCausali] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

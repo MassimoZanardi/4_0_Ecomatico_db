@@ -207,7 +207,7 @@ BEGIN
 					SELECT 1
 					FROM dbo.tblImportiMagazzino m
 					INNER JOIN dbo.tblImporti i ON m.Id = i.Id
-					WHERE i.Lock = 0 AND @Id IN (m.IdMittenteParent, m.IdMittente, m.IdDestinatarioParent, m.IdDestinatario)
+					WHERE i.Lock = 0 AND @Id IN (m.IdDestinatarioParent, m.IdDestinatario)
 				)
 				OR EXISTS (
 					SELECT 1

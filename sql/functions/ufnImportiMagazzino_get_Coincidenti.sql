@@ -2,17 +2,19 @@
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Offerte e contratti: importi di magazzino attivi dell'azienda le cui variabili coincidono con i valori di una
--- riga di DDT. È l'unico punto in cui è scritta la regola di coincidenza per il magazzino, come
+-- Offerte e contratti: importi di magazzino attivi dell'azienda le cui variabili coincidono con i valori di un
+-- DDT. È l'unico punto in cui è scritta la regola di coincidenza per il magazzino, come
 -- ufnImportiRifiuti_get_Coincidenti per i rifiuti: la leggono la fatturazione e la verifica degli importi.
--- Funzione in linea senza TOP né sottoquery: applicata a più righe diventa un join. Per questo non va aggiunto
--- qui nulla che dipenda dal documento oltre ai confronti delle variabili.
+-- Funzione in linea senza TOP né sottoquery: applicata a più DDT diventa un join. Per questo non va aggiunto qui
+-- nulla che dipenda dal documento oltre ai confronti delle variabili.
 --
--- Il confronto è per riga del DDT: @IdArticolo per una riga articolo, @IdMateriale per una riga EoW (l'altro è
--- NULL). Un importo che indica un articolo non coincide con una riga EoW, e viceversa; un importo che non
--- indica né l'uno né l'altro coincide con qualsiasi riga.
+-- L'importo di magazzino è un listino: si sceglie sul DDT, non sulla riga. Articoli e materiali non sono
+-- variabili: stanno sulle righe dell'importo (tblImportiRigheMagazzino) e li guarda chi calcola le righe di fattura.
 -- Coincidenza: tutte le variabili indicate nell'importo coincidono con i valori (una variabile NULL vale
--- "qualsiasi"). Destinatario: @IdDestinatarioParent è il soggetto, @IdDestinatario la sua sede.
+-- "qualsiasi").
+--   @IdSedePartenza: sede interna del DDT, da cui parte la merce.
+--   @IdDestinatarioParent: soggetto del destinatario del DDT.
+--   @IdDestinatario: dove arriva la merce, cioè la destinazione del DDT o, se manca, il destinatario.
 -- ETICHETTA: qui non viene verificata. IdEtichetta è quella indicata nell'importo (NULL = qualsiasi): chi
 -- chiama scarta l'importo se la indica e il DDT non ce l'ha tra le sue.
 -- Classe:
@@ -24,10 +26,9 @@ GO
 CREATE OR ALTER FUNCTION dbo.ufnImportiMagazzino_get_Coincidenti (
 	@IdAzienda CHAR(16),
 	@Data DATE,
+	@IdSedePartenza CHAR(16),
 	@IdDestinatarioParent CHAR(16),
-	@IdDestinatario CHAR(16),
-	@IdArticolo CHAR(16),
-	@IdMateriale CHAR(2))
+	@IdDestinatario CHAR(16))
 RETURNS TABLE
 AS
 RETURN
@@ -55,8 +56,7 @@ RETURN
 		-- Azienda: quella copiata sulle variabili (tblImportiMagazzino.IdSede)
 		ir.IdSede = @IdAzienda
 		AND i.Lock = 0
-		AND (ir.IdArticolo IS NULL OR ir.IdArticolo = @IdArticolo)
-		AND (ir.IdMateriale IS NULL OR ir.IdMateriale = @IdMateriale)
+		AND (ir.IdSedePartenza IS NULL OR ir.IdSedePartenza = @IdSedePartenza)
 		AND (ir.IdDestinatarioParent IS NULL OR ir.IdDestinatarioParent = @IdDestinatarioParent)
 		AND (ir.IdDestinatario IS NULL OR ir.IdDestinatario = @IdDestinatario)
 );

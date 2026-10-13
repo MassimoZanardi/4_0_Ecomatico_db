@@ -3,15 +3,17 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- Offerte e contratti > Importi magazzino > Azioni > Verifica importi: quali importi dell'azienda interna
--- corrente coinciderebbero con una riga di DDT che avesse i valori indicati, e quale verrebbe applicato. La
--- regola di coincidenza e la classe dell'importo sono quelle della fatturazione
--- (ufnImportiMagazzino_get_Coincidenti); qui si restituiscono tutti gli importi che coincidono, non solo il primo.
+-- corrente coinciderebbero con un DDT che avesse i valori indicati, e quale verrebbe applicato. La regola di
+-- coincidenza e la classe dell'importo sono quelle della fatturazione (ufnImportiMagazzino_get_Coincidenti);
+-- qui si restituiscono tutti gli importi che coincidono, non solo il primo.
 --   @Data: data del DDT (decide la validità dei contratti); se manca, oggi.
---   Il confronto è per riga: @IdArticolo (riga articolo) oppure @IdMateriale (riga EoW), non entrambi.
---   Un valore non indicato vuol dire che la riga o il DDT non ha quel dato: non coincide con gli importi che
---   lo indicano. Destinatario: @IdDestinatarioParent è il soggetto, @IdDestinatario la sua sede; indicato solo
---   il soggetto, la sede è il soggetto stesso; indicata solo la sede, il soggetto si ricava.
---   @IdEtichetta: un'etichetta del DDT (una sola).
+--   @IdSedePartenza: sede interna da cui parte la merce. Destinatario: @IdDestinatarioParent è il soggetto,
+--   @IdDestinatario dove arriva la merce; indicato solo il soggetto, la sede è il soggetto stesso; indicata
+--   solo la sede, il soggetto si ricava. @IdEtichetta: un'etichetta del DDT (una sola). Un valore non
+--   indicato vuol dire che il DDT non ha quel dato: non coincide con gli importi che lo indicano.
+--   @IdArticolo oppure @IdMateriale (facoltativi): un articolo o un materiale del DDT. Non entrano nella
+--   scelta dell'importo: servono a dire se l'importo ha una riga con il suo prezzo (Prezzo), e se manca
+--   (SenzaRigaArticolo = 1: un DDT con quell'articolo non sarebbe fatturabile con quell'importo).
 -- Righe nell'ordine di scelta. Esito: A applicato; B coincide ma non viene applicato (Motivo); S di un contratto
 -- non valido alla data; X di un'offerta o di un contratto cancellato (mai applicato).
 -- Conflitto = 1: stessa priorità e stesso tipo (di contratto o standard) dell'importo applicato, lui compreso:
@@ -19,6 +21,7 @@ GO
 CREATE OR ALTER PROCEDURE dbo.uspImportiMagazzino_get_Verifica
 	@IdSessione CHAR(16) = NULL,
 	@Data DATE = NULL,
+	@IdSedePartenza CHAR(16) = NULL,
 	@IdDestinatarioParent CHAR(16) = NULL,
 	@IdDestinatario CHAR(16) = NULL,
 	@IdArticolo CHAR(16) = NULL,
@@ -32,6 +35,7 @@ BEGIN
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdSedePartenza = NULLIF(NULLIF(LTRIM(RTRIM(@IdSedePartenza)), ''), REPLICATE('0', 16));
 		SET @IdDestinatarioParent = NULLIF(NULLIF(LTRIM(RTRIM(@IdDestinatarioParent)), ''), REPLICATE('0', 16));
 		SET @IdDestinatario = NULLIF(NULLIF(LTRIM(RTRIM(@IdDestinatario)), ''), REPLICATE('0', 16));
 		SET @IdArticolo = NULLIF(NULLIF(LTRIM(RTRIM(@IdArticolo)), ''), REPLICATE('0', 16));
@@ -87,7 +91,7 @@ BEGIN
 				k.IdOffertaContratto,
 				k.Standard,
 				k.Classe
-			FROM dbo.ufnImportiMagazzino_get_Coincidenti(@idAzienda, @Data, @IdDestinatarioParent, @IdDestinatario, @IdArticolo, @IdMateriale) k
+			FROM dbo.ufnImportiMagazzino_get_Coincidenti(@idAzienda, @Data, @IdSedePartenza, @IdDestinatarioParent, @IdDestinatario) k
 			-- L'importo che indica un'etichetta coincide solo se è quella del DDT
 			WHERE
 				k.IdEtichetta IS NULL
@@ -128,6 +132,8 @@ BEGIN
 			ContrattoDataInizio = oc.DataInizio,
 			ContrattoDataFine = oc.DataFine,
 			Righe = (SELECT COUNT(*) FROM dbo.tblImportiRighe g WHERE g.IdImporto = t.IdImporto),
+			Prezzo = pr.Importo,
+			SenzaRigaArticolo = CAST(IIF((@IdArticolo IS NOT NULL OR @IdMateriale IS NOT NULL) AND pr.Id IS NULL, 1, 0) AS BIT),
 			Esito = CAST(CASE
 				WHEN t.Classe = 'V' AND t.N = 1 THEN 'A'
 				WHEN t.Classe = 'V' THEN 'B'
@@ -150,6 +156,20 @@ BEGIN
 			LEFT JOIN dbo.tblOfferteContratti oc ON t.IdOffertaContratto = oc.Id
 			LEFT JOIN dbo.tblClientiFornitori cf ON oc.IdClienteFornitore = cf.Id
 			LEFT JOIN dbo.tblSedi cs ON cf.IdSede = cs.Id
+			OUTER APPLY (
+				-- Riga a quantità dell'importo per l'articolo o il materiale indicato
+				SELECT TOP (1) x.Id, x.Importo
+				FROM
+					dbo.tblImportiRighe x
+					INNER JOIN dbo.tblImportiRigheMagazzino xm ON x.Id = xm.Id
+				WHERE
+					x.IdImporto = t.IdImporto
+					AND x.IdTipo = 'MA'
+					AND x.Importo IS NOT NULL
+					AND ISNULL(x.MinimoFatturabile, 0) = 0
+					AND (xm.IdArticolo = @IdArticolo OR xm.IdMateriale = @IdMateriale)
+				ORDER BY ISNULL(x.Pos, 0), x.Id
+			) pr
 		ORDER BY
 			CASE t.Classe WHEN 'V' THEN 0 WHEN 'S' THEN 1 ELSE 2 END,
 			t.N

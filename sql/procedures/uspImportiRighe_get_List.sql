@@ -84,10 +84,17 @@ BEGIN
 			d.IdConto,
 			ContoNome = ISNULL(c.Codice + ' - ', '') + c.Nome,
 			d.Descrizione,
-			g.Pos
+			g.Pos,
+			-- Solo per gli importi di magazzino: articolo o materiale EoW della riga a quantità
+			x.IdArticolo,
+			x.IdMateriale,
+			Voce = ISNULL(ar.Nome + ISNULL(' (' + ar.Codice + ')', ''), 'EoW: ' + ma.Nome)
 		FROM
 			dbo.tblImportiRighe g
 			LEFT JOIN dbo.tblImportiRigheDettagli d ON g.Id = d.Id
+			LEFT JOIN dbo.tblImportiRigheMagazzino x ON g.Id = x.Id
+			LEFT JOIN dbo.tblMagazziniArticoli ar ON x.IdArticolo = ar.Id
+			LEFT JOIN dbo.tblRifiutiMateriali ma ON x.IdMateriale = ma.Id
 			LEFT JOIN dbo.tblImportiRigheTipi t ON g.IdTipo = t.Id
 			LEFT JOIN dbo.tblAliquoteIva a ON d.IdAliquotaIva = a.Id
 			LEFT JOIN dbo.tblFattureConti c ON d.IdConto = c.Id

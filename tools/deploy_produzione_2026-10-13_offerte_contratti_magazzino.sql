@@ -5,22 +5,27 @@ Da eseguire DOPO deploy_produzione_2026-10-12_offerte_contratti.sql e
 deploy_produzione_2026-10-13_magazzino_etichette.sql. Rieseguibile.
 Eseguire con sqlcmd -f 65001 -I (oppure da SSMS). Va deployato insieme all'app.
 
-1. Struttura: tblMagazziniCausali.IsFatturabile (solo Vendita); tblImportiMagazzino senza il mittente e con
-   IdArticolo, IdMateriale e IdSede; indice IX_ImportiMagazzino_IdSede.
-2. Funzioni degli importi di magazzino: elenco (ufnImportiMagazzino_get_List), regola di coincidenza per riga del
-   DDT (_get_Coincidenti), DDT considerati (_get_Documenti), importo per riga (_get_ApplicazioneRighe_List),
-   riepilogo e cliente per DDT (_get_Applicazione_List), righe di fattura (_get_RigheFattura).
+L'importo di magazzino è un listino: si sceglie sul DDT (uno solo) e ha una riga per ogni articolo o materiale.
+
+1. Struttura: tblMagazziniCausali.IsFatturabile (solo Vendita); tblImportiMagazzino senza il mittente, con
+   IdSedePartenza e IdSede; nuova tabella tblImportiRigheMagazzino (articolo o materiale della riga a quantità);
+   indici IX_ImportiMagazzino_IdSede e IX_ImportiRigheMagazzino_IdArticolo.
+2. Funzioni degli importi di magazzino: elenco (ufnImportiMagazzino_get_List), regola di coincidenza con il DDT
+   (_get_Coincidenti), DDT considerati (_get_Documenti), importo del DDT e prezzo di ogni riga
+   (_get_ApplicazioneRighe_List), riepilogo e cliente per DDT (_get_Applicazione_List), righe di fattura
+   (_get_RigheFattura).
 3. Funzioni della fatturazione: ufnFattureDocumenti_get_Magazzino (DDT candidati), ufnFattureDocumenti_get_Rifiuti
    (colonna SenzaImporto), ufnFattureGenera_get_Documenti (rifiuti e magazzino insieme, colonna IdModulo, parametri
    @Rifiuti e @Magazzino), ufnFattureDocumenti_get_Documento (documento del blocco "Cliente a cui fatturare").
 4. Stored procedure degli importi di magazzino: uspImportiMagazzino_ins, _get, _upd, _get_List, _get_Esportazione,
-   _get_Sedi_SelectList, _get_Etichette_SelectList, _get_Articoli_SelectList, _get_Materiali_SelectList,
-   _get_Verifica, _get_Conflitti.
-5. Stored procedure modificate: uspFattureDocumenti_get, _get_Righe, _upd, _del_Fattura, _get_Clienti_List (anche
-   per il modulo MAG); uspFatture_ins_Genera (un DDT con @IdModulo = 'MAG', parametro @Magazzino);
-   uspFatture_get_Genera_Riepilogo, _Fatture_List e _List (nuova firma della funzione comune; i DDT nella procedura
-   automatica non sono ancora in questo script); uspMagazziniArticoli_del, uspSedi_del_SediEsterne,
-   uspSedi_del_SediInterne e le due cancellazioni a cascata di sviluppo.
+   _get_Sedi_SelectList, _get_SediInterne_SelectList, _get_Etichette_SelectList, _get_Articoli_SelectList,
+   _get_Materiali_SelectList, _get_Verifica, _get_Conflitti.
+5. Stored procedure modificate: uspImportiRighe_upd e _get_List (articolo o materiale della riga); uspFattureDocumenti_get,
+   _get_Righe, _upd, _del_Fattura, _get_Clienti_List (anche per il modulo MAG); uspFatture_ins_Genera (un DDT con
+   @IdModulo = 'MAG', parametro @Magazzino); uspFatture_get_Genera_Riepilogo, _Fatture_List e _List (nuova firma
+   della funzione comune; i DDT nella procedura automatica non sono ancora in questo script);
+   uspMagazziniArticoli_del, uspSedi_del_SediEsterne, uspSedi_del_SediInterne e le due cancellazioni a cascata di
+   sviluppo.
 
 Dopo il deploy: eseguire tools\verifica_crlf_accenti.sql, che deve dare 0 righe.
 */
@@ -36,12 +41,17 @@ SET QUOTED_IDENTIFIER ON;
 GO
 
 -- Offerte e contratti, fase magazzino: importi dei DDT e causali fatturabili.
+-- L'importo di magazzino è un LISTINO: vale per una tratta e un destinatario (o per tutti) e ha una riga per ogni
+-- articolo o materiale, con il suo prezzo. L'articolo non è una variabile dell'importo: sta sulla riga, come
+-- nella 3.1.
 --   1. tblMagazziniCausali.IsFatturabile: causali i cui DDT entrano nella fatturazione. Solo Vendita (V).
---   2. tblImportiMagazzino: via il mittente dalle variabili (IdMittenteParent, IdMittente); nuove variabili
---      IdArticolo (righe articolo del DDT) e IdMateriale (righe EoW), che si escludono; IdSede, copia
---      dell'azienda dell'importo, per il confronto con i documenti (come tblImportiRifiuti.IdSede).
---   3. Indice per il confronto: gli importi di magazzino dell'azienda con le loro variabili.
--- Variabili che restano: destinatario (soggetto e sede), articolo, materiale, etichetta.
+--   2. tblImportiMagazzino: variabili sede di partenza (IdSedePartenza, la sede interna del DDT), destinatario
+--      (soggetto e sede: la sede si confronta con la destinazione finale della merce) ed etichetta; via il
+--      mittente; IdSede, copia dell'azienda dell'importo, per il confronto con i documenti (come
+--      tblImportiRifiuti.IdSede). Le colonne IdArticolo e IdMateriale, esistite solo in sviluppo, vengono tolte.
+--   3. tblImportiRigheMagazzino: articolo oppure materiale EoW a cui si applica il prezzo di una riga a quantità
+--      (tipo MA). Chiave esterna sulla riga ON DELETE CASCADE: cancellata la riga, sparisce da sola.
+--   4. Indici.
 -- Rieseguibile. Da eseguire dopo offerte_contratti_struttura.sql e magazzino_etichette_struttura.sql.
 
 BEGIN TRANSACTION;
@@ -51,11 +61,20 @@ IF COL_LENGTH('dbo.tblMagazziniCausali', 'IsFatturabile') IS NULL
 	ALTER TABLE dbo.tblMagazziniCausali ADD IsFatturabile BIT NULL;
 
 -- 2. Variabili degli importi di magazzino
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ImportiMagazzino_IdSede')
+	DROP INDEX IX_ImportiMagazzino_IdSede ON dbo.tblImportiMagazzino;
+
 IF OBJECT_ID('dbo.FK_tblImportiMagazzino_tblSedi_IdMittenteParent', 'F') IS NOT NULL
 	ALTER TABLE dbo.tblImportiMagazzino DROP CONSTRAINT FK_tblImportiMagazzino_tblSedi_IdMittenteParent;
 
 IF OBJECT_ID('dbo.FK_tblImportiMagazzino_tblSedi_IdMittente', 'F') IS NOT NULL
 	ALTER TABLE dbo.tblImportiMagazzino DROP CONSTRAINT FK_tblImportiMagazzino_tblSedi_IdMittente;
+
+IF OBJECT_ID('dbo.FK_tblImportiMagazzino_tblMagazziniArticoli', 'F') IS NOT NULL
+	ALTER TABLE dbo.tblImportiMagazzino DROP CONSTRAINT FK_tblImportiMagazzino_tblMagazziniArticoli;
+
+IF OBJECT_ID('dbo.FK_tblImportiMagazzino_tblRifiutiMateriali', 'F') IS NOT NULL
+	ALTER TABLE dbo.tblImportiMagazzino DROP CONSTRAINT FK_tblImportiMagazzino_tblRifiutiMateriali;
 
 IF COL_LENGTH('dbo.tblImportiMagazzino', 'IdMittenteParent') IS NOT NULL
 	ALTER TABLE dbo.tblImportiMagazzino DROP COLUMN IdMittenteParent;
@@ -63,24 +82,40 @@ IF COL_LENGTH('dbo.tblImportiMagazzino', 'IdMittenteParent') IS NOT NULL
 IF COL_LENGTH('dbo.tblImportiMagazzino', 'IdMittente') IS NOT NULL
 	ALTER TABLE dbo.tblImportiMagazzino DROP COLUMN IdMittente;
 
-IF COL_LENGTH('dbo.tblImportiMagazzino', 'IdArticolo') IS NULL
+IF COL_LENGTH('dbo.tblImportiMagazzino', 'IdArticolo') IS NOT NULL
+	ALTER TABLE dbo.tblImportiMagazzino DROP COLUMN IdArticolo;
+
+IF COL_LENGTH('dbo.tblImportiMagazzino', 'IdMateriale') IS NOT NULL
+	ALTER TABLE dbo.tblImportiMagazzino DROP COLUMN IdMateriale;
+
+IF COL_LENGTH('dbo.tblImportiMagazzino', 'IdSedePartenza') IS NULL
 BEGIN
-	ALTER TABLE dbo.tblImportiMagazzino ADD IdArticolo CHAR(16) COLLATE Latin1_General_CI_AS NULL;
+	ALTER TABLE dbo.tblImportiMagazzino ADD IdSedePartenza CHAR(16) COLLATE Latin1_General_CI_AS NULL;
 
-	ALTER TABLE dbo.tblImportiMagazzino WITH CHECK ADD CONSTRAINT FK_tblImportiMagazzino_tblMagazziniArticoli
-		FOREIGN KEY (IdArticolo) REFERENCES dbo.tblMagazziniArticoli (Id);
-END
-
-IF COL_LENGTH('dbo.tblImportiMagazzino', 'IdMateriale') IS NULL
-BEGIN
-	ALTER TABLE dbo.tblImportiMagazzino ADD IdMateriale CHAR(2) COLLATE Latin1_General_CI_AS NULL;
-
-	ALTER TABLE dbo.tblImportiMagazzino WITH CHECK ADD CONSTRAINT FK_tblImportiMagazzino_tblRifiutiMateriali
-		FOREIGN KEY (IdMateriale) REFERENCES dbo.tblRifiutiMateriali (Id);
+	ALTER TABLE dbo.tblImportiMagazzino WITH CHECK ADD CONSTRAINT FK_tblImportiMagazzino_tblSedi_IdSedePartenza
+		FOREIGN KEY (IdSedePartenza) REFERENCES dbo.tblSedi (Id);
 END
 
 IF COL_LENGTH('dbo.tblImportiMagazzino', 'IdSede') IS NULL
 	ALTER TABLE dbo.tblImportiMagazzino ADD IdSede CHAR(16) COLLATE Latin1_General_CI_AS NULL;
+
+-- 3. Articolo o materiale delle righe a quantità
+IF OBJECT_ID('dbo.tblImportiRigheMagazzino', 'U') IS NULL
+BEGIN
+	CREATE TABLE dbo.tblImportiRigheMagazzino (
+		Id CHAR(16) COLLATE Latin1_General_CI_AS NOT NULL,
+		IdArticolo CHAR(16) COLLATE Latin1_General_CI_AS NULL,
+		IdMateriale CHAR(2) COLLATE Latin1_General_CI_AS NULL,
+		CONSTRAINT PK_tblImportiRigheMagazzino PRIMARY KEY CLUSTERED (Id ASC)
+	);
+
+	ALTER TABLE dbo.tblImportiRigheMagazzino WITH CHECK ADD CONSTRAINT FK_tblImportiRigheMagazzino_tblImportiRighe
+		FOREIGN KEY (Id) REFERENCES dbo.tblImportiRighe (Id) ON DELETE CASCADE;
+	ALTER TABLE dbo.tblImportiRigheMagazzino WITH CHECK ADD CONSTRAINT FK_tblImportiRigheMagazzino_tblMagazziniArticoli
+		FOREIGN KEY (IdArticolo) REFERENCES dbo.tblMagazziniArticoli (Id);
+	ALTER TABLE dbo.tblImportiRigheMagazzino WITH CHECK ADD CONSTRAINT FK_tblImportiRigheMagazzino_tblRifiutiMateriali
+		FOREIGN KEY (IdMateriale) REFERENCES dbo.tblRifiutiMateriali (Id);
+END
 
 COMMIT TRANSACTION;
 GO
@@ -100,21 +135,21 @@ FROM
 	INNER JOIN dbo.tblImporti i ON m.Id = i.Id
 WHERE m.IdSede IS NULL;
 
--- 3. Importi di magazzino dell'azienda con le loro variabili: il confronto con ogni riga di DDT legge solo questi
+-- 4. Indici
+-- Importi di magazzino dell'azienda con le loro variabili: il confronto con ogni DDT legge solo questi
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ImportiMagazzino_IdSede')
 	CREATE NONCLUSTERED INDEX IX_ImportiMagazzino_IdSede ON dbo.tblImportiMagazzino (IdSede)
-		INCLUDE (IdDestinatarioParent, IdDestinatario, IdArticolo, IdMateriale, IdEtichetta);
+		INCLUDE (IdSedePartenza, IdDestinatarioParent, IdDestinatario, IdEtichetta);
+
+-- Righe di importo di un articolo: controllo di cancellazione dell'articolo e chiave esterna
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ImportiRigheMagazzino_IdArticolo')
+	CREATE NONCLUSTERED INDEX IX_ImportiRigheMagazzino_IdArticolo ON dbo.tblImportiRigheMagazzino (IdArticolo)
+		WHERE IdArticolo IS NOT NULL;
 
 COMMIT TRANSACTION;
 GO
 
 SELECT Id, Nome, IsFatturabile FROM dbo.tblMagazziniCausali ORDER BY Nome;
-GO
-GO
-
-SET ANSI_NULLS ON;
-GO
-SET QUOTED_IDENTIFIER ON;
 GO
 
 PRINT 'sql/functions/ufnImportiMagazzino_get_List.sql';
@@ -126,8 +161,8 @@ GO
 -- Offerte e contratti > Importi magazzino: righe dell'elenco e dell'esportazione (uspImportiMagazzino_get_List,
 -- uspImportiMagazzino_get_Esportazione), così leggono le stesse righe con la stessa ricerca.
 -- Scope: importi di magazzino attivi dell'azienda interna corrente della sessione.
--- Variabili: articolo (righe articolo del DDT) oppure materiale (righe EoW), destinatario (soggetto e,
--- facoltativa, una sua sede), etichetta del DDT. Una variabile NULL vale "qualsiasi".
+-- Variabili: sede di partenza (sede interna del DDT), destinatario (soggetto e, facoltativa, una sua sede),
+-- etichetta del DDT. Una variabile NULL vale "qualsiasi". Articoli e materiali stanno sulle righe dell'importo.
 -- StatoValore 1 (avviso): importo senza righe, importo di un'offerta, contratto scaduto.
 --   @SoloContrattoScaduto = 1: solo gli importi di un contratto confermato la cui validità è finita prima di oggi.
 CREATE OR ALTER FUNCTION dbo.ufnImportiMagazzino_get_List (
@@ -155,8 +190,7 @@ RETURN
 		i.Nome,
 		i.IdPriorita,
 		Priorita = p.Nome,
-		Articolo = a.Nome + ISNULL(' (' + a.Codice + ')', ''),
-		Materiale = ma.Nome,
+		Partenza = sp.NomeCompleto + ISNULL(' ' + sp.IndirizzoCompleto, ''),
 		Destinatario = IIF(r.IdDestinatario IS NULL, da.NomeCompleto, ds.NomeCompleto + ISNULL(' ' + ds.IndirizzoCompleto, '')),
 		Etichetta = et.Nome,
 		c.Cliente,
@@ -169,8 +203,7 @@ RETURN
 		INNER JOIN dbo.tblSessioni s ON i.IdSede = s.IdAzienda
 		INNER JOIN dbo.tblImportiMagazzino r ON i.Id = r.Id
 		LEFT JOIN dbo.tblImportiPriorita p ON i.IdPriorita = p.Id
-		LEFT JOIN dbo.tblMagazziniArticoli a ON r.IdArticolo = a.Id
-		LEFT JOIN dbo.tblRifiutiMateriali ma ON r.IdMateriale = ma.Id
+		LEFT JOIN dbo.tblSedi sp ON r.IdSedePartenza = sp.Id
 		LEFT JOIN dbo.tblSedi da ON r.IdDestinatarioParent = da.Id
 		LEFT JOIN dbo.tblSedi ds ON r.IdDestinatario = ds.Id
 		LEFT JOIN dbo.tblEtichette et ON r.IdEtichetta = et.Id
@@ -209,16 +242,13 @@ RETURN
 			(
 			@Search IS NULL
 			OR i.Nome LIKE '%' + @Search + '%'
-			OR a.Nome LIKE '%' + @Search + '%'
-			OR a.Codice LIKE '%' + @Search + '%'
-			OR ma.Nome LIKE '%' + @Search + '%'
+			OR sp.NomeCompleto LIKE '%' + @Search + '%'
 			OR da.NomeCompleto LIKE '%' + @Search + '%'
 			OR ds.NomeCompleto LIKE '%' + @Search + '%'
 			OR et.Nome LIKE '%' + @Search + '%'
 			OR c.Cliente LIKE '%' + @Search + '%'
 			)
 );
-GO
 GO
 
 PRINT 'sql/functions/ufnImportiMagazzino_get_Coincidenti.sql';
@@ -227,17 +257,19 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Offerte e contratti: importi di magazzino attivi dell'azienda le cui variabili coincidono con i valori di una
--- riga di DDT. È l'unico punto in cui è scritta la regola di coincidenza per il magazzino, come
+-- Offerte e contratti: importi di magazzino attivi dell'azienda le cui variabili coincidono con i valori di un
+-- DDT. È l'unico punto in cui è scritta la regola di coincidenza per il magazzino, come
 -- ufnImportiRifiuti_get_Coincidenti per i rifiuti: la leggono la fatturazione e la verifica degli importi.
--- Funzione in linea senza TOP né sottoquery: applicata a più righe diventa un join. Per questo non va aggiunto
--- qui nulla che dipenda dal documento oltre ai confronti delle variabili.
+-- Funzione in linea senza TOP né sottoquery: applicata a più DDT diventa un join. Per questo non va aggiunto qui
+-- nulla che dipenda dal documento oltre ai confronti delle variabili.
 --
--- Il confronto è per riga del DDT: @IdArticolo per una riga articolo, @IdMateriale per una riga EoW (l'altro è
--- NULL). Un importo che indica un articolo non coincide con una riga EoW, e viceversa; un importo che non
--- indica né l'uno né l'altro coincide con qualsiasi riga.
+-- L'importo di magazzino è un listino: si sceglie sul DDT, non sulla riga. Articoli e materiali non sono
+-- variabili: stanno sulle righe dell'importo (tblImportiRigheMagazzino) e li guarda chi calcola le righe di fattura.
 -- Coincidenza: tutte le variabili indicate nell'importo coincidono con i valori (una variabile NULL vale
--- "qualsiasi"). Destinatario: @IdDestinatarioParent è il soggetto, @IdDestinatario la sua sede.
+-- "qualsiasi").
+--   @IdSedePartenza: sede interna del DDT, da cui parte la merce.
+--   @IdDestinatarioParent: soggetto del destinatario del DDT.
+--   @IdDestinatario: dove arriva la merce, cioè la destinazione del DDT o, se manca, il destinatario.
 -- ETICHETTA: qui non viene verificata. IdEtichetta è quella indicata nell'importo (NULL = qualsiasi): chi
 -- chiama scarta l'importo se la indica e il DDT non ce l'ha tra le sue.
 -- Classe:
@@ -249,10 +281,9 @@ GO
 CREATE OR ALTER FUNCTION dbo.ufnImportiMagazzino_get_Coincidenti (
 	@IdAzienda CHAR(16),
 	@Data DATE,
+	@IdSedePartenza CHAR(16),
 	@IdDestinatarioParent CHAR(16),
-	@IdDestinatario CHAR(16),
-	@IdArticolo CHAR(16),
-	@IdMateriale CHAR(2))
+	@IdDestinatario CHAR(16))
 RETURNS TABLE
 AS
 RETURN
@@ -280,12 +311,10 @@ RETURN
 		-- Azienda: quella copiata sulle variabili (tblImportiMagazzino.IdSede)
 		ir.IdSede = @IdAzienda
 		AND i.Lock = 0
-		AND (ir.IdArticolo IS NULL OR ir.IdArticolo = @IdArticolo)
-		AND (ir.IdMateriale IS NULL OR ir.IdMateriale = @IdMateriale)
+		AND (ir.IdSedePartenza IS NULL OR ir.IdSedePartenza = @IdSedePartenza)
 		AND (ir.IdDestinatarioParent IS NULL OR ir.IdDestinatarioParent = @IdDestinatarioParent)
 		AND (ir.IdDestinatario IS NULL OR ir.IdDestinatario = @IdDestinatario)
 );
-GO
 GO
 
 PRINT 'sql/functions/ufnImportiMagazzino_get_Documenti.sql';
@@ -303,6 +332,9 @@ GO
 -- causale fatturabile (tblMagazziniCausali.IsFatturabile, oggi la sola vendita).
 -- Lock: 0 solo se movimento e DDT sono confermati.
 -- Destinatario: IdDestinatario è l'anagrafica indicata sul DDT, IdDestinatarioParent il suo soggetto.
+-- IdDestinazioneEffettiva: dove arriva la merce, cioè la destinazione del DDT o, se manca, il destinatario: è il
+-- valore che si confronta con la variabile "Sede del destinatario" degli importi. IdSedeDdt è la sede interna da
+-- cui parte la merce (variabile "Sede di partenza").
 CREATE OR ALTER FUNCTION dbo.ufnImportiMagazzino_get_Documenti (
 	@Id CHAR(16),
 	@IdAzienda CHAR(16),
@@ -341,7 +373,8 @@ RETURN
 		IsFatturabile = CAST(IIF(ISNULL(ca.IsFatturabile, 0) = 1 AND ISNULL(d.Sezionale, '') <> 'R' AND m.IdOperazione = 'S', 1, 0) AS BIT),
 		d.IdDestinatario,
 		IdDestinatarioParent = ISNULL(sd.IdParent, sd.Id),
-		d.IdDestinazione
+		d.IdDestinazione,
+		IdDestinazioneEffettiva = ISNULL(d.IdDestinazione, d.IdDestinatario)
 	FROM
 		ids k
 		INNER JOIN dbo.tblMagazziniMovimenti m ON k.Id = m.Id
@@ -350,7 +383,6 @@ RETURN
 		LEFT JOIN dbo.tblSedi sd ON d.IdDestinatario = sd.Id
 );
 GO
-GO
 
 PRINT 'sql/functions/ufnImportiMagazzino_get_ApplicazioneRighe_List.sql';
 GO
@@ -358,17 +390,20 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Offerte e contratti, magazzino: importo che la fatturazione applica a ogni riga dei DDT (regole O5M di
--- docs/regole/offerte-contratti.md). Il confronto è per riga: una riga per ogni riga articolo o EoW del DDT,
--- anche se nessun importo coincide (IdImporto NULL). Le righe descrittive del DDT non entrano.
+-- Offerte e contratti, magazzino: per ogni riga dei DDT, l'importo applicato al DDT e la riga dell'importo che
+-- dà il prezzo dell'articolo o del materiale (regole O5M di docs/regole/offerte-contratti.md). Una riga per
+-- ogni riga articolo o EoW del DDT; le righe descrittive del DDT non entrano.
 --   Parametri: quelli di ufnImportiMagazzino_get_Documenti. @SoloFatturabili = 1: solo i DDT confermati e
 --        fatturabili; il confronto non viene fatto per gli altri.
--- Importo: tra gli importi di magazzino attivi dell'azienda, il primo le cui variabili coincidono con la riga
--- (ufnImportiMagazzino_get_Coincidenti: articolo o materiale, destinatario; l'etichetta è una di quelle del
--- DDT), in ordine di priorità decrescente e, a parità, prima quello di un contratto e poi quello standard. La
--- validità del contratto è alla data del DDT.
+-- Importo: UNO SOLO PER DDT, lo stesso su tutte le sue righe: tra gli importi di magazzino attivi dell'azienda, il
+-- primo le cui variabili coincidono con il DDT (ufnImportiMagazzino_get_Coincidenti: sede di partenza,
+-- destinatario, destinazione; l'etichetta è una di quelle del DDT), in ordine di priorità decrescente e, a parità,
+-- prima quello di un contratto e poi quello standard. La validità del contratto è alla data del DDT.
+-- IdRigaImporto: la riga a quantità (tipo MA) dell'importo che indica l'articolo o il materiale della riga del DDT.
+-- NULL se il DDT non ha un importo, o se l'importo non ha una riga per quell'articolo: in quel caso il DDT non è
+-- fatturabile. Non si cerca il prezzo in un altro importo.
 -- Riga articolo: unità di misura dell'articolo. Riga EoW: chilogrammi.
--- IdImportoScartato: importo di un contratto che coinciderebbe ma non è valido alla data del DDT.
+-- IdImportoScartato: importo di un contratto che coinciderebbe con il DDT ma non è valido alla sua data.
 CREATE OR ALTER FUNCTION dbo.ufnImportiMagazzino_get_ApplicazioneRighe_List (
 	@Id CHAR(16),
 	@IdAzienda CHAR(16),
@@ -379,14 +414,36 @@ RETURNS TABLE
 AS
 RETURN
 (
-	WITH righe AS (
+	WITH scelta AS (
+		-- Per ogni DDT gli importi che coincidono: N = 1 è il primo candidato (classe V) in ordine di scelta, o
+		-- una riga senza candidato; IdImportoScartato il primo degli scartati (classe S). Un importo che indica
+		-- un'etichetta che il DDT non ha non coincide: passa alla classe X
 		SELECT
-			IdMovimento = doc.Id,
-			doc.IdDdt,
-			doc.[Data],
-			doc.IdAzienda,
-			doc.IdDestinatario,
-			doc.IdDestinatarioParent,
+			doc.Id,
+			IdImporto = IIF(q.Classe = 'V', c.IdImporto, NULL),
+			IdOffertaContratto = IIF(q.Classe = 'V', c.IdOffertaContratto, NULL),
+			IdClienteContratto = IIF(q.Classe = 'V', c.IdClienteContratto, NULL),
+			IdImportoScartato = FIRST_VALUE(IIF(q.Classe = 'S', c.IdImporto, NULL)) OVER (
+				PARTITION BY doc.Id
+				ORDER BY IIF(q.Classe = 'S', 0, 1), c.IdPriorita DESC, c.IdImporto
+				ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW),
+			N = ROW_NUMBER() OVER (
+				PARTITION BY doc.Id
+				ORDER BY IIF(q.Classe = 'V', 0, 1), c.IdPriorita DESC, c.Standard, c.IdImporto)
+		FROM
+			dbo.ufnImportiMagazzino_get_Documenti(@Id, @IdAzienda, @DataDa, @DataA) doc
+			OUTER APPLY dbo.ufnImportiMagazzino_get_Coincidenti(doc.IdAzienda, doc.[Data], doc.IdSedeDdt, doc.IdDestinatarioParent, doc.IdDestinazioneEffettiva) c
+			-- Al massimo una riga: (Id, IdEtichetta) è la chiave primaria
+			LEFT JOIN dbo.tblMagazziniDdtEtichette e ON e.Id = doc.IdDdt
+													 AND e.IdEtichetta = c.IdEtichetta
+			CROSS APPLY (SELECT Classe = IIF(c.IdEtichetta IS NOT NULL AND e.Id IS NULL, 'X', c.Classe)) q
+		WHERE
+			ISNULL(@SoloFatturabili, 0) = 0
+			OR (doc.Lock = 0 AND doc.IsFatturabile = 1)
+	),
+	righe AS (
+		SELECT
+			r.IdMovimento,
 			IdRiga = r.Id,
 			IsEoW = CAST(0 AS BIT),
 			r.Pos,
@@ -396,22 +453,14 @@ RETURN
 			r.Quantita,
 			IdUnitaMisura = a.IdUnitaMisura
 		FROM
-			dbo.ufnImportiMagazzino_get_Documenti(@Id, @IdAzienda, @DataDa, @DataA) doc
-			INNER JOIN dbo.tblMagazziniMovimentiRighe r ON doc.Id = r.IdMovimento
+			dbo.tblMagazziniMovimentiRighe r
 			INNER JOIN dbo.tblMagazziniArticoli a ON r.IdArticolo = a.Id
-		WHERE
-			r.Lock <= 2
-			AND (ISNULL(@SoloFatturabili, 0) = 0 OR (doc.Lock = 0 AND doc.IsFatturabile = 1))
+		WHERE r.Lock <= 2
 
 		UNION ALL
 
 		SELECT
-			IdMovimento = doc.Id,
-			doc.IdDdt,
-			doc.[Data],
-			doc.IdAzienda,
-			doc.IdDestinatario,
-			doc.IdDestinatarioParent,
+			r.IdMovimento,
 			IdRiga = r.Id,
 			IsEoW = CAST(1 AS BIT),
 			r.Pos,
@@ -421,63 +470,45 @@ RETURN
 			r.Quantita,
 			IdUnitaMisura = CAST('KG' AS CHAR(2))
 		FROM
-			dbo.ufnImportiMagazzino_get_Documenti(@Id, @IdAzienda, @DataDa, @DataA) doc
-			INNER JOIN dbo.tblMagazziniMovimentiRigheEoW r ON doc.Id = r.IdMovimento
+			dbo.tblMagazziniMovimentiRigheEoW r
 			LEFT JOIN dbo.tblRifiutiMateriali ma ON r.IdMateriale = ma.Id
-		WHERE
-			r.Lock <= 2
-			AND (ISNULL(@SoloFatturabili, 0) = 0 OR (doc.Lock = 0 AND doc.IsFatturabile = 1))
-	),
-	scelta AS (
-		-- Per ogni riga gli importi che coincidono: N = 1 è il primo candidato (classe V) in ordine di scelta, o
-		-- una riga senza candidato; IdImportoScartato il primo degli scartati (classe S). Un importo che indica
-		-- un'etichetta che il DDT non ha non coincide: passa alla classe X
-		SELECT
-			g.IdMovimento,
-			g.IdRiga,
-			g.IsEoW,
-			g.Pos,
-			g.IdArticolo,
-			g.IdMateriale,
-			g.Voce,
-			g.Quantita,
-			g.IdUnitaMisura,
-			IdImporto = IIF(q.Classe = 'V', c.IdImporto, NULL),
-			IdOffertaContratto = IIF(q.Classe = 'V', c.IdOffertaContratto, NULL),
-			IdClienteContratto = IIF(q.Classe = 'V', c.IdClienteContratto, NULL),
-			IdImportoScartato = FIRST_VALUE(IIF(q.Classe = 'S', c.IdImporto, NULL)) OVER (
-				PARTITION BY g.IdRiga
-				ORDER BY IIF(q.Classe = 'S', 0, 1), c.IdPriorita DESC, c.IdImporto
-				ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW),
-			N = ROW_NUMBER() OVER (
-				PARTITION BY g.IdRiga
-				ORDER BY IIF(q.Classe = 'V', 0, 1), c.IdPriorita DESC, c.Standard, c.IdImporto)
-		FROM
-			righe g
-			OUTER APPLY dbo.ufnImportiMagazzino_get_Coincidenti(g.IdAzienda, g.[Data], g.IdDestinatarioParent, g.IdDestinatario, g.IdArticolo, g.IdMateriale) c
-			-- Al massimo una riga: (Id, IdEtichetta) è la chiave primaria
-			LEFT JOIN dbo.tblMagazziniDdtEtichette e ON e.Id = g.IdDdt
-													 AND e.IdEtichetta = c.IdEtichetta
-			CROSS APPLY (SELECT Classe = IIF(c.IdEtichetta IS NOT NULL AND e.Id IS NULL, 'X', c.Classe)) q
+		WHERE r.Lock <= 2
 	)
 	SELECT
-		t.IdMovimento,
-		t.IdRiga,
-		t.IsEoW,
-		t.Pos,
-		t.IdArticolo,
-		t.IdMateriale,
-		t.Voce,
-		t.Quantita,
-		t.IdUnitaMisura,
-		t.IdImporto,
-		t.IdOffertaContratto,
-		t.IdClienteContratto,
-		t.IdImportoScartato
-	FROM scelta t
-	WHERE t.N = 1
+		g.IdMovimento,
+		g.IdRiga,
+		g.IsEoW,
+		g.Pos,
+		g.IdArticolo,
+		g.IdMateriale,
+		g.Voce,
+		g.Quantita,
+		g.IdUnitaMisura,
+		s.IdImporto,
+		s.IdOffertaContratto,
+		s.IdClienteContratto,
+		s.IdImportoScartato,
+		IdRigaImporto = p.Id
+	FROM
+		scelta s
+		INNER JOIN righe g ON s.Id = g.IdMovimento
+		OUTER APPLY (
+			-- Riga a quantità dell'importo per l'articolo o il materiale di questa riga del DDT (una sola: lo
+			-- garantisce uspImportiRighe_upd)
+			SELECT TOP (1) x.Id
+			FROM
+				dbo.tblImportiRighe x
+				INNER JOIN dbo.tblImportiRigheMagazzino xm ON x.Id = xm.Id
+			WHERE
+				x.IdImporto = s.IdImporto
+				AND x.IdTipo = 'MA'
+				AND x.Importo IS NOT NULL
+				AND ISNULL(x.MinimoFatturabile, 0) = 0
+				AND (xm.IdArticolo = g.IdArticolo OR xm.IdMateriale = g.IdMateriale)
+			ORDER BY ISNULL(x.Pos, 0), x.Id
+		) p
+	WHERE s.N = 1
 );
-GO
 GO
 
 PRINT 'sql/functions/ufnImportiMagazzino_get_Applicazione_List.sql';
@@ -486,17 +517,18 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Offerte e contratti, magazzino: per ogni DDT, il riepilogo degli importi applicati alle sue righe
--- (ufnImportiMagazzino_get_ApplicazioneRighe_List) e il cliente a cui fatturarlo. Una riga per movimento con
--- un DDT; è l'analogo di ufnImportiRifiuti_get_Applicazione_List, con il confronto fatto per riga.
+-- Offerte e contratti, magazzino: per ogni DDT, l'importo applicato (uno solo: l'importo di magazzino è un
+-- listino), il cliente a cui fatturarlo e il riepilogo delle sue righe
+-- (ufnImportiMagazzino_get_ApplicazioneRighe_List). Una riga per movimento con un DDT; è l'analogo di
+-- ufnImportiRifiuti_get_Applicazione_List.
 --   Parametri: quelli di ufnImportiMagazzino_get_ApplicazioneRighe_List.
--- Righe: righe articolo ed EoW del DDT. RigheSenzaImporto: quelle a cui nessun importo coincide: se ce n'è
--- anche una sola il DDT intero non viene fatturato (non si fattura una parte del DDT).
--- IdImporto, IdOffertaContratto: l'importo e il contratto applicati, solo se sono gli stessi per tutte le righe
--- (altrimenti NULL): servono al legame in tblFattureDocumenti e al raggruppamento per contratto.
--- Cliente (ClienteOrigine): D quello indicato sul DDT (tblFattureDocumenti), altrimenti C quello dei contratti
--- degli importi applicati, altrimenti P la scheda cliente attiva del soggetto destinatario. ClientiDiversi = 1:
--- le righe hanno importi di contratti di clienti diversi e sul DDT non è indicato un cliente: va indicato.
+-- Righe: righe articolo ed EoW del DDT. RigheSenzaImporto: quelle il cui articolo o materiale non ha una riga
+-- nell'importo applicato (tutte, se nessun importo coincide): se ce n'è anche una sola il DDT intero non viene
+-- fatturato. Un DDT senza righe non ha importo.
+-- Cliente (ClienteOrigine): D quello indicato sul DDT (tblFattureDocumenti), altrimenti C quello del contratto
+-- dell'importo applicato, altrimenti P la scheda cliente attiva del soggetto destinatario (per un importo
+-- standard). NULL se nessuno dei tre.
+-- IdImportoScartato: importo di un contratto che coinciderebbe con il DDT ma non è valido alla sua data.
 -- IdFattura: solo se la fattura non è cancellata. IsPreFattura, IdClientePreFattura: come per i rifiuti.
 CREATE OR ALTER FUNCTION dbo.ufnImportiMagazzino_get_Applicazione_List (
 	@Id CHAR(16),
@@ -528,34 +560,30 @@ RETURN
 		IdClientePreFattura = IIF(f.IdTipo = 'TD00', f.IdClienteFornitore, NULL),
 		Righe = ISNULL(g.Righe, 0),
 		RigheSenzaImporto = ISNULL(g.RigheSenzaImporto, 0),
-		RigheScartate = ISNULL(g.RigheScartate, 0),
-		IdImporto = IIF(g.ImportoMin = g.ImportoMax AND g.RigheSenzaImporto = 0, g.ImportoMin, NULL),
-		IdOffertaContratto = IIF(g.ContrattoMin = g.ContrattoMax AND g.RigheStandard = 0 AND g.RigheSenzaImporto = 0, g.ContrattoMin, NULL),
-		IdClienteFornitore = COALESCE(d.IdClienteFornitore, IIF(g.ClienteMin = g.ClienteMax, g.ClienteMin, NULL), IIF(g.ClienteMin IS NULL, cp.Id, NULL)),
+		g.IdImporto,
+		g.IdOffertaContratto,
+		g.IdImportoScartato,
+		IdClienteFornitore = COALESCE(d.IdClienteFornitore, g.IdClienteContratto, cp.Id),
 		ClienteOrigine = CAST(CASE
 			WHEN d.IdClienteFornitore IS NOT NULL THEN 'D'
-			WHEN g.ClienteMin = g.ClienteMax THEN 'C'
-			WHEN g.ClienteMin IS NULL AND cp.Id IS NOT NULL THEN 'P'
-		END AS CHAR(1)),
-		ClientiDiversi = CAST(IIF(d.IdClienteFornitore IS NULL AND g.ClienteMin <> g.ClienteMax, 1, 0) AS BIT)
+			WHEN g.IdClienteContratto IS NOT NULL THEN 'C'
+			WHEN cp.Id IS NOT NULL THEN 'P'
+		END AS CHAR(1))
 	FROM
 		dbo.ufnImportiMagazzino_get_Documenti(@Id, @IdAzienda, @DataDa, @DataA) doc
 		LEFT JOIN dbo.tblFattureDocumenti d ON doc.Id = d.Id
 		LEFT JOIN dbo.tblFatture f ON d.IdFattura = f.Id
 								  AND f.Lock IN (0, 2)
 		LEFT JOIN (
+			-- Importo, contratto e cliente sono gli stessi su tutte le righe del DDT
 			SELECT
 				r.IdMovimento,
 				Righe = COUNT(*),
-				RigheSenzaImporto = SUM(IIF(r.IdImporto IS NULL, 1, 0)),
-				RigheScartate = SUM(IIF(r.IdImportoScartato IS NOT NULL, 1, 0)),
-				RigheStandard = SUM(IIF(r.IdImporto IS NOT NULL AND r.IdOffertaContratto IS NULL, 1, 0)),
-				ImportoMin = MIN(r.IdImporto),
-				ImportoMax = MAX(r.IdImporto),
-				ContrattoMin = MIN(r.IdOffertaContratto),
-				ContrattoMax = MAX(r.IdOffertaContratto),
-				ClienteMin = MIN(r.IdClienteContratto),
-				ClienteMax = MAX(r.IdClienteContratto)
+				RigheSenzaImporto = SUM(IIF(r.IdRigaImporto IS NULL, 1, 0)),
+				IdImporto = MIN(r.IdImporto),
+				IdOffertaContratto = MIN(r.IdOffertaContratto),
+				IdClienteContratto = MIN(r.IdClienteContratto),
+				IdImportoScartato = MIN(r.IdImportoScartato)
 			FROM dbo.ufnImportiMagazzino_get_ApplicazioneRighe_List(@Id, @IdAzienda, @DataDa, @DataA, @SoloFatturabili) r
 			GROUP BY r.IdMovimento
 		) g ON doc.Id = g.IdMovimento
@@ -574,7 +602,6 @@ RETURN
 		OR (doc.Lock = 0 AND doc.IsFatturabile = 1)
 );
 GO
-GO
 
 PRINT 'sql/functions/ufnImportiMagazzino_get_RigheFattura.sql';
 GO
@@ -582,21 +609,21 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Offerte e contratti, magazzino: righe di fattura che gli importi applicati alle righe del DDT del movimento
--- @Id generano, nell'ordine delle righe del DDT e, per ciascuna, delle righe dell'importo. Funzione in linea: si
--- può usare con CROSS APPLY su più DDT. Nessuna riga per le righe del DDT senza importo.
+-- Offerte e contratti, magazzino: righe di fattura che l'importo applicato al DDT del movimento @Id genera.
+-- Funzione in linea: si può usare con CROSS APPLY su più DDT. Nessuna riga se il DDT non ha un importo.
 --
--- Riga dell'importo a quantità (tipo MA): una per ogni riga del DDT a cui l'importo è applicato, con la quantità
--- e l'unità di misura di quella riga (riga articolo: unità dell'articolo; riga EoW: chilogrammi).
--- Riga per movimento (tipo MM) e riga di sola descrizione (importo NULL): una sola volta per DDT e per importo,
--- sulla prima riga del DDT a cui quell'importo è applicato, con quantità 1 (unità NR) se ha un importo.
--- Minimo fatturabile (al massimo una riga per importo): è il minimo da fatturare per il DDT con quell'importo. Si
--- confronta con la somma degli imponibili delle altre sue righe (se la riga del minimo è di tipo MM, di tutte;
--- altrimenti di quelle a quantità): se il minimo è maggiore la riga entra, una volta, con quantità 1 e importo
--- pari alla differenza, altrimenti non entra.
--- Testo: i segnaposto #1 articolo o materiale della riga del DDT, #2 numero del DDT, #3 data del DDT,
--- #4 destinatario, #5 destinazione (se non indicata, il destinatario) vengono sostituiti.
+-- Righe a quantità (tipo MA, con l'articolo o il materiale): una per ogni riga del DDT con quell'articolo o quel
+-- materiale, nell'ordine delle righe del DDT, con la quantità e l'unità di misura della riga (riga articolo:
+-- unità dell'articolo; riga EoW: chilogrammi). Una riga a quantità il cui articolo non è nel DDT non entra.
+-- Righe per movimento (tipo MM) e righe di sola descrizione (importo NULL): una volta per DDT, dopo le righe a
+-- quantità, nell'ordine delle righe dell'importo; quantità 1 (unità NR) se hanno un importo.
+-- Minimo fatturabile (al massimo una riga per importo): è il minimo da fatturare per il DDT. Si confronta con la
+-- somma degli imponibili delle altre righe (se la riga del minimo è di tipo MM, di tutte; altrimenti di quelle a
+-- quantità): se il minimo è maggiore la riga entra con quantità 1 e importo pari alla differenza.
+-- Testo: i segnaposto #1 articolo o materiale della riga del DDT (vuoto sulle righe "una volta per DDT"),
+-- #2 numero del DDT, #3 data del DDT, #4 destinatario, #5 destinazione (se non indicata, il destinatario).
 -- Aliquota IVA: quella della riga dell'importo, altrimenti quella della scheda del cliente @IdClienteFornitore.
+-- Ordine: PosDdt (0 per le righe "una volta per DDT", che vanno in coda con Gruppo = 1), poi Pos.
 CREATE OR ALTER FUNCTION dbo.ufnImportiMagazzino_get_RigheFattura (
 	@Id CHAR(16),
 	@IdClienteFornitore CHAR(16))
@@ -604,76 +631,81 @@ RETURNS TABLE
 AS
 RETURN
 (
-	WITH a AS (
+	WITH testata AS (
 		SELECT
-			x.IdRiga,
-			PosDdt = ISNULL(x.Pos, 0),
-			x.IdImporto,
-			x.Voce,
-			x.Quantita,
-			x.IdUnitaMisura,
-			-- Prima riga del DDT con questo importo: porta le righe "una volta per DDT"
-			Prima = CAST(IIF(ROW_NUMBER() OVER (PARTITION BY x.IdImporto ORDER BY ISNULL(x.Pos, 0), x.IdRiga) = 1, 1, 0) AS BIT),
+			doc.Id,
 			IdAliquotaIvaCliente = c.IdAliquotaIva,
 			DdtNumero = CAST(CAST(doc.Numero AS VARCHAR(10)) + ISNULL('/' + doc.Sezionale, '') AS VARCHAR(20)),
 			DdtData = CONVERT(VARCHAR(10), doc.[Data], 103),
 			Destinatario = sd.NomeCompleto + ISNULL(' ' + sd.IndirizzoCompleto, ''),
-			Destinazione = ISNULL(sz.NomeCompleto + ISNULL(' ' + sz.IndirizzoCompleto, ''), sd.NomeCompleto + ISNULL(' ' + sd.IndirizzoCompleto, ''))
+			Destinazione = sz.NomeCompleto + ISNULL(' ' + sz.IndirizzoCompleto, '')
 		FROM
-			dbo.ufnImportiMagazzino_get_ApplicazioneRighe_List(@Id, NULL, NULL, NULL, 0) x
-			INNER JOIN dbo.ufnImportiMagazzino_get_Documenti(@Id, NULL, NULL, NULL) doc ON x.IdMovimento = doc.Id
+			dbo.ufnImportiMagazzino_get_Documenti(@Id, NULL, NULL, NULL) doc
 			LEFT JOIN dbo.tblClientiFornitori c ON c.Id = @IdClienteFornitore
 			LEFT JOIN dbo.tblSedi sd ON doc.IdDestinatario = sd.Id
-			LEFT JOIN dbo.tblSedi sz ON doc.IdDestinazione = sz.Id
+			LEFT JOIN dbo.tblSedi sz ON doc.IdDestinazioneEffettiva = sz.Id
+	),
+	ddt AS (
+		SELECT
+			x.IdRiga,
+			PosDdt = ISNULL(x.Pos, 0),
+			x.IdImporto,
+			x.IdRigaImporto,
+			x.Voce,
+			x.Quantita,
+			x.IdUnitaMisura
+		FROM dbo.ufnImportiMagazzino_get_ApplicazioneRighe_List(@Id, NULL, NULL, NULL, 0) x
 		WHERE x.IdImporto IS NOT NULL
 	),
 	righe AS (
+		-- Righe a quantità: una per ogni riga del DDT che ha il suo prezzo nell'importo
 		SELECT
-			a.IdRiga,
+			Gruppo = 0,
+			IdRigaDdt = a.IdRiga,
 			a.PosDdt,
-			a.IdImporto,
+			g.Id,
+			g.Pos,
+			g.IdTipo,
+			MinimoFatturabile = CAST(0 AS BIT),
+			Prezzo = g.Importo,
+			Quantita = CAST(a.Quantita AS DECIMAL(18, 4)),
+			IdUnitaMisura = CAST(a.IdUnitaMisura AS CHAR(2)),
+			a.Voce
+		FROM
+			ddt a
+			INNER JOIN dbo.tblImportiRighe g ON a.IdRigaImporto = g.Id
+
+		UNION ALL
+
+		-- Righe per movimento, di sola descrizione e minimo fatturabile: una volta per DDT
+		SELECT
+			Gruppo = 1,
+			IdRigaDdt = CAST(NULL AS CHAR(16)),
+			PosDdt = 0,
 			g.Id,
 			g.Pos,
 			g.IdTipo,
 			MinimoFatturabile = CAST(ISNULL(g.MinimoFatturabile, 0) AS BIT),
 			Prezzo = g.Importo,
-			Quantita = CAST(CASE
-				WHEN g.Importo IS NULL THEN NULL
-				WHEN g.IdTipo = 'MM' THEN 1
-				WHEN g.IdTipo = 'MA' THEN a.Quantita
-			END AS DECIMAL(18, 4)),
-			IdUnitaMisura = CAST(CASE
-				WHEN g.Importo IS NULL THEN NULL
-				WHEN g.IdTipo = 'MM' THEN 'NR'
-				WHEN g.IdTipo = 'MA' THEN a.IdUnitaMisura
-			END AS CHAR(2)),
-			Descrizione = CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(d.Descrizione, ''),
-				'#1', ISNULL(a.Voce, '')),
-				'#2', ISNULL(a.DdtNumero, '')),
-				'#3', ISNULL(a.DdtData, '__/__/____')),
-				'#4', ISNULL(a.Destinatario, '')),
-				'#5', ISNULL(a.Destinazione, '')) AS VARCHAR(1000)),
-			IdAliquotaIva = ISNULL(d.IdAliquotaIva, a.IdAliquotaIvaCliente),
-			d.IdConto
+			Quantita = CAST(IIF(g.Importo IS NULL, NULL, 1) AS DECIMAL(18, 4)),
+			IdUnitaMisura = CAST(IIF(g.Importo IS NULL, NULL, 'NR') AS CHAR(2)),
+			Voce = CAST(NULL AS VARCHAR(200))
 		FROM
-			a
+			(SELECT DISTINCT IdImporto FROM ddt) a
 			INNER JOIN dbo.tblImportiRighe g ON a.IdImporto = g.IdImporto
-			LEFT JOIN dbo.tblImportiRigheDettagli d ON g.Id = d.Id
 		WHERE
-			-- A quantità: per ogni riga del DDT; le altre (per movimento, sola descrizione, minimo): una volta
-			a.Prima = 1
-			OR (g.Importo IS NOT NULL AND g.IdTipo = 'MA' AND ISNULL(g.MinimoFatturabile, 0) = 0)
+			g.Importo IS NULL
+			OR g.IdTipo = 'MM'
+			OR ISNULL(g.MinimoFatturabile, 0) = 1
 	),
 	minimo AS (
-		-- Per ogni importo, somma degli imponibili delle righe con cui si confronta il suo minimo fatturabile
+		-- Somma degli imponibili delle righe con cui si confronta il minimo fatturabile
 		SELECT
-			m.IdImporto,
 			Altre = ISNULL((
 				SELECT SUM(ROUND(x.Prezzo * x.Quantita, 2))
 				FROM righe x
 				WHERE
-					x.IdImporto = m.IdImporto
-					AND x.MinimoFatturabile = 0
+					x.MinimoFatturabile = 0
 					AND x.Quantita IS NOT NULL
 					AND (m.IdTipo = 'MM' OR x.IdTipo <> 'MM')
 			), 0)
@@ -683,34 +715,39 @@ RETURN
 			AND m.Prezzo IS NOT NULL
 	)
 	SELECT
-		t.IdRiga,
+		t.Gruppo,
+		t.IdRigaDdt,
 		t.PosDdt,
-		t.IdImporto,
 		t.Id,
 		t.Pos,
 		t.IdTipo,
 		t.MinimoFatturabile,
 		SolaDescrizione = CAST(IIF(t.Prezzo IS NULL, 1, 0) AS BIT),
-		t.Descrizione,
-		Quantita = CAST(IIF(t.MinimoFatturabile = 1, 1, t.Quantita) AS DECIMAL(18, 4)),
-		IdUnitaMisura = CAST(IIF(t.MinimoFatturabile = 1, 'NR', t.IdUnitaMisura) AS CHAR(2)),
+		Descrizione = CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(d.Descrizione, ''),
+			'#1', ISNULL(t.Voce, '')),
+			'#2', ISNULL(h.DdtNumero, '')),
+			'#3', ISNULL(h.DdtData, '__/__/____')),
+			'#4', ISNULL(h.Destinatario, '')),
+			'#5', ISNULL(h.Destinazione, '')) AS VARCHAR(1000)),
+		t.Quantita,
+		t.IdUnitaMisura,
 		Importo = CAST(IIF(t.MinimoFatturabile = 1, t.Prezzo - n.Altre, t.Prezzo) AS DECIMAL(18, 4)),
 		Imponibile = CAST(ROUND(IIF(t.MinimoFatturabile = 1, t.Prezzo - n.Altre, t.Prezzo * t.Quantita), 2) AS DECIMAL(18, 2)),
-		t.IdAliquotaIva,
-		t.IdConto
+		IdAliquotaIva = ISNULL(d.IdAliquotaIva, h.IdAliquotaIvaCliente),
+		d.IdConto
 	FROM
 		righe t
+		CROSS JOIN testata h
+		LEFT JOIN dbo.tblImportiRigheDettagli d ON t.Id = d.Id
 		LEFT JOIN minimo n ON t.MinimoFatturabile = 1
-						  AND t.IdImporto = n.IdImporto
 	WHERE
 		-- Sola descrizione: sempre
 		t.Prezzo IS NULL
-		-- Riga normale: solo se ha una quantità
-		OR (t.MinimoFatturabile = 0 AND t.Quantita IS NOT NULL)
+		-- Riga normale: sempre (ha una quantità)
+		OR t.MinimoFatturabile = 0
 		-- Minimo fatturabile: solo per la differenza non raggiunta dalle altre righe
 		OR (t.MinimoFatturabile = 1 AND t.Prezzo > n.Altre)
 );
-GO
 GO
 
 PRINT 'sql/functions/ufnFattureDocumenti_get_Rifiuti.sql';
@@ -800,7 +837,6 @@ RETURN
 			)
 );
 GO
-GO
 
 PRINT 'sql/functions/ufnFattureDocumenti_get_Magazzino.sql';
 GO
@@ -809,16 +845,17 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- Generazione automatica delle fatture: DDT di magazzino candidati, con gli importi e il cliente che verrebbero
--- applicati (ufnImportiMagazzino_get_Applicazione_List, con il confronto per riga del DDT) e l'esito. Stesse
+-- applicati (ufnImportiMagazzino_get_Applicazione_List: un solo importo per DDT) e l'esito. Stesse
 -- colonne e stessi parametri di ufnFattureDocumenti_get_Rifiuti: le due si leggono insieme in
 -- ufnFattureGenera_get_Documenti. Id è l'Id del movimento, Data e Numero quelli del DDT.
 --   @Id: un solo movimento ("Genera la fattura" dalla scheda); altrimenti @IdAzienda e l'intervallo di date.
 -- Candidati: DDT emessi e confermati di un movimento di scarico con una causale fatturabile, di una sede che la
 -- sessione vede, non ancora in una fattura (le pre-fatture non contano come fattura quando si includono).
 -- IdProduttore: qui è il destinatario del DDT, la sede per il raggruppamento "una fattura per sede".
--- IdImporto, IdOffertaContratto: solo se sono gli stessi per tutte le righe del DDT.
--- SenzaImporto = 1: il DDT non ha righe, oppure almeno una riga non ha un importo che coincide.
--- Fatturabile = 1: non "Non fatturabile", tutte le righe con un importo, un cliente determinato, almeno una riga
+-- IdImporto, IdOffertaContratto: quelli dell'importo applicato al DDT.
+-- SenzaImporto = 1: il DDT non ha righe, nessun importo coincide, oppure l'importo applicato non ha una riga per
+-- uno dei suoi articoli o materiali.
+-- Fatturabile = 1: non "Non fatturabile", un importo con una riga per ogni articolo, un cliente determinato, almeno una riga
 -- di fattura e l'aliquota IVA su ogni riga con importo. Stessa condizione di uspFattureDocumenti_get: vanno tenute
 -- allineate. Un DDT in una pre-fattura inclusa è sempre fatturabile.
 CREATE OR ALTER FUNCTION dbo.ufnFattureDocumenti_get_Magazzino (
@@ -849,14 +886,14 @@ RETURN
 		a.IdOffertaContratto,
 		IdClienteFornitore = IIF(a.IsPreFattura = 1, a.IdClientePreFattura, a.IdClienteFornitore),
 		a.ClienteOrigine,
-		IdImportoScartato = CAST(NULL AS CHAR(16)),
-		SenzaImporto = CAST(IIF(a.Righe = 0 OR a.RigheSenzaImporto > 0, 1, 0) AS BIT),
+		a.IdImportoScartato,
+		SenzaImporto = CAST(IIF(a.Righe = 0 OR a.IdImporto IS NULL OR a.RigheSenzaImporto > 0, 1, 0) AS BIT),
 		Righe = ISNULL(t.Righe, 0),
 		Totale = t.Totale,
 		SenzaIva = ISNULL(t.SenzaIva, 0),
 		Fatturabile = CAST(CASE
 			WHEN a.IsPreFattura = 1 THEN 1
-			WHEN a.NonFatturabile = 0 AND a.Righe > 0 AND a.RigheSenzaImporto = 0
+			WHEN a.NonFatturabile = 0 AND a.Righe > 0 AND a.IdImporto IS NOT NULL AND a.RigheSenzaImporto = 0
 				AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0 THEN 1
 			ELSE 0
 		END AS BIT)
@@ -882,7 +919,6 @@ RETURN
 			OR IIF(a.IsPreFattura = 1, a.IdClientePreFattura, a.IdClienteFornitore) = @IdClienteFornitore
 			)
 );
-GO
 GO
 
 PRINT 'sql/functions/ufnFattureGenera_get_Documenti.sql';
@@ -1011,7 +1047,6 @@ RETURN
 		OUTER APPLY dbo.ufnFatture_get_Totali(IIF(t.N = 1, t.IdPreFattura, NULL)) pf
 );
 GO
-GO
 
 PRINT 'sql/functions/ufnFattureDocumenti_get_Documento.sql';
 GO
@@ -1061,7 +1096,6 @@ RETURN
 		INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeDdt = x.Id
 	WHERE @IdModulo = 'MAG'
 );
-GO
 GO
 
 PRINT 'sql/procedures/uspImportiMagazzino_ins.sql';
@@ -1175,7 +1209,6 @@ BEGIN
 
 END;
 GO
-GO
 
 PRINT 'sql/procedures/uspImportiMagazzino_get.sql';
 GO
@@ -1249,8 +1282,7 @@ BEGIN
 			i.Nome,
 			i.IdPriorita,
 			i.Lock,
-			r.IdArticolo,
-			r.IdMateriale,
+			r.IdSedePartenza,
 			r.IdDestinatarioParent,
 			r.IdDestinatario,
 			r.IdEtichetta,
@@ -1298,7 +1330,6 @@ BEGIN
 	END
 END;
 GO
-GO
 
 PRINT 'sql/procedures/uspImportiMagazzino_upd.sql';
 GO
@@ -1307,18 +1338,18 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- Salva un importo di magazzino e conferma la bozza (Lock 2 -> 0).
--- Le variabili (articolo o materiale, destinatario, etichetta) sono facoltative: una variabile non indicata vale
--- "qualsiasi" nel confronto con le righe del DDT.
--- Articolo e materiale si escludono: l'articolo vale per le righe articolo del DDT, il materiale per le righe EoW.
--- Destinatario: @IdDestinatarioParent è il soggetto (tutte le sue sedi), @IdDestinatario una sua sede precisa.
--- Indicata la sola sede, il soggetto si ricava dalla sede.
+-- L'importo di magazzino è un listino: gli articoli e i materiali stanno sulle sue righe (uspImportiRighe_upd).
+-- Le variabili (sede di partenza, destinatario, etichetta) sono facoltative: una variabile non indicata vale
+-- "qualsiasi" nel confronto con il DDT.
+-- Sede di partenza: una sede interna dell'azienda, quella da cui parte la merce (la sede del DDT).
+-- Destinatario: @IdDestinatarioParent è il soggetto (tutte le sue sedi), @IdDestinatario una sua sede precisa,
+-- che si confronta con la destinazione finale della merce. Indicata la sola sede, il soggetto si ricava dalla sede.
 CREATE OR ALTER PROCEDURE dbo.uspImportiMagazzino_upd
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Nome VARCHAR(50) = NULL,
 	@IdPriorita INT = NULL,
-	@IdArticolo CHAR(16) = NULL,
-	@IdMateriale CHAR(2) = NULL,
+	@IdSedePartenza CHAR(16) = NULL,
 	@IdDestinatarioParent CHAR(16) = NULL,
 	@IdDestinatario CHAR(16) = NULL,
 	@IdEtichetta CHAR(16) = NULL
@@ -1333,8 +1364,7 @@ BEGIN
 		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @Nome = dbo.ufnStringhe_get_SenzaSpazi(@Nome, 0, 1);
-		SET @IdArticolo = NULLIF(NULLIF(LTRIM(RTRIM(@IdArticolo)), ''), @idSediciZeri);
-		SET @IdMateriale = NULLIF(NULLIF(LTRIM(RTRIM(@IdMateriale)), ''), REPLICATE('0', 2));
+		SET @IdSedePartenza = NULLIF(NULLIF(LTRIM(RTRIM(@IdSedePartenza)), ''), @idSediciZeri);
 		SET @IdDestinatarioParent = NULLIF(NULLIF(LTRIM(RTRIM(@IdDestinatarioParent)), ''), @idSediciZeri);
 		SET @IdDestinatario = NULLIF(NULLIF(LTRIM(RTRIM(@IdDestinatario)), ''), @idSediciZeri);
 		SET @IdEtichetta = NULLIF(NULLIF(LTRIM(RTRIM(@IdEtichetta)), ''), @idSediciZeri);
@@ -1363,12 +1393,6 @@ BEGIN
 			SET @returnMessage = 'Selezionare la priorità';
 			GOTO BRANCH_END;
 		END
-		IF @IdArticolo IS NOT NULL AND @IdMateriale IS NOT NULL
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Indicare l''articolo oppure il materiale EoW, non entrambi';
-			GOTO BRANCH_END;
-		END
 
 		-- Controlla il permesso sulla funzione e che il modulo Magazzino sia attivo sul dominio
 		DECLARE @permesso TINYINT;
@@ -1385,13 +1409,13 @@ BEGIN
 
 		-- Controlla il permesso sul record: scope azienda interna corrente della sessione
 		DECLARE @idAzienda CHAR(16);
-		DECLARE @idArticoloAttuale CHAR(16);
+		DECLARE @idSedePartenzaAttuale CHAR(16);
 		DECLARE @idDestinatarioParentAttuale CHAR(16);
 		DECLARE @idDestinatarioAttuale CHAR(16);
 		DECLARE @idEtichettaAttuale CHAR(16);
 		SELECT
 			@idAzienda = i.IdSede,
-			@idArticoloAttuale = r.IdArticolo,
+			@idSedePartenzaAttuale = r.IdSedePartenza,
 			@idDestinatarioParentAttuale = r.IdDestinatarioParent,
 			@idDestinatarioAttuale = r.IdDestinatario,
 			@idEtichettaAttuale = r.IdEtichetta
@@ -1428,25 +1452,19 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Articolo: dell'azienda; quello già sull'importo resta valido anche se cancellato
-		IF @IdArticolo IS NOT NULL AND NOT EXISTS (
+		-- Sede di partenza: una sede interna dell'azienda; quella già sull'importo resta valida
+		IF @IdSedePartenza IS NOT NULL AND NOT EXISTS (
 			SELECT 1
-			FROM dbo.tblMagazziniArticoli a
+			FROM dbo.tblSedi s
 			WHERE
-				a.Id = @IdArticolo
-				AND a.IdSede = @idAzienda
-				AND (a.Lock = 0 OR a.Id = @idArticoloAttuale)
+				s.Id = @IdSedePartenza
+				AND s.InternaEsterna = 'I'
+				AND s.IdAziendaInterna = @idAzienda
+				AND (s.Lock = 0 OR s.Id = @idSedePartenzaAttuale)
 		)
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'L''articolo indicato non esiste';
-			GOTO BRANCH_END;
-		END
-
-		IF @IdMateriale IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiMateriali WHERE Id = @IdMateriale)
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Il materiale indicato non esiste';
+			SET @returnMessage = 'La sede di partenza indicata non esiste';
 			GOTO BRANCH_END;
 		END
 
@@ -1549,8 +1567,7 @@ BEGIN
 
 			UPDATE dbo.tblImportiMagazzino
 			SET
-				IdArticolo = @IdArticolo,
-				IdMateriale = @IdMateriale,
+				IdSedePartenza = @IdSedePartenza,
 				IdDestinatarioParent = @IdDestinatarioParent,
 				IdDestinatario = @IdDestinatario,
 				IdEtichetta = @IdEtichetta
@@ -1574,7 +1591,6 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 END;
-GO
 GO
 
 PRINT 'sql/procedures/uspImportiMagazzino_get_List.sql';
@@ -1632,8 +1648,7 @@ BEGIN
 			t.StatoDescrizione,
 			t.Nome,
 			t.Priorita,
-			t.Articolo,
-			t.Materiale,
+			t.Partenza,
 			t.Destinatario,
 			t.Etichetta,
 			t.Cliente,
@@ -1660,7 +1675,6 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 END;
-GO
 GO
 
 PRINT 'sql/procedures/uspImportiMagazzino_get_Esportazione.sql';
@@ -1715,8 +1729,7 @@ BEGIN
 		SELECT TOP (@MaxRighe + 1)
 			[Nome] = t.Nome,
 			[Priorità] = t.Priorita,
-			[Articolo] = t.Articolo,
-			[Materiale EoW] = t.Materiale,
+			[Sede di partenza] = t.Partenza,
 			[Destinatario] = t.Destinatario,
 			[Etichetta] = t.Etichetta,
 			[Cliente] = t.Cliente,
@@ -1741,7 +1754,6 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 END;
-GO
 GO
 
 PRINT 'sql/procedures/uspImportiMagazzino_get_Sedi_SelectList.sql';
@@ -1883,6 +1895,88 @@ BEGIN
 
 END;
 GO
+
+PRINT 'sql/procedures/uspImportiMagazzino_get_SediInterne_SelectList.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Select delle sedi interne per la variabile "Sede di partenza" di un importo di magazzino: l'azienda interna
+-- corrente della sessione e le sue sedi interne, cioè quelle da cui può partire la merce di un DDT. La prima
+-- voce (Id a zeri) significa "qualsiasi". La sede selezionata è sempre presente, anche se cancellata.
+CREATE OR ALTER PROCEDURE dbo.uspImportiMagazzino_get_SediInterne_SelectList
+	@IdSessione CHAR(16) = NULL,
+	@IdSelected CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+		DECLARE @idSediciZeri CHAR(16) = REPLICATE('0', 16);
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdSelected = ISNULL(NULLIF(LTRIM(RTRIM(@IdSelected)), ''), @idSediciZeri);
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione e che il modulo Magazzino sia attivo sul dominio
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'OCI',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso OR ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('MAG', @IdSessione), 0) = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idAzienda CHAR(16);
+		SELECT @idAzienda = IdAzienda
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
+		SELECT Id, [Text], Selected
+		FROM (
+			SELECT
+				Id = CAST(@idSediciZeri AS CHAR(16)),
+				[Text] = CAST('(Tutte)' AS VARCHAR(400)),
+				Selected = CAST(IIF(@IdSelected = @idSediciZeri, 1, 0) AS BIT),
+				Pos = 0
+			UNION ALL
+			SELECT
+				s.Id,
+				[Text] = CAST(s.NomeCompleto + ISNULL(' ' + s.IndirizzoCompleto, '') AS VARCHAR(400)),
+				Selected = CAST(IIF(s.Id = @IdSelected, 1, 0) AS BIT),
+				Pos = 1
+			FROM dbo.tblSedi s
+			WHERE
+				s.InternaEsterna = 'I'
+				AND s.IdAziendaInterna = @idAzienda
+				AND (s.Lock = 0 OR s.Id = @IdSelected)
+		) x
+		ORDER BY Pos, [Text];
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
 GO
 
 PRINT 'sql/procedures/uspImportiMagazzino_get_Etichette_SelectList.sql';
@@ -1971,7 +2065,6 @@ BEGIN
 
 END;
 GO
-GO
 
 PRINT 'sql/procedures/uspImportiMagazzino_get_Articoli_SelectList.sql';
 GO
@@ -1979,9 +2072,9 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Select degli articoli per la variabile "Articolo" di un importo di magazzino: articoli attivi dell'azienda
+-- Select degli articoli per la riga a quantità di un importo di magazzino: articoli attivi dell'azienda
 -- interna corrente della sessione, al massimo 50, con la ricerca su nome e codice. La prima voce (Id a zeri)
--- significa "qualsiasi". L'articolo selezionato è sempre presente, anche se cancellato, fuori dalla ricerca o
+-- è "(Selezionare)". L'articolo selezionato è sempre presente, anche se cancellato, fuori dalla ricerca o
 -- oltre i primi 50.
 CREATE OR ALTER PROCEDURE dbo.uspImportiMagazzino_get_Articoli_SelectList
 	@IdSessione CHAR(16) = NULL,
@@ -2023,7 +2116,7 @@ BEGIN
 		FROM (
 			SELECT
 				Id = CAST(@idSediciZeri AS CHAR(16)),
-				[Text] = CAST('(Tutti)' AS VARCHAR(400)),
+				[Text] = CAST('(Selezionare)' AS VARCHAR(400)),
 				Selected = CAST(IIF(@IdSelected = @idSediciZeri, 1, 0) AS BIT),
 				Pos = 0
 			UNION ALL
@@ -2079,7 +2172,6 @@ BEGIN
 	END
 END;
 GO
-GO
 
 PRINT 'sql/procedures/uspImportiMagazzino_get_Materiali_SelectList.sql';
 GO
@@ -2087,8 +2179,8 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Select dei materiali EoW per la variabile "Materiale" di un importo di magazzino (righe EoW del DDT). La
--- prima voce (Id a zeri) significa "qualsiasi". I materiali sono un'anagrafica di sistema, uguale per tutti.
+-- Select dei materiali EoW per la riga a quantità di un importo di magazzino (righe EoW del DDT). La
+-- prima voce (Id a zeri) è "(Selezionare)". I materiali sono un'anagrafica di sistema, uguale per tutti.
 CREATE OR ALTER PROCEDURE dbo.uspImportiMagazzino_get_Materiali_SelectList
 	@IdSessione CHAR(16) = NULL,
 	@IdSelected CHAR(2) = NULL
@@ -2127,7 +2219,7 @@ BEGIN
 		FROM (
 			SELECT
 				Id = CAST(@idDueZeri AS CHAR(2)),
-				[Text] = CAST('(Tutti)' AS VARCHAR(400)),
+				[Text] = CAST('(Selezionare)' AS VARCHAR(400)),
 				Selected = CAST(IIF(@IdSelected = @idDueZeri, 1, 0) AS BIT),
 				Pos = 0
 			UNION ALL
@@ -2153,7 +2245,6 @@ BEGIN
 	END
 END;
 GO
-GO
 
 PRINT 'sql/procedures/uspImportiMagazzino_get_Verifica.sql';
 GO
@@ -2162,15 +2253,17 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- Offerte e contratti > Importi magazzino > Azioni > Verifica importi: quali importi dell'azienda interna
--- corrente coinciderebbero con una riga di DDT che avesse i valori indicati, e quale verrebbe applicato. La
--- regola di coincidenza e la classe dell'importo sono quelle della fatturazione
--- (ufnImportiMagazzino_get_Coincidenti); qui si restituiscono tutti gli importi che coincidono, non solo il primo.
+-- corrente coinciderebbero con un DDT che avesse i valori indicati, e quale verrebbe applicato. La regola di
+-- coincidenza e la classe dell'importo sono quelle della fatturazione (ufnImportiMagazzino_get_Coincidenti);
+-- qui si restituiscono tutti gli importi che coincidono, non solo il primo.
 --   @Data: data del DDT (decide la validità dei contratti); se manca, oggi.
---   Il confronto è per riga: @IdArticolo (riga articolo) oppure @IdMateriale (riga EoW), non entrambi.
---   Un valore non indicato vuol dire che la riga o il DDT non ha quel dato: non coincide con gli importi che
---   lo indicano. Destinatario: @IdDestinatarioParent è il soggetto, @IdDestinatario la sua sede; indicato solo
---   il soggetto, la sede è il soggetto stesso; indicata solo la sede, il soggetto si ricava.
---   @IdEtichetta: un'etichetta del DDT (una sola).
+--   @IdSedePartenza: sede interna da cui parte la merce. Destinatario: @IdDestinatarioParent è il soggetto,
+--   @IdDestinatario dove arriva la merce; indicato solo il soggetto, la sede è il soggetto stesso; indicata
+--   solo la sede, il soggetto si ricava. @IdEtichetta: un'etichetta del DDT (una sola). Un valore non
+--   indicato vuol dire che il DDT non ha quel dato: non coincide con gli importi che lo indicano.
+--   @IdArticolo oppure @IdMateriale (facoltativi): un articolo o un materiale del DDT. Non entrano nella
+--   scelta dell'importo: servono a dire se l'importo ha una riga con il suo prezzo (Prezzo), e se manca
+--   (SenzaRigaArticolo = 1: un DDT con quell'articolo non sarebbe fatturabile con quell'importo).
 -- Righe nell'ordine di scelta. Esito: A applicato; B coincide ma non viene applicato (Motivo); S di un contratto
 -- non valido alla data; X di un'offerta o di un contratto cancellato (mai applicato).
 -- Conflitto = 1: stessa priorità e stesso tipo (di contratto o standard) dell'importo applicato, lui compreso:
@@ -2178,6 +2271,7 @@ GO
 CREATE OR ALTER PROCEDURE dbo.uspImportiMagazzino_get_Verifica
 	@IdSessione CHAR(16) = NULL,
 	@Data DATE = NULL,
+	@IdSedePartenza CHAR(16) = NULL,
 	@IdDestinatarioParent CHAR(16) = NULL,
 	@IdDestinatario CHAR(16) = NULL,
 	@IdArticolo CHAR(16) = NULL,
@@ -2191,6 +2285,7 @@ BEGIN
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdSedePartenza = NULLIF(NULLIF(LTRIM(RTRIM(@IdSedePartenza)), ''), REPLICATE('0', 16));
 		SET @IdDestinatarioParent = NULLIF(NULLIF(LTRIM(RTRIM(@IdDestinatarioParent)), ''), REPLICATE('0', 16));
 		SET @IdDestinatario = NULLIF(NULLIF(LTRIM(RTRIM(@IdDestinatario)), ''), REPLICATE('0', 16));
 		SET @IdArticolo = NULLIF(NULLIF(LTRIM(RTRIM(@IdArticolo)), ''), REPLICATE('0', 16));
@@ -2246,7 +2341,7 @@ BEGIN
 				k.IdOffertaContratto,
 				k.Standard,
 				k.Classe
-			FROM dbo.ufnImportiMagazzino_get_Coincidenti(@idAzienda, @Data, @IdDestinatarioParent, @IdDestinatario, @IdArticolo, @IdMateriale) k
+			FROM dbo.ufnImportiMagazzino_get_Coincidenti(@idAzienda, @Data, @IdSedePartenza, @IdDestinatarioParent, @IdDestinatario) k
 			-- L'importo che indica un'etichetta coincide solo se è quella del DDT
 			WHERE
 				k.IdEtichetta IS NULL
@@ -2287,6 +2382,8 @@ BEGIN
 			ContrattoDataInizio = oc.DataInizio,
 			ContrattoDataFine = oc.DataFine,
 			Righe = (SELECT COUNT(*) FROM dbo.tblImportiRighe g WHERE g.IdImporto = t.IdImporto),
+			Prezzo = pr.Importo,
+			SenzaRigaArticolo = CAST(IIF((@IdArticolo IS NOT NULL OR @IdMateriale IS NOT NULL) AND pr.Id IS NULL, 1, 0) AS BIT),
 			Esito = CAST(CASE
 				WHEN t.Classe = 'V' AND t.N = 1 THEN 'A'
 				WHEN t.Classe = 'V' THEN 'B'
@@ -2309,6 +2406,20 @@ BEGIN
 			LEFT JOIN dbo.tblOfferteContratti oc ON t.IdOffertaContratto = oc.Id
 			LEFT JOIN dbo.tblClientiFornitori cf ON oc.IdClienteFornitore = cf.Id
 			LEFT JOIN dbo.tblSedi cs ON cf.IdSede = cs.Id
+			OUTER APPLY (
+				-- Riga a quantità dell'importo per l'articolo o il materiale indicato
+				SELECT TOP (1) x.Id, x.Importo
+				FROM
+					dbo.tblImportiRighe x
+					INNER JOIN dbo.tblImportiRigheMagazzino xm ON x.Id = xm.Id
+				WHERE
+					x.IdImporto = t.IdImporto
+					AND x.IdTipo = 'MA'
+					AND x.Importo IS NOT NULL
+					AND ISNULL(x.MinimoFatturabile, 0) = 0
+					AND (xm.IdArticolo = @IdArticolo OR xm.IdMateriale = @IdMateriale)
+				ORDER BY ISNULL(x.Pos, 0), x.Id
+			) pr
 		ORDER BY
 			CASE t.Classe WHEN 'V' THEN 0 WHEN 'S' THEN 1 ELSE 2 END,
 			t.N
@@ -2326,7 +2437,6 @@ BEGIN
 	END
 END;
 GO
-GO
 
 PRINT 'sql/procedures/uspImportiMagazzino_get_Conflitti.sql';
 GO
@@ -2336,7 +2446,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 -- Offerte e contratti > Importi magazzino: importi attivi della stessa azienda in conflitto con l'importo @Id.
 -- La scheda li mostra dopo il salvataggio; l'importo resta salvato, è un avviso.
--- Due importi sono in conflitto se possono coincidere con la stessa riga di DDT e la fatturazione non ha un
+-- Due importi sono in conflitto se possono coincidere con lo stesso DDT e la fatturazione non ha un
 -- criterio per scegliere tra i due (li ordina per Id):
 --   - variabili sovrapposte: per ogni variabile, uno dei due non la indica oppure indicano lo stesso valore.
 --     L'etichetta non si confronta: un DDT può averne più di una;
@@ -2413,12 +2523,9 @@ BEGIN
 			AND a.Lock <= 2
 			AND b.Lock = 0
 			AND ISNULL(a.IdPriorita, -1) = ISNULL(b.IdPriorita, -1)
-			-- Articolo e materiale: due importi per righe di tipo diverso (uno indica un articolo, l'altro un materiale)
-			-- non coincidono mai con la stessa riga
-			AND (ar.IdArticolo IS NULL OR br.IdArticolo IS NULL OR ar.IdArticolo = br.IdArticolo)
-			AND (ar.IdMateriale IS NULL OR br.IdMateriale IS NULL OR ar.IdMateriale = br.IdMateriale)
-			AND NOT (ar.IdArticolo IS NOT NULL AND br.IdMateriale IS NOT NULL)
-			AND NOT (ar.IdMateriale IS NOT NULL AND br.IdArticolo IS NOT NULL)
+			-- Gli articoli e i materiali delle righe non contano: l'importo si sceglie sul DDT prima di guardarli, quindi
+			-- due listini dello stesso destinatario con la stessa priorità sono in conflitto anche con articoli diversi
+			AND (ar.IdSedePartenza IS NULL OR br.IdSedePartenza IS NULL OR ar.IdSedePartenza = br.IdSedePartenza)
 			AND (ar.IdDestinatarioParent IS NULL OR br.IdDestinatarioParent IS NULL OR ar.IdDestinatarioParent = br.IdDestinatarioParent)
 			AND (ar.IdDestinatario IS NULL OR br.IdDestinatario IS NULL OR ar.IdDestinatario = br.IdDestinatario)
 			AND
@@ -2447,6 +2554,424 @@ BEGIN
 	END
 END;
 GO
+
+PRINT 'sql/procedures/uspImportiRighe_upd.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Aggiunge una riga a un importo (@Id NULL, in coda) o la modifica. Vale per gli importi di rifiuti, magazzino
+-- e servizi: il tipo di riga deve essere del modulo dell'importo.
+-- Riga con importo: il tipo dice per che cosa si moltiplica (una volta per documento, oppure per la quantità).
+-- Riga di sola descrizione (@Importo NULL): in fattura dà una riga di testo, una per documento; aliquota IVA e
+-- conto non contano.
+-- Minimo fatturabile: l'importo della riga è il minimo da fatturare per documento; al massimo una per importo.
+-- Aliquota IVA facoltativa: se manca, la fatturazione usa quella della scheda del cliente.
+CREATE OR ALTER PROCEDURE dbo.uspImportiRighe_upd
+	@Id CHAR(16) = NULL,
+	@IdImporto CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@IdTipo CHAR(2) = NULL,
+	@Importo DECIMAL(18, 4) = NULL,
+	@MinimoFatturabile BIT = NULL,
+	@IdAliquotaIva CHAR(16) = NULL,
+	@IdConto CHAR(16) = NULL,
+	@Descrizione VARCHAR(1000) = NULL,
+	-- Solo per gli importi di magazzino: articolo oppure materiale EoW della riga a quantità (tipo MA)
+	@IdArticolo CHAR(16) = NULL,
+	@IdMateriale CHAR(2) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdImporto = NULLIF(LTRIM(RTRIM(@IdImporto)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdTipo = NULLIF(UPPER(LTRIM(RTRIM(@IdTipo))), '');
+		SET @MinimoFatturabile = ISNULL(@MinimoFatturabile, 0);
+		SET @IdAliquotaIva = NULLIF(NULLIF(LTRIM(RTRIM(@IdAliquotaIva)), ''), REPLICATE('0', 16));
+		SET @IdConto = NULLIF(NULLIF(LTRIM(RTRIM(@IdConto)), ''), REPLICATE('0', 16));
+		SET @Descrizione = NULLIF(LTRIM(RTRIM(@Descrizione)), '');
+		SET @IdArticolo = NULLIF(NULLIF(LTRIM(RTRIM(@IdArticolo)), ''), REPLICATE('0', 16));
+		SET @IdMateriale = NULLIF(NULLIF(LTRIM(RTRIM(@IdMateriale)), ''), REPLICATE('0', 2));
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'OCI',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Riga esistente: l'importo è quello della riga
+		DECLARE @idAliquotaIvaAttuale CHAR(16);
+		DECLARE @idContoAttuale CHAR(16);
+		IF @Id IS NOT NULL
+		BEGIN
+			SET @IdImporto = NULL;
+			SELECT
+				@IdImporto = g.IdImporto,
+				@idAliquotaIvaAttuale = d.IdAliquotaIva,
+				@idContoAttuale = d.IdConto
+			FROM
+				dbo.tblImportiRighe g
+				LEFT JOIN dbo.tblImportiRigheDettagli d ON g.Id = d.Id
+			WHERE g.Id = @Id;
+		END
+
+		-- L'importo deve esistere (in bozza o attivo), appartenere all'azienda interna corrente della sessione
+		-- e il suo modulo deve essere attivo sul dominio
+		DECLARE @idAzienda CHAR(16);
+		DECLARE @idModulo CHAR(3);
+		SELECT
+			@idAzienda = i.IdSede,
+			@idModulo = CASE
+				WHEN r.Id IS NOT NULL THEN 'RIF'
+				WHEN m.Id IS NOT NULL THEN 'MAG'
+				WHEN s.Id IS NOT NULL THEN 'SRV'
+			END
+		FROM
+			dbo.tblImporti i
+			INNER JOIN dbo.tblSessioni e ON i.IdSede = e.IdAzienda
+			LEFT JOIN dbo.tblImportiRifiuti r ON i.Id = r.Id
+			LEFT JOIN dbo.tblImportiMagazzino m ON i.Id = m.Id
+			LEFT JOIN dbo.tblImportiServizi s ON i.Id = s.Id
+		WHERE
+			i.Id = @IdImporto
+			AND e.Id = @IdSessione
+			AND i.Lock <= 2;
+
+		IF @idAzienda IS NULL OR @idModulo IS NULL OR ISNULL(dbo.ufnModuli_get_IsAttivoBySessione(@idModulo, @IdSessione), 0) = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari, o l''importo non esiste';
+			GOTO BRANCH_END;
+		END
+
+		IF @Descrizione IS NULL OR LEN(@Descrizione) < 3
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare il testo della riga in fattura (almeno 3 caratteri)';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @conImporto BIT = IIF(@Importo IS NULL, 0, 1);
+		IF @conImporto = 1
+		BEGIN
+			IF @IdTipo IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.tblImportiRigheTipi WHERE Id = @IdTipo AND IdModulo = @idModulo)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Selezionare a che cosa si applica l''importo della riga';
+				GOTO BRANCH_END;
+			END
+			IF @Importo < 0.0001 OR @Importo > 999999.9999
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'L''importo deve essere compreso tra 0,0001 e 999.999,9999';
+				GOTO BRANCH_END;
+			END
+			-- Aliquota IVA: facoltativa, di sistema (IdSede NULL) o dell'azienda; quella già sulla riga resta valida
+			IF @IdAliquotaIva IS NOT NULL AND NOT EXISTS (
+				SELECT 1
+				FROM dbo.tblAliquoteIva
+				WHERE
+					Id = @IdAliquotaIva
+					AND (IdSede IS NULL OR IdSede = @idAzienda)
+					AND (Lock = 0 OR Id = @idAliquotaIvaAttuale)
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'L''aliquota IVA indicata non esiste';
+				GOTO BRANCH_END;
+			END
+			-- Conto: facoltativo, dell'azienda; quello già sulla riga resta valido
+			IF @IdConto IS NOT NULL AND NOT EXISTS (
+				SELECT 1
+				FROM dbo.tblFattureConti
+				WHERE
+					Id = @IdConto
+					AND IdSede = @idAzienda
+					AND (Lock = 0 OR Id = @idContoAttuale)
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Il conto indicato non esiste';
+				GOTO BRANCH_END;
+			END
+			-- Importi di magazzino: l'importo è un listino. La riga a quantità (MA) senza minimo indica l'articolo
+			-- oppure il materiale EoW a cui si applica il prezzo, obbligatorio (una riga generica nasconderebbe gli
+			-- articoli nuovi non ancora prezzati) e una sola volta per importo; le altre righe non lo indicano
+			IF @idModulo = 'MAG' AND @IdTipo = 'MA' AND @MinimoFatturabile = 0
+			BEGIN
+				IF (@IdArticolo IS NULL AND @IdMateriale IS NULL) OR (@IdArticolo IS NOT NULL AND @IdMateriale IS NOT NULL)
+				BEGIN
+					SET @returnValue = -1;
+					SET @returnMessage = 'Indicare l''articolo oppure il materiale EoW a cui si applica l''importo della riga';
+					GOTO BRANCH_END;
+				END
+				IF @IdArticolo IS NOT NULL AND NOT EXISTS (
+					SELECT 1
+					FROM dbo.tblMagazziniArticoli a
+					WHERE
+						a.Id = @IdArticolo
+						AND a.IdSede = @idAzienda
+						AND (a.Lock = 0 OR EXISTS (SELECT 1 FROM dbo.tblImportiRigheMagazzino x WHERE x.Id = @Id AND x.IdArticolo = a.Id))
+				)
+				BEGIN
+					SET @returnValue = -1;
+					SET @returnMessage = 'L''articolo indicato non esiste';
+					GOTO BRANCH_END;
+				END
+				IF @IdMateriale IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiMateriali WHERE Id = @IdMateriale)
+				BEGIN
+					SET @returnValue = -1;
+					SET @returnMessage = 'Il materiale indicato non esiste';
+					GOTO BRANCH_END;
+				END
+				IF EXISTS (
+					SELECT 1
+					FROM
+						dbo.tblImportiRighe g
+						INNER JOIN dbo.tblImportiRigheMagazzino x ON g.Id = x.Id
+					WHERE
+						g.IdImporto = @IdImporto
+						AND (@Id IS NULL OR g.Id <> @Id)
+						AND (x.IdArticolo = @IdArticolo OR x.IdMateriale = @IdMateriale)
+				)
+				BEGIN
+					SET @returnValue = -1;
+					SET @returnMessage = 'L''importo ha già una riga per questo ' + IIF(@IdArticolo IS NOT NULL, 'articolo', 'materiale');
+					GOTO BRANCH_END;
+				END
+			END
+			ELSE
+			BEGIN
+				SET @IdArticolo = NULL;
+				SET @IdMateriale = NULL;
+			END
+
+			-- Al massimo una riga con il minimo fatturabile per importo
+			IF @MinimoFatturabile = 1 AND EXISTS (
+				SELECT 1
+				FROM dbo.tblImportiRighe
+				WHERE
+					IdImporto = @IdImporto
+					AND MinimoFatturabile = 1
+					AND (@Id IS NULL OR Id <> @Id)
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'L''importo ha già una riga con il minimo fatturabile';
+				GOTO BRANCH_END;
+			END
+		END
+		ELSE
+		BEGIN
+			-- Sola descrizione: una riga di testo per documento (il tipo "per documento" è il primo del modulo)
+			SELECT TOP (1) @IdTipo = Id
+			FROM dbo.tblImportiRigheTipi
+			WHERE IdModulo = @idModulo
+			ORDER BY Pos;
+
+			SET @MinimoFatturabile = 0;
+			SET @IdAliquotaIva = NULL;
+			SET @IdConto = NULL;
+			SET @IdArticolo = NULL;
+			SET @IdMateriale = NULL;
+		END
+
+		-- Nuova riga: uspId_get FUORI dalla transazione
+		DECLARE @nuova BIT = IIF(@Id IS NULL, 1, 0);
+		IF @nuova = 1
+			EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @Id OUTPUT;
+
+		BEGIN TRANSACTION;
+			IF @nuova = 1
+			BEGIN
+				-- In coda alle righe dell'importo
+				DECLARE @pos INT;
+				SELECT @pos = ISNULL(MAX(Pos), 0) + 1
+				FROM dbo.tblImportiRighe WITH (UPDLOCK, HOLDLOCK)
+				WHERE IdImporto = @IdImporto;
+
+				INSERT dbo.tblImportiRighe (Id, IdImporto, IdTipo, Importo, MinimoFatturabile, Lock, Pos)
+				VALUES (@Id, @IdImporto, @IdTipo, @Importo, @MinimoFatturabile, 0, @pos);
+			END
+			ELSE
+			BEGIN
+				UPDATE dbo.tblImportiRighe
+				SET
+					IdTipo = @IdTipo,
+					Importo = @Importo,
+					MinimoFatturabile = @MinimoFatturabile
+				WHERE Id = @Id;
+			END
+
+			DELETE dbo.tblImportiRigheDettagli
+			WHERE Id = @Id;
+
+			INSERT dbo.tblImportiRigheDettagli (Id, IdAliquotaIva, IdConto, Descrizione)
+			VALUES (@Id, @IdAliquotaIva, @IdConto, @Descrizione);
+
+			-- Articolo o materiale della riga a quantità di un importo di magazzino
+			DELETE dbo.tblImportiRigheMagazzino
+			WHERE Id = @Id;
+
+			IF @IdArticolo IS NOT NULL OR @IdMateriale IS NOT NULL
+				INSERT dbo.tblImportiRigheMagazzino (Id, IdArticolo, IdMateriale)
+				VALUES (@Id, @IdArticolo, @IdMateriale);
+		COMMIT TRANSACTION;
+
+		SELECT Id = @Id;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+PRINT 'sql/procedures/uspImportiRighe_get_List.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Righe di un importo (rifiuti, magazzino o servizi) dell'azienda interna corrente della sessione, nell'ordine
+-- in cui finiranno in fattura. Una riga senza importo è di sola descrizione.
+CREATE OR ALTER PROCEDURE dbo.uspImportiRighe_get_List
+	@IdImporto CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdImporto = NULLIF(LTRIM(RTRIM(@IdImporto)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @IdImporto IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdImporto non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'OCI',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- L'importo deve appartenere all'azienda interna corrente della sessione e il suo modulo (quello dei
+		-- documenti a cui si applica) deve essere attivo sul dominio
+		DECLARE @idAzienda CHAR(16);
+		DECLARE @idModulo CHAR(3);
+		SELECT
+			@idAzienda = i.IdSede,
+			@idModulo = CASE
+				WHEN r.Id IS NOT NULL THEN 'RIF'
+				WHEN m.Id IS NOT NULL THEN 'MAG'
+				WHEN s.Id IS NOT NULL THEN 'SRV'
+			END
+		FROM
+			dbo.tblImporti i
+			INNER JOIN dbo.tblSessioni e ON i.IdSede = e.IdAzienda
+			LEFT JOIN dbo.tblImportiRifiuti r ON i.Id = r.Id
+			LEFT JOIN dbo.tblImportiMagazzino m ON i.Id = m.Id
+			LEFT JOIN dbo.tblImportiServizi s ON i.Id = s.Id
+		WHERE
+			i.Id = @IdImporto
+			AND e.Id = @IdSessione
+			AND i.Lock <= 2;
+
+		IF @idAzienda IS NULL OR @idModulo IS NULL OR ISNULL(dbo.ufnModuli_get_IsAttivoBySessione(@idModulo, @IdSessione), 0) = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari, o l''importo non esiste';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			g.Id,
+			g.IdImporto,
+			g.IdTipo,
+			Tipo = t.Nome,
+			g.Importo,
+			MinimoFatturabile = ISNULL(g.MinimoFatturabile, 0),
+			d.IdAliquotaIva,
+			AliquotaIvaNome = a.Nome,
+			d.IdConto,
+			ContoNome = ISNULL(c.Codice + ' - ', '') + c.Nome,
+			d.Descrizione,
+			g.Pos,
+			-- Solo per gli importi di magazzino: articolo o materiale EoW della riga a quantità
+			x.IdArticolo,
+			x.IdMateriale,
+			Voce = ISNULL(ar.Nome + ISNULL(' (' + ar.Codice + ')', ''), 'EoW: ' + ma.Nome)
+		FROM
+			dbo.tblImportiRighe g
+			LEFT JOIN dbo.tblImportiRigheDettagli d ON g.Id = d.Id
+			LEFT JOIN dbo.tblImportiRigheMagazzino x ON g.Id = x.Id
+			LEFT JOIN dbo.tblMagazziniArticoli ar ON x.IdArticolo = ar.Id
+			LEFT JOIN dbo.tblRifiutiMateriali ma ON x.IdMateriale = ma.Id
+			LEFT JOIN dbo.tblImportiRigheTipi t ON g.IdTipo = t.Id
+			LEFT JOIN dbo.tblAliquoteIva a ON d.IdAliquotaIva = a.Id
+			LEFT JOIN dbo.tblFattureConti c ON d.IdConto = c.Id
+		WHERE g.IdImporto = @IdImporto
+		ORDER BY ISNULL(g.Pos, 0), g.Id;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
 GO
 
 PRINT 'sql/procedures/uspMagazziniArticoli_del.sql';
@@ -2538,12 +3063,13 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			-- Modulo Offerte e contratti: un articolo indicato tra le variabili di un importo attivo
+			-- Modulo Offerte e contratti: un articolo indicato in una riga di un importo attivo
 			IF EXISTS (
 				SELECT 1
 				FROM
-					dbo.tblImportiMagazzino m
-					INNER JOIN dbo.tblImporti i ON m.Id = i.Id
+					dbo.tblImportiRigheMagazzino m
+					INNER JOIN dbo.tblImportiRighe g ON m.Id = g.Id
+					INNER JOIN dbo.tblImporti i ON g.IdImporto = i.Id
 				WHERE
 					m.IdArticolo = @Id
 					AND i.Lock = 0
@@ -2623,7 +3149,6 @@ BEGIN
 	END
 
 END;
-GO
 GO
 
 PRINT 'sql/procedures/uspFatture_get_Genera_Fatture_List.sql';
@@ -2746,7 +3271,6 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 END;
-GO
 GO
 
 PRINT 'sql/procedures/uspFatture_get_Genera_List.sql';
@@ -2888,7 +3412,6 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 END;
-GO
 GO
 
 PRINT 'sql/procedures/uspFatture_get_Genera_Riepilogo.sql';
@@ -3058,7 +3581,6 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 END;
-GO
 GO
 
 PRINT 'sql/procedures/uspFatture_ins_Genera.sql';
@@ -3287,12 +3809,12 @@ BEGIN
 
 				UNION ALL
 
-				-- DDT di magazzino: le righe degli importi applicati alle sue righe, nell'ordine del DDT
+				-- DDT di magazzino: le righe dell'importo applicato, prima quelle a quantità nell'ordine del DDT, poi le altre
 				SELECT
 					IdDocumento = d.Id,
 					d.[Data],
 					d.Numero,
-					Pos = g.PosDdt * 10000 + ISNULL(g.Pos, 0),
+					Pos = g.Gruppo * 100000000 + g.PosDdt * 10000 + ISNULL(g.Pos, 0),
 					Ordine = g.Id,
 					g.Descrizione,
 					g.SolaDescrizione,
@@ -3574,7 +4096,6 @@ BEGIN
 	END
 END;
 GO
-GO
 
 PRINT 'sql/procedures/uspFattureDocumenti_get.sql';
 GO
@@ -3717,9 +4238,8 @@ BEGIN
 			OPTION (RECOMPILE);
 		END
 
-
 		-- DDT di magazzino (Id = movimento), con il modulo Offerte e contratti attivo sul dominio e almeno la
-		-- lettura dei movimenti. Il confronto con gli importi è per riga del DDT
+		-- lettura dei movimenti. L'importo è uno solo per DDT e deve avere una riga per ogni suo articolo o materiale
 		DECLARE @permessoMag TINYINT = dbo.ufnFunzioni_get_PermessoBySessione('MAG', @IdSessione);
 		IF ISNULL(@IdModulo, '') = 'MAG'
 			AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 1
@@ -3742,41 +4262,36 @@ BEGIN
 				a.ClienteOrigine,
 				ClienteOrigineDescrizione = CASE a.ClienteOrigine
 					WHEN 'D' THEN 'indicato sul DDT'
-					WHEN 'C' THEN 'dal contratto degli importi'
-					WHEN 'P' THEN 'destinatario del DDT (importi standard)'
+					WHEN 'C' THEN 'dal contratto dell''importo'
+					WHEN 'P' THEN 'destinatario del DDT (importo standard)'
 				END,
 				a.IdImporto,
-				Importo = CASE
-					WHEN a.Righe = 0 OR a.RigheSenzaImporto = a.Righe THEN NULL
-					WHEN a.IdImporto IS NOT NULL THEN i.Nome
-					ELSE 'Importi diversi per riga'
-				END,
-				Priorita = IIF(a.IdImporto IS NOT NULL, p.Nome, NULL),
+				Importo = i.Nome,
+				Priorita = p.Nome,
 				Contratto = CASE
-					WHEN a.Righe = 0 OR a.RigheSenzaImporto = a.Righe THEN NULL
-					WHEN a.IdOffertaContratto IS NOT NULL THEN 'Contratto' + ISNULL(' ' + so.NomeCompleto, '')
+					WHEN a.IdImporto IS NULL THEN NULL
+					WHEN a.IdOffertaContratto IS NULL THEN 'Nessuno (importo standard)'
+					ELSE 'Contratto' + ISNULL(' ' + so.NomeCompleto, '')
 						+ ISNULL(' dal ' + CONVERT(VARCHAR(10), oc.DataInizio, 103), '')
 						+ ISNULL(' al ' + CONVERT(VARCHAR(10), oc.DataFine, 103), '')
-					WHEN a.ClienteOrigine = 'C' OR a.ClientiDiversi = 1 THEN 'Contratti diversi per riga'
-					ELSE 'Nessuno (importi standard)'
 				END,
 				Totale = t.Totale,
 				Fatturabile = CAST(IIF(
 					a.Lock = 0 AND a.NonFatturabile = 0 AND a.IdFattura IS NULL
-					AND a.Righe > 0 AND a.RigheSenzaImporto = 0 AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0, 1, 0) AS BIT),
+					AND a.Righe > 0 AND a.IdImporto IS NOT NULL AND a.RigheSenzaImporto = 0
+					AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0, 1, 0) AS BIT),
 				Avvisi = CAST(STUFF(
 					IIF(a.Lock <> 0, '|Il DDT non è ancora salvato: salvarlo prima di fatturarlo', '')
 					+ IIF(a.IdFattura IS NOT NULL, '|Il DDT è già stato fatturato', '')
 					+ IIF(a.NonFatturabile = 1, '|Il DDT è indicato come non fatturabile', '')
 					+ IIF(a.Righe = 0, '|Il DDT non ha righe di articoli o di materiali: non viene fatturato', '')
-					+ IIF(a.RigheSenzaImporto > 0, '|Nessun importo coincide con ' + IIF(a.RigheSenzaImporto = 1, 'la riga ', 'le righe ') + ISNULL(n.Voci, '')
+					+ IIF(a.Righe > 0 AND a.IdImporto IS NULL, '|Nessun importo coincide con il DDT: non viene fatturato', '')
+					+ IIF(a.IdImporto IS NOT NULL AND a.RigheSenzaImporto > 0, '|L''importo "' + ISNULL(i.Nome, '') + '" non ha una riga per ' + ISNULL(n.Voci, '')
 						+ ': il DDT non viene fatturato', '')
-					+ IIF(a.RigheScartate > 0, '|Per ' + IIF(a.RigheScartate = 1, 'una riga', CAST(a.RigheScartate AS VARCHAR(10)) + ' righe')
-						+ ' coinciderebbe un importo il cui contratto non è valido alla data del DDT', '')
-					+ IIF(a.ClientiDiversi = 1, '|Le righe hanno importi di contratti di clienti diversi: indicare il cliente sul DDT', '')
-					+ IIF(a.IdClienteFornitore IS NULL AND a.ClientiDiversi = 0, '|Cliente non determinato: il destinatario non ha una scheda cliente. Indicare il cliente sul DDT', '')
-					+ IIF(a.IdClienteFornitore IS NOT NULL AND ISNULL(t.SenzaIva, 0) > 0, '|Aliquota IVA non indicata né sulle righe degli importi né sulla scheda del cliente', '')
-					+ IIF(a.Righe > 0 AND a.RigheSenzaImporto = 0 AND ISNULL(t.Righe, 0) = 0, '|Gli importi applicati non hanno righe: il DDT non genera righe in fattura', '')
+					+ IIF(a.IdImportoScartato IS NOT NULL, '|L''importo "' + ISNULL(isc.Nome, '') + '" coincide con il DDT, ma il suo contratto non è valido alla data del DDT'
+						+ IIF(a.IdImporto IS NOT NULL AND a.IdOffertaContratto IS NULL, ': è stato applicato l''importo standard', ''), '')
+					+ IIF(a.IdClienteFornitore IS NULL, '|Cliente non determinato: il destinatario non ha una scheda cliente. Indicare il cliente sul DDT', '')
+					+ IIF(a.IdClienteFornitore IS NOT NULL AND ISNULL(t.SenzaIva, 0) > 0, '|Aliquota IVA non indicata né sulle righe dell''importo né sulla scheda del cliente', '')
 					, 1, 1, '') AS VARCHAR(2000))
 			FROM
 				dbo.ufnImportiMagazzino_get_Applicazione_List(@Id, NULL, NULL, NULL, 0) a
@@ -3788,6 +4303,7 @@ BEGIN
 				LEFT JOIN dbo.tblFatture f ON a.IdFattura = f.Id
 				LEFT JOIN dbo.tblImporti i ON a.IdImporto = i.Id
 				LEFT JOIN dbo.tblImportiPriorita p ON i.IdPriorita = p.Id
+				LEFT JOIN dbo.tblImporti isc ON a.IdImportoScartato = isc.Id
 				LEFT JOIN dbo.tblOfferteContratti oc ON a.IdOffertaContratto = oc.Id
 				LEFT JOIN dbo.tblClientiFornitori co ON oc.IdClienteFornitore = co.Id
 				LEFT JOIN dbo.tblSedi so ON co.IdSede = so.Id
@@ -3800,10 +4316,10 @@ BEGIN
 					FROM dbo.ufnImportiMagazzino_get_RigheFattura(@Id, a.IdClienteFornitore) g
 				) t
 				OUTER APPLY (
-					-- Righe del DDT senza un importo, per l'avviso
+					-- Articoli e materiali del DDT che l'importo applicato non prezza, per l'avviso
 					SELECT Voci = STRING_AGG(CAST('"' + ISNULL(r.Voce, '') + '"' AS VARCHAR(MAX)), ', ') WITHIN GROUP (ORDER BY ISNULL(r.Pos, 0), r.IdRiga)
 					FROM dbo.ufnImportiMagazzino_get_ApplicazioneRighe_List(@Id, NULL, NULL, NULL, 0) r
-					WHERE r.IdImporto IS NULL
+					WHERE r.IdRigaImporto IS NULL
 				) n
 			WHERE a.IsFatturabile = 1
 			OPTION (RECOMPILE);
@@ -3822,7 +4338,6 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 END;
-GO
 GO
 
 PRINT 'sql/procedures/uspFattureDocumenti_get_Righe.sql';
@@ -3892,14 +4407,14 @@ BEGIN
 		END
 
 
-		-- DDT di magazzino: le righe degli importi applicati alle righe del DDT, nell'ordine del DDT
+		-- DDT di magazzino: le righe dell'importo applicato, prima quelle a quantità nell'ordine del DDT, poi le altre
 		IF ISNULL(@IdModulo, '') = 'MAG'
 			AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 1
 			AND dbo.ufnFunzioni_get_PermessoBySessione('MAG', @IdSessione) >= 1
 		BEGIN
 			SELECT
 				g.Id,
-				Pos = CAST(ROW_NUMBER() OVER (ORDER BY g.PosDdt, g.IdRiga, ISNULL(g.Pos, 0), g.Id) AS INT),
+				Pos = CAST(ROW_NUMBER() OVER (ORDER BY g.Gruppo, g.PosDdt, g.IdRigaDdt, ISNULL(g.Pos, 0), g.Id) AS INT),
 				g.Descrizione,
 				g.SolaDescrizione,
 				g.MinimoFatturabile,
@@ -3916,7 +4431,7 @@ BEGIN
 				LEFT JOIN dbo.tblAliquoteIva v ON g.IdAliquotaIva = v.Id
 				LEFT JOIN dbo.tblFattureConti c ON g.IdConto = c.Id
 			WHERE a.IsFatturabile = 1
-			ORDER BY g.PosDdt, g.IdRiga, ISNULL(g.Pos, 0), g.Id
+			ORDER BY g.Gruppo, g.PosDdt, g.IdRigaDdt, ISNULL(g.Pos, 0), g.Id
 			OPTION (RECOMPILE);
 		END
 
@@ -3933,7 +4448,6 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 END;
-GO
 GO
 
 PRINT 'sql/procedures/uspFattureDocumenti_upd.sql';
@@ -4094,7 +4608,6 @@ BEGIN
 	END
 END;
 GO
-GO
 
 PRINT 'sql/procedures/uspFattureDocumenti_del_Fattura.sql';
 GO
@@ -4194,7 +4707,6 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 END;
-GO
 GO
 
 PRINT 'sql/procedures/uspFattureDocumenti_get_Clienti_List.sql';
@@ -4305,7 +4817,6 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 END;
-GO
 GO
 
 PRINT 'sql/procedures/uspSedi_del_SediEsterne.sql';
@@ -4725,7 +5236,6 @@ BEGIN
 END;
 
 
-GO
 
 PRINT 'sql/procedures/uspSedi_del_SediInterne.sql';
 GO
@@ -4990,7 +5500,7 @@ BEGIN
 					SELECT 1
 					FROM dbo.tblImportiMagazzino m
 					INNER JOIN dbo.tblImporti i ON m.Id = i.Id
-					WHERE i.Lock = 0 AND @Id IN (m.IdDestinatarioParent, m.IdDestinatario)
+					WHERE i.Lock = 0 AND @Id IN (m.IdSedePartenza, m.IdDestinatarioParent, m.IdDestinatario)
 				)
 				OR EXISTS (
 					SELECT 1
@@ -5519,7 +6029,6 @@ BEGIN
 END;
 
 
-GO
 
 PRINT 'sql/procedures/uspSYS_del_SedeEsternaCascade.sql';
 GO
@@ -5930,7 +6439,6 @@ BEGIN
         THROW 50001, @returnMessage, 1;
     END
 END;
-GO
 
 PRINT 'sql/procedures/uspSYS_del_SedeInternaCascade.sql';
 GO
@@ -6144,6 +6652,7 @@ BEGIN
             UPDATE dbo.tblImportiRifiuti SET IdDestinatario = NULL WHERE IdDestinatario IN (SELECT Id FROM #Sedi);
             UPDATE dbo.tblImportiRifiuti SET IdIntermediario = NULL WHERE IdIntermediario IN (SELECT Id FROM #Sedi);
             UPDATE dbo.tblImportiRifiuti SET IdEtichetta = NULL WHERE IdEtichetta IN (SELECT Id FROM #Etichette);
+            UPDATE dbo.tblImportiMagazzino SET IdSedePartenza = NULL WHERE IdSedePartenza IN (SELECT Id FROM #Sedi);
             UPDATE dbo.tblImportiMagazzino SET IdDestinatarioParent = NULL WHERE IdDestinatarioParent IN (SELECT Id FROM #Sedi);
             UPDATE dbo.tblImportiMagazzino SET IdDestinatario = NULL WHERE IdDestinatario IN (SELECT Id FROM #Sedi);
             UPDATE dbo.tblImportiMagazzino SET IdEtichetta = NULL WHERE IdEtichetta IN (SELECT Id FROM #Etichette);
@@ -6152,6 +6661,8 @@ BEGIN
             UPDATE dbo.tblImportiServizi SET IdEsecutore = NULL WHERE IdEsecutore IN (SELECT Id FROM #Sedi);
             UPDATE dbo.tblImportiServizi SET IdEtichetta = NULL WHERE IdEtichetta IN (SELECT Id FROM #Etichette);
             UPDATE dbo.tblImportiServizi SET IdTipo = NULL WHERE IdTipo IN (SELECT Id FROM #Tipi);
+            -- Righe di listino di ALTRE aziende su un articolo della cascata (non previsto): perdono l'articolo
+            DELETE FROM dbo.tblImportiRigheMagazzino WHERE IdArticolo IN (SELECT Id FROM #MagArticoli);
             UPDATE dbo.tblImportiRigheDettagli SET IdConto = NULL WHERE IdConto IN (SELECT Id FROM #FattureConti);
             UPDATE dbo.tblImportiRigheDettagli SET IdAliquotaIva = NULL WHERE IdAliquotaIva IN (SELECT Id FROM #AliquoteIva);
 
@@ -6468,5 +6979,3 @@ BEGIN
         THROW 50001, @returnMessage, 1;
     END
 END;
-GO
-

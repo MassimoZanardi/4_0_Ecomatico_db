@@ -5,8 +5,8 @@ GO
 -- Offerte e contratti > Importi magazzino: righe dell'elenco e dell'esportazione (uspImportiMagazzino_get_List,
 -- uspImportiMagazzino_get_Esportazione), così leggono le stesse righe con la stessa ricerca.
 -- Scope: importi di magazzino attivi dell'azienda interna corrente della sessione.
--- Variabili: articolo (righe articolo del DDT) oppure materiale (righe EoW), destinatario (soggetto e,
--- facoltativa, una sua sede), etichetta del DDT. Una variabile NULL vale "qualsiasi".
+-- Variabili: sede di partenza (sede interna del DDT), destinatario (soggetto e, facoltativa, una sua sede),
+-- etichetta del DDT. Una variabile NULL vale "qualsiasi". Articoli e materiali stanno sulle righe dell'importo.
 -- StatoValore 1 (avviso): importo senza righe, importo di un'offerta, contratto scaduto.
 --   @SoloContrattoScaduto = 1: solo gli importi di un contratto confermato la cui validità è finita prima di oggi.
 CREATE OR ALTER FUNCTION dbo.ufnImportiMagazzino_get_List (
@@ -34,8 +34,7 @@ RETURN
 		i.Nome,
 		i.IdPriorita,
 		Priorita = p.Nome,
-		Articolo = a.Nome + ISNULL(' (' + a.Codice + ')', ''),
-		Materiale = ma.Nome,
+		Partenza = sp.NomeCompleto + ISNULL(' ' + sp.IndirizzoCompleto, ''),
 		Destinatario = IIF(r.IdDestinatario IS NULL, da.NomeCompleto, ds.NomeCompleto + ISNULL(' ' + ds.IndirizzoCompleto, '')),
 		Etichetta = et.Nome,
 		c.Cliente,
@@ -48,8 +47,7 @@ RETURN
 		INNER JOIN dbo.tblSessioni s ON i.IdSede = s.IdAzienda
 		INNER JOIN dbo.tblImportiMagazzino r ON i.Id = r.Id
 		LEFT JOIN dbo.tblImportiPriorita p ON i.IdPriorita = p.Id
-		LEFT JOIN dbo.tblMagazziniArticoli a ON r.IdArticolo = a.Id
-		LEFT JOIN dbo.tblRifiutiMateriali ma ON r.IdMateriale = ma.Id
+		LEFT JOIN dbo.tblSedi sp ON r.IdSedePartenza = sp.Id
 		LEFT JOIN dbo.tblSedi da ON r.IdDestinatarioParent = da.Id
 		LEFT JOIN dbo.tblSedi ds ON r.IdDestinatario = ds.Id
 		LEFT JOIN dbo.tblEtichette et ON r.IdEtichetta = et.Id
@@ -88,9 +86,7 @@ RETURN
 			(
 			@Search IS NULL
 			OR i.Nome LIKE '%' + @Search + '%'
-			OR a.Nome LIKE '%' + @Search + '%'
-			OR a.Codice LIKE '%' + @Search + '%'
-			OR ma.Nome LIKE '%' + @Search + '%'
+			OR sp.NomeCompleto LIKE '%' + @Search + '%'
 			OR da.NomeCompleto LIKE '%' + @Search + '%'
 			OR ds.NomeCompleto LIKE '%' + @Search + '%'
 			OR et.Nome LIKE '%' + @Search + '%'

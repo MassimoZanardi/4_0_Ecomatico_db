@@ -3,16 +3,17 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- Generazione automatica delle fatture: DDT di magazzino candidati, con gli importi e il cliente che verrebbero
--- applicati (ufnImportiMagazzino_get_Applicazione_List, con il confronto per riga del DDT) e l'esito. Stesse
+-- applicati (ufnImportiMagazzino_get_Applicazione_List: un solo importo per DDT) e l'esito. Stesse
 -- colonne e stessi parametri di ufnFattureDocumenti_get_Rifiuti: le due si leggono insieme in
 -- ufnFattureGenera_get_Documenti. Id è l'Id del movimento, Data e Numero quelli del DDT.
 --   @Id: un solo movimento ("Genera la fattura" dalla scheda); altrimenti @IdAzienda e l'intervallo di date.
 -- Candidati: DDT emessi e confermati di un movimento di scarico con una causale fatturabile, di una sede che la
 -- sessione vede, non ancora in una fattura (le pre-fatture non contano come fattura quando si includono).
 -- IdProduttore: qui è il destinatario del DDT, la sede per il raggruppamento "una fattura per sede".
--- IdImporto, IdOffertaContratto: solo se sono gli stessi per tutte le righe del DDT.
--- SenzaImporto = 1: il DDT non ha righe, oppure almeno una riga non ha un importo che coincide.
--- Fatturabile = 1: non "Non fatturabile", tutte le righe con un importo, un cliente determinato, almeno una riga
+-- IdImporto, IdOffertaContratto: quelli dell'importo applicato al DDT.
+-- SenzaImporto = 1: il DDT non ha righe, nessun importo coincide, oppure l'importo applicato non ha una riga per
+-- uno dei suoi articoli o materiali.
+-- Fatturabile = 1: non "Non fatturabile", un importo con una riga per ogni articolo, un cliente determinato, almeno una riga
 -- di fattura e l'aliquota IVA su ogni riga con importo. Stessa condizione di uspFattureDocumenti_get: vanno tenute
 -- allineate. Un DDT in una pre-fattura inclusa è sempre fatturabile.
 CREATE OR ALTER FUNCTION dbo.ufnFattureDocumenti_get_Magazzino (
@@ -43,14 +44,14 @@ RETURN
 		a.IdOffertaContratto,
 		IdClienteFornitore = IIF(a.IsPreFattura = 1, a.IdClientePreFattura, a.IdClienteFornitore),
 		a.ClienteOrigine,
-		IdImportoScartato = CAST(NULL AS CHAR(16)),
-		SenzaImporto = CAST(IIF(a.Righe = 0 OR a.RigheSenzaImporto > 0, 1, 0) AS BIT),
+		a.IdImportoScartato,
+		SenzaImporto = CAST(IIF(a.Righe = 0 OR a.IdImporto IS NULL OR a.RigheSenzaImporto > 0, 1, 0) AS BIT),
 		Righe = ISNULL(t.Righe, 0),
 		Totale = t.Totale,
 		SenzaIva = ISNULL(t.SenzaIva, 0),
 		Fatturabile = CAST(CASE
 			WHEN a.IsPreFattura = 1 THEN 1
-			WHEN a.NonFatturabile = 0 AND a.Righe > 0 AND a.RigheSenzaImporto = 0
+			WHEN a.NonFatturabile = 0 AND a.Righe > 0 AND a.IdImporto IS NOT NULL AND a.RigheSenzaImporto = 0
 				AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0 THEN 1
 			ELSE 0
 		END AS BIT)

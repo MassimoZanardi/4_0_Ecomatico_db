@@ -48,8 +48,7 @@ BEGIN
 		SELECT TOP (@MaxRighe + 1)
 			[Nome] = t.Nome,
 			[Priorità] = t.Priorita,
-			[Articolo] = t.Articolo,
-			[Materiale EoW] = t.Materiale,
+			[Sede di partenza] = t.Partenza,
 			[Destinatario] = t.Destinatario,
 			[Etichetta] = t.Etichetta,
 			[Cliente] = t.Cliente,

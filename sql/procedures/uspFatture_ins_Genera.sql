@@ -222,12 +222,12 @@ BEGIN
 
 				UNION ALL
 
-				-- DDT di magazzino: le righe degli importi applicati alle sue righe, nell'ordine del DDT
+				-- DDT di magazzino: le righe dell'importo applicato, prima quelle a quantità nell'ordine del DDT, poi le altre
 				SELECT
 					IdDocumento = d.Id,
 					d.[Data],
 					d.Numero,
-					Pos = g.PosDdt * 10000 + ISNULL(g.Pos, 0),
+					Pos = g.Gruppo * 100000000 + g.PosDdt * 10000 + ISNULL(g.Pos, 0),
 					Ordine = g.Id,
 					g.Descrizione,
 					g.SolaDescrizione,

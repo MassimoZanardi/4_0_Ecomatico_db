@@ -2,9 +2,9 @@
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Select degli articoli per la variabile "Articolo" di un importo di magazzino: articoli attivi dell'azienda
+-- Select degli articoli per la riga a quantità di un importo di magazzino: articoli attivi dell'azienda
 -- interna corrente della sessione, al massimo 50, con la ricerca su nome e codice. La prima voce (Id a zeri)
--- significa "qualsiasi". L'articolo selezionato è sempre presente, anche se cancellato, fuori dalla ricerca o
+-- è "(Selezionare)". L'articolo selezionato è sempre presente, anche se cancellato, fuori dalla ricerca o
 -- oltre i primi 50.
 CREATE OR ALTER PROCEDURE dbo.uspImportiMagazzino_get_Articoli_SelectList
 	@IdSessione CHAR(16) = NULL,
@@ -46,7 +46,7 @@ BEGIN
 		FROM (
 			SELECT
 				Id = CAST(@idSediciZeri AS CHAR(16)),
-				[Text] = CAST('(Tutti)' AS VARCHAR(400)),
+				[Text] = CAST('(Selezionare)' AS VARCHAR(400)),
 				Selected = CAST(IIF(@IdSelected = @idSediciZeri, 1, 0) AS BIT),
 				Pos = 0
 			UNION ALL

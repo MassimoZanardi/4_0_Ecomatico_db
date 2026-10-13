@@ -63,14 +63,14 @@ BEGIN
 		END
 
 
-		-- DDT di magazzino: le righe degli importi applicati alle righe del DDT, nell'ordine del DDT
+		-- DDT di magazzino: le righe dell'importo applicato, prima quelle a quantità nell'ordine del DDT, poi le altre
 		IF ISNULL(@IdModulo, '') = 'MAG'
 			AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 1
 			AND dbo.ufnFunzioni_get_PermessoBySessione('MAG', @IdSessione) >= 1
 		BEGIN
 			SELECT
 				g.Id,
-				Pos = CAST(ROW_NUMBER() OVER (ORDER BY g.PosDdt, g.IdRiga, ISNULL(g.Pos, 0), g.Id) AS INT),
+				Pos = CAST(ROW_NUMBER() OVER (ORDER BY g.Gruppo, g.PosDdt, g.IdRigaDdt, ISNULL(g.Pos, 0), g.Id) AS INT),
 				g.Descrizione,
 				g.SolaDescrizione,
 				g.MinimoFatturabile,
@@ -87,7 +87,7 @@ BEGIN
 				LEFT JOIN dbo.tblAliquoteIva v ON g.IdAliquotaIva = v.Id
 				LEFT JOIN dbo.tblFattureConti c ON g.IdConto = c.Id
 			WHERE a.IsFatturabile = 1
-			ORDER BY g.PosDdt, g.IdRiga, ISNULL(g.Pos, 0), g.Id
+			ORDER BY g.Gruppo, g.PosDdt, g.IdRigaDdt, ISNULL(g.Pos, 0), g.Id
 			OPTION (RECOMPILE);
 		END
 

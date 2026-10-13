@@ -18,7 +18,10 @@ CREATE OR ALTER PROCEDURE dbo.uspImportiRighe_upd
 	@MinimoFatturabile BIT = NULL,
 	@IdAliquotaIva CHAR(16) = NULL,
 	@IdConto CHAR(16) = NULL,
-	@Descrizione VARCHAR(1000) = NULL
+	@Descrizione VARCHAR(1000) = NULL,
+	-- Solo per gli importi di magazzino: articolo oppure materiale EoW della riga a quantità (tipo MA)
+	@IdArticolo CHAR(16) = NULL,
+	@IdMateriale CHAR(2) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -34,6 +37,8 @@ BEGIN
 		SET @IdAliquotaIva = NULLIF(NULLIF(LTRIM(RTRIM(@IdAliquotaIva)), ''), REPLICATE('0', 16));
 		SET @IdConto = NULLIF(NULLIF(LTRIM(RTRIM(@IdConto)), ''), REPLICATE('0', 16));
 		SET @Descrizione = NULLIF(LTRIM(RTRIM(@Descrizione)), '');
+		SET @IdArticolo = NULLIF(NULLIF(LTRIM(RTRIM(@IdArticolo)), ''), REPLICATE('0', 16));
+		SET @IdMateriale = NULLIF(NULLIF(LTRIM(RTRIM(@IdMateriale)), ''), REPLICATE('0', 2));
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -150,6 +155,58 @@ BEGIN
 				SET @returnMessage = 'Il conto indicato non esiste';
 				GOTO BRANCH_END;
 			END
+			-- Importi di magazzino: l'importo è un listino. La riga a quantità (MA) senza minimo indica l'articolo
+			-- oppure il materiale EoW a cui si applica il prezzo, obbligatorio (una riga generica nasconderebbe gli
+			-- articoli nuovi non ancora prezzati) e una sola volta per importo; le altre righe non lo indicano
+			IF @idModulo = 'MAG' AND @IdTipo = 'MA' AND @MinimoFatturabile = 0
+			BEGIN
+				IF (@IdArticolo IS NULL AND @IdMateriale IS NULL) OR (@IdArticolo IS NOT NULL AND @IdMateriale IS NOT NULL)
+				BEGIN
+					SET @returnValue = -1;
+					SET @returnMessage = 'Indicare l''articolo oppure il materiale EoW a cui si applica l''importo della riga';
+					GOTO BRANCH_END;
+				END
+				IF @IdArticolo IS NOT NULL AND NOT EXISTS (
+					SELECT 1
+					FROM dbo.tblMagazziniArticoli a
+					WHERE
+						a.Id = @IdArticolo
+						AND a.IdSede = @idAzienda
+						AND (a.Lock = 0 OR EXISTS (SELECT 1 FROM dbo.tblImportiRigheMagazzino x WHERE x.Id = @Id AND x.IdArticolo = a.Id))
+				)
+				BEGIN
+					SET @returnValue = -1;
+					SET @returnMessage = 'L''articolo indicato non esiste';
+					GOTO BRANCH_END;
+				END
+				IF @IdMateriale IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiMateriali WHERE Id = @IdMateriale)
+				BEGIN
+					SET @returnValue = -1;
+					SET @returnMessage = 'Il materiale indicato non esiste';
+					GOTO BRANCH_END;
+				END
+				IF EXISTS (
+					SELECT 1
+					FROM
+						dbo.tblImportiRighe g
+						INNER JOIN dbo.tblImportiRigheMagazzino x ON g.Id = x.Id
+					WHERE
+						g.IdImporto = @IdImporto
+						AND (@Id IS NULL OR g.Id <> @Id)
+						AND (x.IdArticolo = @IdArticolo OR x.IdMateriale = @IdMateriale)
+				)
+				BEGIN
+					SET @returnValue = -1;
+					SET @returnMessage = 'L''importo ha già una riga per questo ' + IIF(@IdArticolo IS NOT NULL, 'articolo', 'materiale');
+					GOTO BRANCH_END;
+				END
+			END
+			ELSE
+			BEGIN
+				SET @IdArticolo = NULL;
+				SET @IdMateriale = NULL;
+			END
+
 			-- Al massimo una riga con il minimo fatturabile per importo
 			IF @MinimoFatturabile = 1 AND EXISTS (
 				SELECT 1
@@ -176,6 +233,8 @@ BEGIN
 			SET @MinimoFatturabile = 0;
 			SET @IdAliquotaIva = NULL;
 			SET @IdConto = NULL;
+			SET @IdArticolo = NULL;
+			SET @IdMateriale = NULL;
 		END
 
 		-- Nuova riga: uspId_get FUORI dalla transazione
@@ -210,6 +269,14 @@ BEGIN
 
 			INSERT dbo.tblImportiRigheDettagli (Id, IdAliquotaIva, IdConto, Descrizione)
 			VALUES (@Id, @IdAliquotaIva, @IdConto, @Descrizione);
+
+			-- Articolo o materiale della riga a quantità di un importo di magazzino
+			DELETE dbo.tblImportiRigheMagazzino
+			WHERE Id = @Id;
+
+			IF @IdArticolo IS NOT NULL OR @IdMateriale IS NOT NULL
+				INSERT dbo.tblImportiRigheMagazzino (Id, IdArticolo, IdMateriale)
+				VALUES (@Id, @IdArticolo, @IdMateriale);
 		COMMIT TRANSACTION;
 
 		SELECT Id = @Id;

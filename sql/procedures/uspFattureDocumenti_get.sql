@@ -137,9 +137,8 @@ BEGIN
 			OPTION (RECOMPILE);
 		END
 
-
 		-- DDT di magazzino (Id = movimento), con il modulo Offerte e contratti attivo sul dominio e almeno la
-		-- lettura dei movimenti. Il confronto con gli importi è per riga del DDT
+		-- lettura dei movimenti. L'importo è uno solo per DDT e deve avere una riga per ogni suo articolo o materiale
 		DECLARE @permessoMag TINYINT = dbo.ufnFunzioni_get_PermessoBySessione('MAG', @IdSessione);
 		IF ISNULL(@IdModulo, '') = 'MAG'
 			AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 1
@@ -162,41 +161,36 @@ BEGIN
 				a.ClienteOrigine,
 				ClienteOrigineDescrizione = CASE a.ClienteOrigine
 					WHEN 'D' THEN 'indicato sul DDT'
-					WHEN 'C' THEN 'dal contratto degli importi'
-					WHEN 'P' THEN 'destinatario del DDT (importi standard)'
+					WHEN 'C' THEN 'dal contratto dell''importo'
+					WHEN 'P' THEN 'destinatario del DDT (importo standard)'
 				END,
 				a.IdImporto,
-				Importo = CASE
-					WHEN a.Righe = 0 OR a.RigheSenzaImporto = a.Righe THEN NULL
-					WHEN a.IdImporto IS NOT NULL THEN i.Nome
-					ELSE 'Importi diversi per riga'
-				END,
-				Priorita = IIF(a.IdImporto IS NOT NULL, p.Nome, NULL),
+				Importo = i.Nome,
+				Priorita = p.Nome,
 				Contratto = CASE
-					WHEN a.Righe = 0 OR a.RigheSenzaImporto = a.Righe THEN NULL
-					WHEN a.IdOffertaContratto IS NOT NULL THEN 'Contratto' + ISNULL(' ' + so.NomeCompleto, '')
+					WHEN a.IdImporto IS NULL THEN NULL
+					WHEN a.IdOffertaContratto IS NULL THEN 'Nessuno (importo standard)'
+					ELSE 'Contratto' + ISNULL(' ' + so.NomeCompleto, '')
 						+ ISNULL(' dal ' + CONVERT(VARCHAR(10), oc.DataInizio, 103), '')
 						+ ISNULL(' al ' + CONVERT(VARCHAR(10), oc.DataFine, 103), '')
-					WHEN a.ClienteOrigine = 'C' OR a.ClientiDiversi = 1 THEN 'Contratti diversi per riga'
-					ELSE 'Nessuno (importi standard)'
 				END,
 				Totale = t.Totale,
 				Fatturabile = CAST(IIF(
 					a.Lock = 0 AND a.NonFatturabile = 0 AND a.IdFattura IS NULL
-					AND a.Righe > 0 AND a.RigheSenzaImporto = 0 AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0, 1, 0) AS BIT),
+					AND a.Righe > 0 AND a.IdImporto IS NOT NULL AND a.RigheSenzaImporto = 0
+					AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0, 1, 0) AS BIT),
 				Avvisi = CAST(STUFF(
 					IIF(a.Lock <> 0, '|Il DDT non è ancora salvato: salvarlo prima di fatturarlo', '')
 					+ IIF(a.IdFattura IS NOT NULL, '|Il DDT è già stato fatturato', '')
 					+ IIF(a.NonFatturabile = 1, '|Il DDT è indicato come non fatturabile', '')
 					+ IIF(a.Righe = 0, '|Il DDT non ha righe di articoli o di materiali: non viene fatturato', '')
-					+ IIF(a.RigheSenzaImporto > 0, '|Nessun importo coincide con ' + IIF(a.RigheSenzaImporto = 1, 'la riga ', 'le righe ') + ISNULL(n.Voci, '')
+					+ IIF(a.Righe > 0 AND a.IdImporto IS NULL, '|Nessun importo coincide con il DDT: non viene fatturato', '')
+					+ IIF(a.IdImporto IS NOT NULL AND a.RigheSenzaImporto > 0, '|L''importo "' + ISNULL(i.Nome, '') + '" non ha una riga per ' + ISNULL(n.Voci, '')
 						+ ': il DDT non viene fatturato', '')
-					+ IIF(a.RigheScartate > 0, '|Per ' + IIF(a.RigheScartate = 1, 'una riga', CAST(a.RigheScartate AS VARCHAR(10)) + ' righe')
-						+ ' coinciderebbe un importo il cui contratto non è valido alla data del DDT', '')
-					+ IIF(a.ClientiDiversi = 1, '|Le righe hanno importi di contratti di clienti diversi: indicare il cliente sul DDT', '')
-					+ IIF(a.IdClienteFornitore IS NULL AND a.ClientiDiversi = 0, '|Cliente non determinato: il destinatario non ha una scheda cliente. Indicare il cliente sul DDT', '')
-					+ IIF(a.IdClienteFornitore IS NOT NULL AND ISNULL(t.SenzaIva, 0) > 0, '|Aliquota IVA non indicata né sulle righe degli importi né sulla scheda del cliente', '')
-					+ IIF(a.Righe > 0 AND a.RigheSenzaImporto = 0 AND ISNULL(t.Righe, 0) = 0, '|Gli importi applicati non hanno righe: il DDT non genera righe in fattura', '')
+					+ IIF(a.IdImportoScartato IS NOT NULL, '|L''importo "' + ISNULL(isc.Nome, '') + '" coincide con il DDT, ma il suo contratto non è valido alla data del DDT'
+						+ IIF(a.IdImporto IS NOT NULL AND a.IdOffertaContratto IS NULL, ': è stato applicato l''importo standard', ''), '')
+					+ IIF(a.IdClienteFornitore IS NULL, '|Cliente non determinato: il destinatario non ha una scheda cliente. Indicare il cliente sul DDT', '')
+					+ IIF(a.IdClienteFornitore IS NOT NULL AND ISNULL(t.SenzaIva, 0) > 0, '|Aliquota IVA non indicata né sulle righe dell''importo né sulla scheda del cliente', '')
 					, 1, 1, '') AS VARCHAR(2000))
 			FROM
 				dbo.ufnImportiMagazzino_get_Applicazione_List(@Id, NULL, NULL, NULL, 0) a
@@ -208,6 +202,7 @@ BEGIN
 				LEFT JOIN dbo.tblFatture f ON a.IdFattura = f.Id
 				LEFT JOIN dbo.tblImporti i ON a.IdImporto = i.Id
 				LEFT JOIN dbo.tblImportiPriorita p ON i.IdPriorita = p.Id
+				LEFT JOIN dbo.tblImporti isc ON a.IdImportoScartato = isc.Id
 				LEFT JOIN dbo.tblOfferteContratti oc ON a.IdOffertaContratto = oc.Id
 				LEFT JOIN dbo.tblClientiFornitori co ON oc.IdClienteFornitore = co.Id
 				LEFT JOIN dbo.tblSedi so ON co.IdSede = so.Id
@@ -220,10 +215,10 @@ BEGIN
 					FROM dbo.ufnImportiMagazzino_get_RigheFattura(@Id, a.IdClienteFornitore) g
 				) t
 				OUTER APPLY (
-					-- Righe del DDT senza un importo, per l'avviso
+					-- Articoli e materiali del DDT che l'importo applicato non prezza, per l'avviso
 					SELECT Voci = STRING_AGG(CAST('"' + ISNULL(r.Voce, '') + '"' AS VARCHAR(MAX)), ', ') WITHIN GROUP (ORDER BY ISNULL(r.Pos, 0), r.IdRiga)
 					FROM dbo.ufnImportiMagazzino_get_ApplicazioneRighe_List(@Id, NULL, NULL, NULL, 0) r
-					WHERE r.IdImporto IS NULL
+					WHERE r.IdRigaImporto IS NULL
 				) n
 			WHERE a.IsFatturabile = 1
 			OPTION (RECOMPILE);

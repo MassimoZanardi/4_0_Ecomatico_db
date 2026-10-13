@@ -85,12 +85,13 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			-- Modulo Offerte e contratti: un articolo indicato tra le variabili di un importo attivo
+			-- Modulo Offerte e contratti: un articolo indicato in una riga di un importo attivo
 			IF EXISTS (
 				SELECT 1
 				FROM
-					dbo.tblImportiMagazzino m
-					INNER JOIN dbo.tblImporti i ON m.Id = i.Id
+					dbo.tblImportiRigheMagazzino m
+					INNER JOIN dbo.tblImportiRighe g ON m.Id = g.Id
+					INNER JOIN dbo.tblImporti i ON g.IdImporto = i.Id
 				WHERE
 					m.IdArticolo = @Id
 					AND i.Lock = 0

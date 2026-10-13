@@ -2,8 +2,8 @@
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Select dei materiali EoW per la variabile "Materiale" di un importo di magazzino (righe EoW del DDT). La
--- prima voce (Id a zeri) significa "qualsiasi". I materiali sono un'anagrafica di sistema, uguale per tutti.
+-- Select dei materiali EoW per la riga a quantità di un importo di magazzino (righe EoW del DDT). La
+-- prima voce (Id a zeri) è "(Selezionare)". I materiali sono un'anagrafica di sistema, uguale per tutti.
 CREATE OR ALTER PROCEDURE dbo.uspImportiMagazzino_get_Materiali_SelectList
 	@IdSessione CHAR(16) = NULL,
 	@IdSelected CHAR(2) = NULL
@@ -42,7 +42,7 @@ BEGIN
 		FROM (
 			SELECT
 				Id = CAST(@idDueZeri AS CHAR(2)),
-				[Text] = CAST('(Tutti)' AS VARCHAR(400)),
+				[Text] = CAST('(Selezionare)' AS VARCHAR(400)),
 				Selected = CAST(IIF(@IdSelected = @idDueZeri, 1, 0) AS BIT),
 				Pos = 0
 			UNION ALL

@@ -11,6 +11,9 @@ GO
 -- causale fatturabile (tblMagazziniCausali.IsFatturabile, oggi la sola vendita).
 -- Lock: 0 solo se movimento e DDT sono confermati.
 -- Destinatario: IdDestinatario è l'anagrafica indicata sul DDT, IdDestinatarioParent il suo soggetto.
+-- IdDestinazioneEffettiva: dove arriva la merce, cioè la destinazione del DDT o, se manca, il destinatario: è il
+-- valore che si confronta con la variabile "Sede del destinatario" degli importi. IdSedeDdt è la sede interna da
+-- cui parte la merce (variabile "Sede di partenza").
 CREATE OR ALTER FUNCTION dbo.ufnImportiMagazzino_get_Documenti (
 	@Id CHAR(16),
 	@IdAzienda CHAR(16),
@@ -49,7 +52,8 @@ RETURN
 		IsFatturabile = CAST(IIF(ISNULL(ca.IsFatturabile, 0) = 1 AND ISNULL(d.Sezionale, '') <> 'R' AND m.IdOperazione = 'S', 1, 0) AS BIT),
 		d.IdDestinatario,
 		IdDestinatarioParent = ISNULL(sd.IdParent, sd.Id),
-		d.IdDestinazione
+		d.IdDestinazione,
+		IdDestinazioneEffettiva = ISNULL(d.IdDestinazione, d.IdDestinatario)
 	FROM
 		ids k
 		INNER JOIN dbo.tblMagazziniMovimenti m ON k.Id = m.Id

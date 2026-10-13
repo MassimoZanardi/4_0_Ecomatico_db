@@ -3,18 +3,18 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- Salva un importo di magazzino e conferma la bozza (Lock 2 -> 0).
--- Le variabili (articolo o materiale, destinatario, etichetta) sono facoltative: una variabile non indicata vale
--- "qualsiasi" nel confronto con le righe del DDT.
--- Articolo e materiale si escludono: l'articolo vale per le righe articolo del DDT, il materiale per le righe EoW.
--- Destinatario: @IdDestinatarioParent è il soggetto (tutte le sue sedi), @IdDestinatario una sua sede precisa.
--- Indicata la sola sede, il soggetto si ricava dalla sede.
+-- L'importo di magazzino è un listino: gli articoli e i materiali stanno sulle sue righe (uspImportiRighe_upd).
+-- Le variabili (sede di partenza, destinatario, etichetta) sono facoltative: una variabile non indicata vale
+-- "qualsiasi" nel confronto con il DDT.
+-- Sede di partenza: una sede interna dell'azienda, quella da cui parte la merce (la sede del DDT).
+-- Destinatario: @IdDestinatarioParent è il soggetto (tutte le sue sedi), @IdDestinatario una sua sede precisa,
+-- che si confronta con la destinazione finale della merce. Indicata la sola sede, il soggetto si ricava dalla sede.
 CREATE OR ALTER PROCEDURE dbo.uspImportiMagazzino_upd
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Nome VARCHAR(50) = NULL,
 	@IdPriorita INT = NULL,
-	@IdArticolo CHAR(16) = NULL,
-	@IdMateriale CHAR(2) = NULL,
+	@IdSedePartenza CHAR(16) = NULL,
 	@IdDestinatarioParent CHAR(16) = NULL,
 	@IdDestinatario CHAR(16) = NULL,
 	@IdEtichetta CHAR(16) = NULL
@@ -29,8 +29,7 @@ BEGIN
 		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @Nome = dbo.ufnStringhe_get_SenzaSpazi(@Nome, 0, 1);
-		SET @IdArticolo = NULLIF(NULLIF(LTRIM(RTRIM(@IdArticolo)), ''), @idSediciZeri);
-		SET @IdMateriale = NULLIF(NULLIF(LTRIM(RTRIM(@IdMateriale)), ''), REPLICATE('0', 2));
+		SET @IdSedePartenza = NULLIF(NULLIF(LTRIM(RTRIM(@IdSedePartenza)), ''), @idSediciZeri);
 		SET @IdDestinatarioParent = NULLIF(NULLIF(LTRIM(RTRIM(@IdDestinatarioParent)), ''), @idSediciZeri);
 		SET @IdDestinatario = NULLIF(NULLIF(LTRIM(RTRIM(@IdDestinatario)), ''), @idSediciZeri);
 		SET @IdEtichetta = NULLIF(NULLIF(LTRIM(RTRIM(@IdEtichetta)), ''), @idSediciZeri);
@@ -59,12 +58,6 @@ BEGIN
 			SET @returnMessage = 'Selezionare la priorità';
 			GOTO BRANCH_END;
 		END
-		IF @IdArticolo IS NOT NULL AND @IdMateriale IS NOT NULL
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Indicare l''articolo oppure il materiale EoW, non entrambi';
-			GOTO BRANCH_END;
-		END
 
 		-- Controlla il permesso sulla funzione e che il modulo Magazzino sia attivo sul dominio
 		DECLARE @permesso TINYINT;
@@ -81,13 +74,13 @@ BEGIN
 
 		-- Controlla il permesso sul record: scope azienda interna corrente della sessione
 		DECLARE @idAzienda CHAR(16);
-		DECLARE @idArticoloAttuale CHAR(16);
+		DECLARE @idSedePartenzaAttuale CHAR(16);
 		DECLARE @idDestinatarioParentAttuale CHAR(16);
 		DECLARE @idDestinatarioAttuale CHAR(16);
 		DECLARE @idEtichettaAttuale CHAR(16);
 		SELECT
 			@idAzienda = i.IdSede,
-			@idArticoloAttuale = r.IdArticolo,
+			@idSedePartenzaAttuale = r.IdSedePartenza,
 			@idDestinatarioParentAttuale = r.IdDestinatarioParent,
 			@idDestinatarioAttuale = r.IdDestinatario,
 			@idEtichettaAttuale = r.IdEtichetta
@@ -124,25 +117,19 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Articolo: dell'azienda; quello già sull'importo resta valido anche se cancellato
-		IF @IdArticolo IS NOT NULL AND NOT EXISTS (
+		-- Sede di partenza: una sede interna dell'azienda; quella già sull'importo resta valida
+		IF @IdSedePartenza IS NOT NULL AND NOT EXISTS (
 			SELECT 1
-			FROM dbo.tblMagazziniArticoli a
+			FROM dbo.tblSedi s
 			WHERE
-				a.Id = @IdArticolo
-				AND a.IdSede = @idAzienda
-				AND (a.Lock = 0 OR a.Id = @idArticoloAttuale)
+				s.Id = @IdSedePartenza
+				AND s.InternaEsterna = 'I'
+				AND s.IdAziendaInterna = @idAzienda
+				AND (s.Lock = 0 OR s.Id = @idSedePartenzaAttuale)
 		)
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'L''articolo indicato non esiste';
-			GOTO BRANCH_END;
-		END
-
-		IF @IdMateriale IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiMateriali WHERE Id = @IdMateriale)
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Il materiale indicato non esiste';
+			SET @returnMessage = 'La sede di partenza indicata non esiste';
 			GOTO BRANCH_END;
 		END
 
@@ -245,8 +232,7 @@ BEGIN
 
 			UPDATE dbo.tblImportiMagazzino
 			SET
-				IdArticolo = @IdArticolo,
-				IdMateriale = @IdMateriale,
+				IdSedePartenza = @IdSedePartenza,
 				IdDestinatarioParent = @IdDestinatarioParent,
 				IdDestinatario = @IdDestinatario,
 				IdEtichetta = @IdEtichetta

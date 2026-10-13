@@ -1483,8 +1483,8 @@ GO
 -- quantità 1 e importo pari alla differenza, altrimenti non entra.
 -- Testo: i segnaposto #1 codice EER, #2 numero del formulario, #3 data del formulario, #4 produttore,
 -- #5 destinatario vengono sostituiti con i dati della registrazione. La data del formulario esiste solo se il
--- formulario è in Ecomatico (emesso o acquisito): con il solo numero digitato sulla registrazione manca, e dal
--- testo si toglie anche il " del " che precede #3 ("Formulario Nr: #2 del #3" diventa "Formulario Nr: 123").
+-- formulario è in Ecomatico (emesso o acquisito): con il solo numero digitato sulla registrazione manca, e al
+-- posto di #3 va "__/__/____", da completare a mano sulla fattura (qualunque sia il testo intorno a #3).
 -- Aliquota IVA: quella della riga dell'importo, altrimenti quella della scheda del cliente @IdClienteFornitore.
 CREATE OR ALTER FUNCTION dbo.ufnImportiRifiuti_get_RigheImporto (
 	@Id CHAR(16),
@@ -1542,10 +1542,10 @@ RETURN
 				WHEN g.IdTipo = 'RL' THEN 'LT'
 			END AS CHAR(2)),
 			Descrizione = CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-				IIF(a.FormularioData IS NULL, REPLACE(ISNULL(d.Descrizione, ''), ' del #3', ''), ISNULL(d.Descrizione, '')),
+				ISNULL(d.Descrizione, ''),
 				'#1', ISNULL(a.Eer, '')),
 				'#2', ISNULL(a.FormularioNumero, '')),
-				'#3', ISNULL(a.FormularioData, '')),
+				'#3', ISNULL(a.FormularioData, '__/__/____')),
 				'#4', ISNULL(a.Produttore, '')),
 				'#5', ISNULL(a.Destinatario, '')) AS VARCHAR(1000)),
 			IdAliquotaIva = ISNULL(d.IdAliquotaIva, a.IdAliquotaIvaCliente),

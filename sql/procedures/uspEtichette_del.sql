@@ -126,6 +126,15 @@ BEGIN
 					INNER JOIN dbo.tblRifiutiModelliEtichette t ON e.Id = t.Id
 					WHERE t.IdEtichetta = @Id;
 				END
+				-- Magazzino: le etichette stanno sui DDT
+				IF @idModulo = 'MAG'
+				BEGIN
+					UPDATE e
+					SET Etichette = ( SELECT et.Nome, Colore = IIF(et.Visualizzazione = 'C', c.Hex, c.Css), et.Descrizione, et.Visualizzazione FROM dbo.tblMagazziniDdtEtichette x INNER JOIN dbo.tblEtichette et ON x.IdEtichetta = et.Id INNER JOIN dbo.tblColori c ON et.IdColore = c.Id WHERE x.Id = e.Id AND et.Lock = 0 ORDER BY et.Nome FOR JSON PATH )
+					FROM dbo.tblMagazziniDdt e
+					INNER JOIN dbo.tblMagazziniDdtEtichette t ON e.Id = t.Id
+					WHERE t.IdEtichetta = @Id;
+				END
 
 				IF @Reset = 1
 					DELETE dbo.tblIdCancellati

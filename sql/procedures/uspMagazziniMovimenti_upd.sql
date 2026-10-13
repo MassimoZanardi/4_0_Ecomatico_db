@@ -17,7 +17,9 @@ CREATE OR ALTER PROCEDURE dbo.uspMagazziniMovimenti_upd
 	@DdtDataInizioTrasporto SMALLDATETIME = NULL,
 	@DdtPeso DECIMAL(18, 2) = NULL,
 	@DdtNumero INT = NULL,
-	@DdtIdDestinazione CHAR(16) = NULL
+	@DdtIdDestinazione CHAR(16) = NULL,
+	-- Etichette del DDT (modulo Magazzino, della sede interna del DDT): Id separati da ";"
+	@DdtIdEtichette VARCHAR(1000) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -309,6 +311,25 @@ BEGIN
 					IdTrasportatore = @DdtIdTrasportatore,
 					DataInizioTrasporto = @DdtDataInizioTrasporto,
 					Peso = @DdtPeso
+				WHERE Id = @idDdt;
+
+				-- Etichette del DDT: quelle attive del modulo Magazzino della sede interna del DDT. La colonna
+				-- Etichette tiene il JSON per gli elenchi, come per registrazioni e formulari dei rifiuti
+				DELETE dbo.tblMagazziniDdtEtichette
+				WHERE Id = @idDdt;
+
+				INSERT dbo.tblMagazziniDdtEtichette (Id, IdEtichetta)
+				SELECT DISTINCT @idDdt, e.Id
+				FROM
+					dbo.tblEtichette e
+					INNER JOIN STRING_SPLIT(@DdtIdEtichette, ';') v ON e.Id = v.value
+				WHERE
+					e.IdSede = @idSedeDdt
+					AND e.IdModulo = 'MAG'
+					AND e.Lock = 0;
+
+				UPDATE dbo.tblMagazziniDdt
+				SET Etichette = dbo.ufnMagazziniDdt_get_Etichette(@idDdt)
 				WHERE Id = @idDdt;
 			END
 

@@ -20,6 +20,7 @@ CREATE TABLE [dbo].[tblMagazziniDdt](
 	[DataInizioTrasporto] [smalldatetime] NULL,
 	[Peso] [decimal](18, 2) NULL,
 	[Lock] [tinyint] NULL,
+	[Etichette] [varchar](2000) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblMagazziniDdt] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

@@ -72,6 +72,16 @@ BEGIN
 				INNER JOIN dbo.tblIdCancellati c ON t.IdEtichetta = c.Id
 				WHERE c.IdSessione = @IdSessione;
 			END
+			-- Magazzino: le etichette stanno sui DDT
+			IF EXISTS (SELECT 1 FROM dbo.tblEtichette i INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id WHERE c.IdSessione = @IdSessione AND i.IdModulo = 'MAG')
+			BEGIN
+				UPDATE e
+				SET Etichette = ( SELECT et.Nome, Colore = IIF(et.Visualizzazione = 'C', c2.Hex, c2.Css), et.Descrizione, et.Visualizzazione FROM dbo.tblMagazziniDdtEtichette x INNER JOIN dbo.tblEtichette et ON x.IdEtichetta = et.Id INNER JOIN dbo.tblColori c2 ON et.IdColore = c2.Id WHERE x.Id = e.Id AND et.Lock = 0 ORDER BY et.Nome FOR JSON PATH )
+				FROM dbo.tblMagazziniDdt e
+				INNER JOIN dbo.tblMagazziniDdtEtichette t ON e.Id = t.Id
+				INNER JOIN dbo.tblIdCancellati c ON t.IdEtichetta = c.Id
+				WHERE c.IdSessione = @IdSessione;
+			END
 
 			DELETE i
 			FROM dbo.tblIdLog i

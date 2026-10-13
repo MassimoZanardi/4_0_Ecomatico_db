@@ -11,6 +11,7 @@ GO
 --   1. tblRifiutiOperazioni.IsFatturabile: operazioni le cui registrazioni entrano nella fatturazione (T*, T*aT, TR)
 --   2. tblClientiFornitori.IdRaggruppamento: una fattura per cliente (C), per sede (S) o per contratto (T)
 --   3. tblImportiRighe.Pos: ordine delle righe dell'importo
+--   3b. tblImportiRifiuti.IdSede: azienda dell'importo, copiata sulle variabili per il confronto con i documenti
 --   4. tblFattureDocumenti: legame tra il documento fatturabile (registrazione, movimento con DDT, servizio)
 --      e la fattura, con "non fatturabile" e cliente indicato sul documento
 --   5. tblPagine.IdModulo: modulo che il dominio deve avere attivo, oltre a quello dell'area, per vedere la voce
@@ -38,6 +39,12 @@ END
 -- 3. Ordine delle righe dell'importo
 IF COL_LENGTH('dbo.tblImportiRighe', 'Pos') IS NULL
 	ALTER TABLE dbo.tblImportiRighe ADD Pos INT NULL;
+
+-- 3b. Azienda dell'importo copiata sulle variabili dei rifiuti: il confronto con i documenti legge con un solo
+--     accesso gli importi dell'azienda (ufnImportiRifiuti_get_Coincidenti). La scrive uspImportiRifiuti_ins e non
+--     cambia più, come tblImporti.IdSede di cui è la copia
+IF COL_LENGTH('dbo.tblImportiRifiuti', 'IdSede') IS NULL
+	ALTER TABLE dbo.tblImportiRifiuti ADD IdSede CHAR(16) COLLATE Latin1_General_CI_AS NULL;
 
 -- 4. Documenti fatturabili: Id = Id del documento (registrazione, movimento di magazzino, servizio)
 IF OBJECT_ID('dbo.tblFattureDocumenti', 'U') IS NULL
@@ -93,6 +100,14 @@ WHERE
 	Tipo = 'C'
 	AND IdRaggruppamento IS NULL;
 
+-- 3b. Importi rifiuti esistenti: l'azienda dell'importo
+UPDATE r
+SET IdSede = i.IdSede
+FROM
+	dbo.tblImportiRifiuti r
+	INNER JOIN dbo.tblImporti i ON r.Id = i.Id
+WHERE r.IdSede IS NULL;
+
 -- Tipo di riga a litri: stesso stile di "KG (Kilogrammo)" e "T (Tonnellata)"
 UPDATE dbo.tblImportiRigheTipi SET Nome = 'L (Litro)' WHERE Id = 'RL' AND Nome <> 'L (Litro)';
 
@@ -104,7 +119,13 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_OfferteContrattiImport
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Importi_IdSede')
 	CREATE NONCLUSTERED INDEX IX_Importi_IdSede ON dbo.tblImporti (IdSede) INCLUDE (IdPriorita, Lock);
 
--- Righe dell'importo applicato, lette per ogni documento da ufnImportiRifiuti_get_ApplicazioneRighe: con le
+-- Importi rifiuti dell'azienda con le loro variabili: il confronto con ogni documento legge solo questi, non
+-- le variabili degli importi di tutte le aziende
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ImportiRifiuti_IdSede')
+	CREATE NONCLUSTERED INDEX IX_ImportiRifiuti_IdSede ON dbo.tblImportiRifiuti (IdSede)
+		INCLUDE (IdEer, IdProduttoreParent, IdProduttore, IdTrasportatore, IdDestinatario, IdIntermediario, IdEtichetta);
+
+-- Righe dell'importo applicato, lette per ogni documento da ufnImportiRifiuti_get_RigheImporto: con le
 -- colonne incluse non serve il lookup per riga. L'indice nato senza colonne incluse viene ricreato
 IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ImportiRighe_IdImporto')
 	AND NOT EXISTS (

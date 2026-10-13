@@ -3,7 +3,8 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- Generazione automatica delle fatture: registrazioni dei rifiuti candidate, con l'importo e il cliente che
--- verrebbero applicati (ufnImportiRifiuti_get_Applicazione) e l'esito. Serve sia alla verifica
+-- verrebbero applicati (ufnImportiRifiuti_get_Applicazione_List: il confronto con gli importi è fatto una volta
+-- per tutte le registrazioni; le righe si leggono con ufnImportiRifiuti_get_RigheImporto) e l'esito. Serve sia alla verifica
 -- (uspFatture_get_Genera_List) sia alla generazione (uspFatture_ins_Genera), così leggono le stesse righe.
 --   @Id: una sola registrazione ("Genera la fattura" dalla scheda); altrimenti @IdAzienda e l'intervallo di date.
 --   @IdClienteFornitore: solo i documenti riconducibili a quel cliente (quelli che gli verrebbero fatturati).
@@ -56,40 +57,22 @@ RETURN
 			ELSE 0
 		END AS BIT)
 	FROM
-		dbo.tblRifiutiRegistrazioni r
-		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-		INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
-		INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-		INNER JOIN dbo.tblSedi sr ON g.IdSede = sr.Id
-		INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON g.IdSede = x.Id
-		CROSS APPLY dbo.ufnImportiRifiuti_get_Applicazione(r.Id) a
+		-- Registrazioni confermate di un'operazione fatturabile, non rettifiche, di @Id o dell'azienda nel
+		-- periodo, con l'importo e il cliente applicati: il confronto è fatto una volta per tutte
+		dbo.ufnImportiRifiuti_get_Applicazione_List(@Id, @IdAzienda, @DataDa, @DataA, 1) a
+		INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeRegistro = x.Id
 		OUTER APPLY (
 			SELECT
 				Totale = SUM(ISNULL(q.Imponibile, 0)),
 				Righe = COUNT(*),
 				SenzaIva = SUM(IIF(q.SolaDescrizione = 0 AND q.IdAliquotaIva IS NULL, 1, 0))
-			FROM dbo.ufnImportiRifiuti_get_ApplicazioneRighe(r.Id) q
+			FROM dbo.ufnImportiRifiuti_get_RigheImporto(a.Id, a.IdImporto, a.IdClienteFornitore) q
 		) t
 	WHERE
-		r.Lock = 0
-		AND o.IsFatturabile = 1
-		AND a.IsRettifica = 0
 		-- Non ancora in una fattura; in una pre-fattura solo se si includono
-		AND
 			(
 			a.IdFattura IS NULL
 			OR (a.IsPreFattura = 1 AND @IncludiPreFatture = 1)
-			)
-		AND
-			(
-				(@Id IS NOT NULL AND r.Id = @Id)
-				OR
-				(
-					@Id IS NULL
-					AND sr.IdAziendaInterna = @IdAzienda
-					AND r.[Data] >= @DataDa
-					AND r.[Data] <= @DataA
-				)
 			)
 		AND
 			(

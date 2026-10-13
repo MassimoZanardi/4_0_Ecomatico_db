@@ -81,8 +81,10 @@ BEGIN
 			INSERT dbo.tblImporti (Id, IdSede, IdPriorita, Lock)
 			VALUES (@returnId, @idAzienda, 4, 2);
 
-			INSERT dbo.tblImportiRifiuti (Id)
-			VALUES (@returnId);
+			-- IdSede: copia dell'azienda dell'importo (che non cambia più), per il confronto con i documenti
+			-- (ufnImportiRifiuti_get_Coincidenti)
+			INSERT dbo.tblImportiRifiuti (Id, IdSede)
+			VALUES (@returnId, @idAzienda);
 
 			IF @IdOffertaContratto IS NOT NULL
 				INSERT dbo.tblOfferteContrattiImporti (IdOffertaContratto, IdImporto)

@@ -10,10 +10,14 @@ Eseguire con sqlcmd -f 65001 -I (oppure da SSMS). Va deployato insieme all'app.
    tblOfferteContratti, tblOfferteContrattiImporti.
 2. Valori di riferimento: priorita' degli importi e tipi di riga.
 3. Struttura e registrazione del modulo: tblRifiutiOperazioni.IsFatturabile (T*, T*aT, TR),
-   tblClientiFornitori.IdRaggruppamento, tblImportiRighe.Pos, tblFattureDocumenti, tblPagine.IdModulo, indici,
-   modulo OFC con le funzioni OCC e OCI, pagine e menu (Offerte e contratti prima di Fatturazione).
-4. Funzioni: elenchi di importi e contratti, importo e cliente applicati a una registrazione, righe di fattura,
-   documenti da fatturare.
+   tblClientiFornitori.IdRaggruppamento, tblImportiRighe.Pos, tblImportiRifiuti.IdSede (azienda dell'importo,
+   copiata sulle variabili), tblFattureDocumenti, tblPagine.IdModulo, indici (compresi quelli sulle chiavi esterne
+   di tblFattureDocumenti e IX_ImportiRifiuti_IdSede), modulo OFC con le funzioni OCC e OCI, pagine e menu
+   (Offerte e contratti prima di Fatturazione).
+4. Funzioni: elenchi di importi e contratti, importi che coincidono con i valori di un documento
+   (ufnImportiRifiuti_get_Coincidenti), importo e cliente applicati alle registrazioni con un confronto a insiemi
+   (ufnImportiRifiuti_get_Applicazione_List), righe di fattura dell'importo applicato
+   (ufnImportiRifiuti_get_RigheImporto), documenti da fatturare.
 5. Stored procedure nuove: importi rifiuti e righe (con il conteggio di quelli di contratti scaduti), contratti e
    offerte, blocco "Cliente a cui fatturare" (uspFattureDocumenti_*), verifica e generazione delle fatture
    (uspFatture_get_Genera_Riepilogo, uspFatture_get_Genera_Fatture_List, uspFatture_get_Genera_List,
@@ -162,11 +166,24 @@ CREATE TABLE [dbo].[tblImportiRifiuti](
 	[IdDestinatario] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdIntermediario] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdEtichetta] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblImportiRifiuti] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
+
+GO
+
+SET ANSI_PADDING ON
+
+GO
+
+CREATE NONCLUSTERED INDEX [IX_ImportiRifiuti_IdSede] ON [dbo].[tblImportiRifiuti]
+(
+	[IdSede] ASC
+)
+INCLUDE([IdEer],[IdProduttoreParent],[IdProduttore],[IdTrasportatore],[IdDestinatario],[IdIntermediario],[IdEtichetta]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 
 GO
 
@@ -662,6 +679,7 @@ GO
 --   1. tblRifiutiOperazioni.IsFatturabile: operazioni le cui registrazioni entrano nella fatturazione (T*, T*aT, TR)
 --   2. tblClientiFornitori.IdRaggruppamento: una fattura per cliente (C), per sede (S) o per contratto (T)
 --   3. tblImportiRighe.Pos: ordine delle righe dell'importo
+--   3b. tblImportiRifiuti.IdSede: azienda dell'importo, copiata sulle variabili per il confronto con i documenti
 --   4. tblFattureDocumenti: legame tra il documento fatturabile (registrazione, movimento con DDT, servizio)
 --      e la fattura, con "non fatturabile" e cliente indicato sul documento
 --   5. tblPagine.IdModulo: modulo che il dominio deve avere attivo, oltre a quello dell'area, per vedere la voce
@@ -689,6 +707,12 @@ END
 -- 3. Ordine delle righe dell'importo
 IF COL_LENGTH('dbo.tblImportiRighe', 'Pos') IS NULL
 	ALTER TABLE dbo.tblImportiRighe ADD Pos INT NULL;
+
+-- 3b. Azienda dell'importo copiata sulle variabili dei rifiuti: il confronto con i documenti legge con un solo
+--     accesso gli importi dell'azienda (ufnImportiRifiuti_get_Coincidenti). La scrive uspImportiRifiuti_ins e non
+--     cambia più, come tblImporti.IdSede di cui è la copia
+IF COL_LENGTH('dbo.tblImportiRifiuti', 'IdSede') IS NULL
+	ALTER TABLE dbo.tblImportiRifiuti ADD IdSede CHAR(16) COLLATE Latin1_General_CI_AS NULL;
 
 -- 4. Documenti fatturabili: Id = Id del documento (registrazione, movimento di magazzino, servizio)
 IF OBJECT_ID('dbo.tblFattureDocumenti', 'U') IS NULL
@@ -744,6 +768,14 @@ WHERE
 	Tipo = 'C'
 	AND IdRaggruppamento IS NULL;
 
+-- 3b. Importi rifiuti esistenti: l'azienda dell'importo
+UPDATE r
+SET IdSede = i.IdSede
+FROM
+	dbo.tblImportiRifiuti r
+	INNER JOIN dbo.tblImporti i ON r.Id = i.Id
+WHERE r.IdSede IS NULL;
+
 -- Tipo di riga a litri: stesso stile di "KG (Kilogrammo)" e "T (Tonnellata)"
 UPDATE dbo.tblImportiRigheTipi SET Nome = 'L (Litro)' WHERE Id = 'RL' AND Nome <> 'L (Litro)';
 
@@ -755,7 +787,13 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_OfferteContrattiImport
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Importi_IdSede')
 	CREATE NONCLUSTERED INDEX IX_Importi_IdSede ON dbo.tblImporti (IdSede) INCLUDE (IdPriorita, Lock);
 
--- Righe dell'importo applicato, lette per ogni documento da ufnImportiRifiuti_get_ApplicazioneRighe: con le
+-- Importi rifiuti dell'azienda con le loro variabili: il confronto con ogni documento legge solo questi, non
+-- le variabili degli importi di tutte le aziende
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ImportiRifiuti_IdSede')
+	CREATE NONCLUSTERED INDEX IX_ImportiRifiuti_IdSede ON dbo.tblImportiRifiuti (IdSede)
+		INCLUDE (IdEer, IdProduttoreParent, IdProduttore, IdTrasportatore, IdDestinatario, IdIntermediario, IdEtichetta);
+
+-- Righe dell'importo applicato, lette per ogni documento da ufnImportiRifiuti_get_RigheImporto: con le
 -- colonne incluse non serve il lookup per riga. L'indice nato senza colonne incluse viene ricreato
 IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ImportiRighe_IdImporto')
 	AND NOT EXISTS (
@@ -1082,15 +1120,94 @@ RETURN
 GO
 GO
 
-PRINT 'sql/functions/ufnImportiRifiuti_get_Applicazione.sql';
+PRINT 'sql/functions/ufnImportiRifiuti_get_Coincidenti.sql';
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Offerte e contratti: importo e cliente che la fatturazione applica a una registrazione dei rifiuti
--- (regole O5 di docs/regole/offerte-contratti.md). Una riga per la registrazione @Id, anche se nessun importo
--- coincide (IdImporto NULL). Funzione in linea: si può usare con CROSS APPLY su più registrazioni.
+-- Offerte e contratti: importi rifiuti attivi dell'azienda le cui variabili coincidono con i valori indicati
+-- (regole O5 di docs/regole/offerte-contratti.md). È l'unico punto in cui è scritta la regola di coincidenza:
+-- la leggono la fatturazione (ufnImportiRifiuti_get_Applicazione_List) e la verifica degli importi.
+-- Funzione in linea senza TOP né sottoquery: applicata a più documenti diventa un join, e gli importi
+-- dell'azienda si leggono una volta sola. Per questo non va aggiunto qui nulla che dipenda dal documento
+-- oltre ai confronti delle variabili.
+--
+-- Coincidenza: tutte le variabili indicate nell'importo coincidono con i valori (una variabile NULL vale
+-- "qualsiasi").
+-- ETICHETTA: qui non viene verificata. IdEtichetta è quella indicata nell'importo (NULL = qualsiasi): chi
+-- chiama scarta l'importo se la indica e il documento non ce l'ha tra le sue.
+-- Classe:
+--   V  candidato: importo standard (non associato a un contratto o a un'offerta), oppure importo di un
+--      contratto attivo di un cliente con @Data compresa tra inizio e fine;
+--   S  scartato: importo di un contratto attivo di un cliente non valido alla data (avviso "contratto scaduto");
+--   X  mai candidato: importo di un'offerta o di un contratto cancellato.
+-- Ordine di scelta tra i candidati: IdPriorita DESC, Standard (prima quello di un contratto), IdImporto.
+CREATE OR ALTER FUNCTION dbo.ufnImportiRifiuti_get_Coincidenti (
+	@IdAzienda CHAR(16),
+	@Data DATE,
+	@IdEer CHAR(6),
+	@IdProduttoreParent CHAR(16),
+	@IdProduttore CHAR(16),
+	@IdTrasportatore CHAR(16),
+	@IdDestinatario CHAR(16),
+	@IdIntermediario CHAR(16))
+RETURNS TABLE
+AS
+RETURN
+(
+	SELECT
+		IdImporto = i.Id,
+		i.IdPriorita,
+		ir.IdEtichetta,
+		IdOffertaContratto = oc.Id,
+		IdClienteContratto = oc.IdClienteFornitore,
+		Standard = CAST(IIF(ci.IdImporto IS NULL, 1, 0) AS BIT),
+		Classe = CAST(CASE
+			WHEN ci.IdImporto IS NULL THEN 'V'
+			WHEN oc.Lock = 0 AND oc.Tipo = 'C' AND oc.ClienteFornitoreTipo = 'C' AND @Data BETWEEN oc.DataInizio AND oc.DataFine THEN 'V'
+			WHEN oc.Lock = 0 AND oc.Tipo = 'C' AND oc.ClienteFornitoreTipo = 'C' AND NOT (@Data BETWEEN oc.DataInizio AND oc.DataFine) THEN 'S'
+			ELSE 'X'
+		END AS CHAR(1))
+	FROM
+		dbo.tblImportiRifiuti ir
+		INNER JOIN dbo.tblImporti i ON ir.Id = i.Id
+		LEFT JOIN dbo.tblOfferteContrattiImporti ci ON i.Id = ci.IdImporto
+		-- FORCESEEK: il contratto si legge per chiave. Senza, applicata a molti documenti la funzione può finire
+		-- a leggere tutti i contratti per ogni documento (misurato: 6 milioni di righe per 3.780 documenti)
+		LEFT JOIN dbo.tblOfferteContratti oc WITH (FORCESEEK) ON ci.IdOffertaContratto = oc.Id
+	WHERE
+		-- Azienda: quella copiata sulle variabili (tblImportiRifiuti.IdSede), per leggere con un solo accesso
+		-- gli importi dell'azienda senza passare da quelli di tutte le altre
+		ir.IdSede = @IdAzienda
+		AND i.Lock = 0
+		AND (ir.IdEer IS NULL OR ir.IdEer = @IdEer)
+		AND (ir.IdProduttoreParent IS NULL OR ir.IdProduttoreParent = @IdProduttoreParent)
+		AND (ir.IdProduttore IS NULL OR ir.IdProduttore = @IdProduttore)
+		AND (ir.IdTrasportatore IS NULL OR ir.IdTrasportatore = @IdTrasportatore)
+		AND (ir.IdDestinatario IS NULL OR ir.IdDestinatario = @IdDestinatario)
+		AND (ir.IdIntermediario IS NULL OR ir.IdIntermediario = @IdIntermediario)
+);
+GO
+GO
+
+PRINT 'sql/functions/ufnImportiRifiuti_get_Applicazione_List.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Offerte e contratti: importo e cliente che la fatturazione applica alle registrazioni dei rifiuti
+-- (regole O5 di docs/regole/offerte-contratti.md). Una riga per registrazione, anche se nessun importo
+-- coincide (IdImporto NULL).
+--   @Id: una sola registrazione; altrimenti le registrazioni dei registri dell'azienda @IdAzienda con la data
+--        tra @DataDa e @DataA.
+--   @SoloFatturabili = 1: solo le registrazioni confermate (Lock = 0) di un'operazione fatturabile, non
+--        rettifiche; il confronto con gli importi non viene fatto per le altre.
+-- Il confronto è a insiemi: gli importi dell'azienda si leggono una volta e si incrociano con tutte le
+-- registrazioni richieste (ufnImportiRifiuti_get_Coincidenti), invece di una ricerca per registrazione.
+-- Chi la chiama con parametri variabili usa OPTION (RECOMPILE); per una sola registrazione c'è
+-- ufnImportiRifiuti_get_Applicazione.
 --
 -- Importo: tra gli importi rifiuti attivi dell'azienda del registro, il primo le cui variabili indicate
 -- coincidono tutte con la registrazione (una variabile NULL vale "qualsiasi"), in ordine di priorità
@@ -1113,13 +1230,38 @@ GO
 -- IdFattura: solo se la fattura non è cancellata (cancellata la fattura, la registrazione torna fatturabile).
 -- IsPreFattura, IdClientePreFattura: il documento è in una pre-fattura (TD00), intestata a quel cliente; la
 -- generazione può riprenderla e convertirla in fattura (uspFatture_ins_Genera, @IncludiPreFatture).
-CREATE OR ALTER FUNCTION dbo.ufnImportiRifiuti_get_Applicazione (
-	@Id CHAR(16))
+CREATE OR ALTER FUNCTION dbo.ufnImportiRifiuti_get_Applicazione_List (
+	@Id CHAR(16),
+	@IdAzienda CHAR(16),
+	@DataDa DATE,
+	@DataA DATE,
+	@SoloFatturabili BIT)
 RETURNS TABLE
 AS
 RETURN
 (
-	WITH doc AS (
+	WITH ids AS (
+		-- Due rami distinti, ciascuno con il suo accesso: la registrazione @Id per chiave, oppure quelle
+		-- dell'azienda nel periodo (un solo WHERE con OR farebbe leggere tutte le registrazioni anche per una sola)
+		SELECT r.Id
+		FROM dbo.tblRifiutiRegistrazioni r
+		WHERE r.Id = @Id
+
+		UNION ALL
+
+		SELECT r.Id
+		FROM
+			dbo.tblRifiutiRegistrazioni r
+			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
+			INNER JOIN dbo.tblSedi sr ON g.IdSede = sr.Id
+		WHERE
+			@Id IS NULL
+			AND sr.IdAziendaInterna = @IdAzienda
+			AND r.[Data] >= @DataDa
+			AND r.[Data] <= @DataA
+	),
+	doc AS (
 		SELECT
 			r.Id,
 			r.[Data],
@@ -1146,7 +1288,8 @@ RETURN
 			IsPreFattura = CAST(IIF(f.IdTipo = 'TD00', 1, 0) AS BIT),
 			IdClientePreFattura = IIF(f.IdTipo = 'TD00', f.IdClienteFornitore, NULL)
 		FROM
-			dbo.tblRifiutiRegistrazioni r
+			ids k
+			INNER JOIN dbo.tblRifiutiRegistrazioni r ON k.Id = r.Id
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
 			INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
 			INNER JOIN dbo.tblSedi sr ON g.IdSede = sr.Id
@@ -1156,136 +1299,177 @@ RETURN
 			LEFT JOIN dbo.tblFattureDocumenti d ON r.Id = d.Id
 			LEFT JOIN dbo.tblFatture f ON d.IdFattura = f.Id
 									  AND f.Lock IN (0, 2)
-		WHERE r.Id = @Id
+		WHERE
+			ISNULL(@SoloFatturabili, 0) = 0
+			OR
+			(
+				r.Lock = 0
+				AND o.IsFatturabile = 1
+				AND v.IsRettifica = 0
+			)
+	),
+	scelta AS (
+		-- Per ogni registrazione gli importi che coincidono: N = 1 è il primo candidato (classe V) in ordine di
+		-- scelta, o una riga senza candidato; IdImportoScartato il primo degli scartati (classe S). Un importo che
+		-- indica un'etichetta che la registrazione non ha non coincide: passa alla classe X
+		SELECT
+			doc.Id,
+			doc.[Data],
+			doc.Numero,
+			doc.Lock,
+			doc.IdSedeRegistro,
+			doc.IdAzienda,
+			doc.IdOperazione,
+			doc.IsFatturabile,
+			doc.IdEer,
+			doc.IdUnitaMisura,
+			doc.Quantita,
+			doc.IsRettifica,
+			doc.IsAnnullata,
+			doc.IdProduttore,
+			doc.IdProduttoreParent,
+			doc.IdTrasportatore,
+			doc.IdDestinatario,
+			doc.IdIntermediario,
+			doc.FormularioNumero,
+			doc.IdClienteIndicato,
+			doc.NonFatturabile,
+			doc.IdFattura,
+			doc.IsPreFattura,
+			doc.IdClientePreFattura,
+			IdImporto = IIF(q.Classe = 'V', c.IdImporto, NULL),
+			IdOffertaContratto = IIF(q.Classe = 'V', c.IdOffertaContratto, NULL),
+			IdClienteContratto = IIF(q.Classe = 'V', c.IdClienteContratto, NULL),
+			IdImportoScartato = FIRST_VALUE(IIF(q.Classe = 'S', c.IdImporto, NULL)) OVER (
+				PARTITION BY doc.Id
+				ORDER BY IIF(q.Classe = 'S', 0, 1), c.IdPriorita DESC, c.IdImporto
+				ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW),
+			N = ROW_NUMBER() OVER (
+				PARTITION BY doc.Id
+				ORDER BY IIF(q.Classe = 'V', 0, 1), c.IdPriorita DESC, c.Standard, c.IdImporto)
+		FROM
+			doc
+			OUTER APPLY dbo.ufnImportiRifiuti_get_Coincidenti(doc.IdAzienda, doc.[Data], doc.IdEer, doc.IdProduttoreParent, doc.IdProduttore,
+				doc.IdTrasportatore, doc.IdDestinatario, doc.IdIntermediario) c
+			-- Al massimo una riga: (Id, IdEtichetta) è la chiave primaria
+			LEFT JOIN dbo.tblRifiutiRegistrazioniEtichette e ON e.Id = doc.Id
+															 AND e.IdEtichetta = c.IdEtichetta
+			CROSS APPLY (SELECT Classe = IIF(c.IdEtichetta IS NOT NULL AND e.Id IS NULL, 'X', c.Classe)) q
 	)
 	SELECT
-		doc.Id,
-		doc.[Data],
-		doc.Numero,
-		doc.Lock,
-		doc.IdSedeRegistro,
-		doc.IdAzienda,
-		doc.IdOperazione,
-		doc.IsFatturabile,
-		doc.IdEer,
-		doc.IdUnitaMisura,
-		doc.Quantita,
-		doc.IsRettifica,
-		doc.IsAnnullata,
-		doc.IdProduttore,
-		doc.IdProduttoreParent,
-		doc.IdTrasportatore,
-		doc.IdDestinatario,
-		doc.IdIntermediario,
-		doc.FormularioNumero,
-		doc.IdClienteIndicato,
-		doc.NonFatturabile,
-		doc.IdFattura,
-		doc.IsPreFattura,
-		doc.IdClientePreFattura,
-		a.IdImporto,
-		a.IdOffertaContratto,
-		IdClienteFornitore = COALESCE(doc.IdClienteIndicato, a.IdClienteContratto, cp.Id),
+		t.Id,
+		t.[Data],
+		t.Numero,
+		t.Lock,
+		t.IdSedeRegistro,
+		t.IdAzienda,
+		t.IdOperazione,
+		t.IsFatturabile,
+		t.IdEer,
+		t.IdUnitaMisura,
+		t.Quantita,
+		t.IsRettifica,
+		t.IsAnnullata,
+		t.IdProduttore,
+		t.IdProduttoreParent,
+		t.IdTrasportatore,
+		t.IdDestinatario,
+		t.IdIntermediario,
+		t.FormularioNumero,
+		t.IdClienteIndicato,
+		t.NonFatturabile,
+		t.IdFattura,
+		t.IsPreFattura,
+		t.IdClientePreFattura,
+		t.IdImporto,
+		t.IdOffertaContratto,
+		IdClienteFornitore = COALESCE(t.IdClienteIndicato, t.IdClienteContratto, cp.Id),
 		ClienteOrigine = CAST(CASE
-			WHEN doc.IdClienteIndicato IS NOT NULL THEN 'D'
-			WHEN a.IdClienteContratto IS NOT NULL THEN 'C'
+			WHEN t.IdClienteIndicato IS NOT NULL THEN 'D'
+			WHEN t.IdClienteContratto IS NOT NULL THEN 'C'
 			WHEN cp.Id IS NOT NULL THEN 'P'
 		END AS CHAR(1)),
-		IdImportoScartato = s.IdImporto
+		t.IdImportoScartato
 	FROM
-		doc
-		OUTER APPLY (
-			SELECT TOP (1)
-				IdImporto = i.Id,
-				IdOffertaContratto = oc.Id,
-				IdClienteContratto = oc.IdClienteFornitore
-			FROM
-				dbo.tblImporti i
-				INNER JOIN dbo.tblImportiRifiuti ir ON i.Id = ir.Id
-				LEFT JOIN dbo.tblOfferteContrattiImporti ci ON i.Id = ci.IdImporto
-				LEFT JOIN dbo.tblOfferteContratti oc ON ci.IdOffertaContratto = oc.Id
-			WHERE
-				i.IdSede = doc.IdAzienda
-				AND i.Lock = 0
-				AND
-					(
-					ci.IdImporto IS NULL
-					OR
-						(
-						oc.Lock = 0
-						AND oc.Tipo = 'C'
-						AND oc.ClienteFornitoreTipo = 'C'
-						AND doc.[Data] BETWEEN oc.DataInizio AND oc.DataFine
-						)
-					)
-				AND (ir.IdEer IS NULL OR ir.IdEer = doc.IdEer)
-				AND (ir.IdProduttoreParent IS NULL OR ir.IdProduttoreParent = doc.IdProduttoreParent)
-				AND (ir.IdProduttore IS NULL OR ir.IdProduttore = doc.IdProduttore)
-				AND (ir.IdTrasportatore IS NULL OR ir.IdTrasportatore = doc.IdTrasportatore)
-				AND (ir.IdDestinatario IS NULL OR ir.IdDestinatario = doc.IdDestinatario)
-				AND (ir.IdIntermediario IS NULL OR ir.IdIntermediario = doc.IdIntermediario)
-				AND
-					(
-					ir.IdEtichetta IS NULL
-					OR EXISTS (SELECT 1 FROM dbo.tblRifiutiRegistrazioniEtichette e WHERE e.Id = doc.Id AND e.IdEtichetta = ir.IdEtichetta)
-					)
-			ORDER BY
-				i.IdPriorita DESC,
-				IIF(ci.IdImporto IS NULL, 1, 0),
-				i.Id
-		) a
+		scelta t
 		OUTER APPLY (
 			SELECT TOP (1) c.Id
 			FROM dbo.tblClientiFornitori c
 			WHERE
-				c.IdSede = doc.IdProduttoreParent
-				AND c.IdAziendaInterna = doc.IdAzienda
+				c.IdSede = t.IdProduttoreParent
+				AND c.IdAziendaInterna = t.IdAzienda
 				AND c.Tipo = 'C'
 				AND c.Lock = 0
 			ORDER BY c.Id
 		) cp
-		OUTER APPLY (
-			SELECT TOP (1) IdImporto = i.Id
-			FROM
-				dbo.tblImporti i
-				INNER JOIN dbo.tblImportiRifiuti ir ON i.Id = ir.Id
-				INNER JOIN dbo.tblOfferteContrattiImporti ci ON i.Id = ci.IdImporto
-				INNER JOIN dbo.tblOfferteContratti oc ON ci.IdOffertaContratto = oc.Id
-			WHERE
-				i.IdSede = doc.IdAzienda
-				AND i.Lock = 0
-				AND oc.Lock = 0
-				AND oc.Tipo = 'C'
-				AND oc.ClienteFornitoreTipo = 'C'
-				AND NOT (doc.[Data] BETWEEN oc.DataInizio AND oc.DataFine)
-				AND (ir.IdEer IS NULL OR ir.IdEer = doc.IdEer)
-				AND (ir.IdProduttoreParent IS NULL OR ir.IdProduttoreParent = doc.IdProduttoreParent)
-				AND (ir.IdProduttore IS NULL OR ir.IdProduttore = doc.IdProduttore)
-				AND (ir.IdTrasportatore IS NULL OR ir.IdTrasportatore = doc.IdTrasportatore)
-				AND (ir.IdDestinatario IS NULL OR ir.IdDestinatario = doc.IdDestinatario)
-				AND (ir.IdIntermediario IS NULL OR ir.IdIntermediario = doc.IdIntermediario)
-				AND
-					(
-					ir.IdEtichetta IS NULL
-					OR EXISTS (SELECT 1 FROM dbo.tblRifiutiRegistrazioniEtichette e WHERE e.Id = doc.Id AND e.IdEtichetta = ir.IdEtichetta)
-					)
-			ORDER BY
-				i.IdPriorita DESC,
-				i.Id
-		) s
+	WHERE t.N = 1
 );
 GO
 GO
 
-PRINT 'sql/functions/ufnImportiRifiuti_get_ApplicazioneRighe.sql';
+PRINT 'sql/functions/ufnImportiRifiuti_get_Applicazione.sql';
 GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Offerte e contratti: righe di fattura che l'importo applicato a una registrazione dei rifiuti
--- (ufnImportiRifiuti_get_Applicazione) genera per quella registrazione, nell'ordine delle righe dell'importo.
--- Funzione in linea: si può usare con CROSS APPLY su più registrazioni.
+-- Offerte e contratti: importo e cliente che la fatturazione applica a una registrazione dei rifiuti
+-- (regole O5 di docs/regole/offerte-contratti.md). Una riga per la registrazione @Id, anche se nessun importo
+-- coincide (IdImporto NULL).
+-- È ufnImportiRifiuti_get_Applicazione_List per una sola registrazione, senza il filtro sulle fatturabili: la
+-- regola e il significato delle colonne sono descritti lì. Per più registrazioni usare quella, non questa con
+-- CROSS APPLY (il confronto verrebbe rifatto per ogni registrazione).
+CREATE OR ALTER FUNCTION dbo.ufnImportiRifiuti_get_Applicazione (
+	@Id CHAR(16))
+RETURNS TABLE
+AS
+RETURN
+(
+	SELECT
+		a.Id,
+		a.[Data],
+		a.Numero,
+		a.Lock,
+		a.IdSedeRegistro,
+		a.IdAzienda,
+		a.IdOperazione,
+		a.IsFatturabile,
+		a.IdEer,
+		a.IdUnitaMisura,
+		a.Quantita,
+		a.IsRettifica,
+		a.IsAnnullata,
+		a.IdProduttore,
+		a.IdProduttoreParent,
+		a.IdTrasportatore,
+		a.IdDestinatario,
+		a.IdIntermediario,
+		a.FormularioNumero,
+		a.IdClienteIndicato,
+		a.NonFatturabile,
+		a.IdFattura,
+		a.IsPreFattura,
+		a.IdClientePreFattura,
+		a.IdImporto,
+		a.IdOffertaContratto,
+		a.IdClienteFornitore,
+		a.ClienteOrigine,
+		a.IdImportoScartato
+	FROM dbo.ufnImportiRifiuti_get_Applicazione_List(@Id, NULL, NULL, NULL, 0) a
+);
+GO
+GO
+
+PRINT 'sql/functions/ufnImportiRifiuti_get_RigheImporto.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Offerte e contratti: righe di fattura che l'importo @IdImporto genera per la registrazione dei rifiuti @Id,
+-- nell'ordine delle righe dell'importo. Importo e cliente sono quelli già determinati dal confronto
+-- (ufnImportiRifiuti_get_Applicazione_List): qui non lo si rifà. Funzione in linea: si può usare con CROSS APPLY
+-- su più registrazioni. Nessuna riga se @IdImporto è NULL.
 --
 -- Quantità secondo il tipo della riga: RM una per registrazione (unità NR); RK i chilogrammi e RT le tonnellate
 -- (chilogrammi / 1000), solo per le registrazioni in chilogrammi; RL i litri, solo per le registrazioni in
@@ -1298,35 +1482,40 @@ GO
 -- quantità 1 e importo pari alla differenza, altrimenti non entra.
 -- Testo: i segnaposto #1 codice EER, #2 numero del formulario, #3 data del formulario, #4 produttore,
 -- #5 destinatario vengono sostituiti con i dati della registrazione.
--- Aliquota IVA: quella della riga dell'importo, altrimenti quella della scheda del cliente.
-CREATE OR ALTER FUNCTION dbo.ufnImportiRifiuti_get_ApplicazioneRighe (
-	@Id CHAR(16))
+-- Aliquota IVA: quella della riga dell'importo, altrimenti quella della scheda del cliente @IdClienteFornitore.
+CREATE OR ALTER FUNCTION dbo.ufnImportiRifiuti_get_RigheImporto (
+	@Id CHAR(16),
+	@IdImporto CHAR(16),
+	@IdClienteFornitore CHAR(16))
 RETURNS TABLE
 AS
 RETURN
 (
 	WITH a AS (
 		SELECT
-			x.Id,
-			x.IdImporto,
-			x.IdUnitaMisura,
-			x.Quantita,
+			r.Id,
+			IdImporto = @IdImporto,
+			v.IdUnitaMisura,
+			v.Quantita,
 			IdAliquotaIvaCliente = c.IdAliquotaIva,
 			Eer = e.Nome + IIF(e.Pericoloso = 1, '*', ''),
-			x.FormularioNumero,
+			m.FormularioNumero,
 			FormularioData = CONVERT(VARCHAR(10), fo.DataEmissione, 103),
 			Produttore = sp.NomeCompleto + ISNULL(' ' + sp.IndirizzoCompleto, ''),
 			Destinatario = sd.NomeCompleto + ISNULL(' ' + sd.IndirizzoCompleto, '')
 		FROM
-			dbo.ufnImportiRifiuti_get_Applicazione(@Id) x
-			INNER JOIN dbo.tblRifiutiRegistrazioni r ON x.Id = r.Id
-			LEFT JOIN dbo.tblClientiFornitori c ON x.IdClienteFornitore = c.Id
-			LEFT JOIN dbo.tblRifiutiEer e ON x.IdEer = e.Id
+			dbo.tblRifiutiRegistrazioni r
+			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			INNER JOIN dbo.viewRifiutiRegistrazioniEffettive v ON r.Id = v.Id
+			LEFT JOIN dbo.tblClientiFornitori c ON c.Id = @IdClienteFornitore
+			LEFT JOIN dbo.tblRifiutiEer e ON v.IdEer = e.Id
 			LEFT JOIN dbo.tblRifiutiFormulari fo ON r.IdMovimento = fo.IdMovimento
 												 AND fo.Lock < 2
-			LEFT JOIN dbo.tblSedi sp ON x.IdProduttore = sp.Id
-			LEFT JOIN dbo.tblSedi sd ON x.IdDestinatario = sd.Id
-		WHERE x.IdImporto IS NOT NULL
+			LEFT JOIN dbo.tblSedi sp ON m.IdSedeProduttoreDetentore = sp.Id
+			LEFT JOIN dbo.tblSedi sd ON m.IdSedeDestinatario = sd.Id
+		WHERE
+			r.Id = @Id
+			AND @IdImporto IS NOT NULL
 	),
 	righe AS (
 		SELECT
@@ -1405,6 +1594,44 @@ RETURN
 GO
 GO
 
+PRINT 'sql/functions/ufnImportiRifiuti_get_ApplicazioneRighe.sql';
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Offerte e contratti: righe di fattura che l'importo applicato a una registrazione dei rifiuti
+-- (ufnImportiRifiuti_get_Applicazione) genera per quella registrazione, nell'ordine delle righe dell'importo.
+-- Per una sola registrazione: determina importo e cliente e ne legge le righe con
+-- ufnImportiRifiuti_get_RigheImporto, dove sono descritte le regole (quantità, sola descrizione, minimo
+-- fatturabile, segnaposto, aliquota IVA). Chi ha già importo e cliente di più registrazioni usa direttamente
+-- quella, senza rifare il confronto.
+CREATE OR ALTER FUNCTION dbo.ufnImportiRifiuti_get_ApplicazioneRighe (
+	@Id CHAR(16))
+RETURNS TABLE
+AS
+RETURN
+(
+	SELECT
+		g.Id,
+		g.Pos,
+		g.IdTipo,
+		g.MinimoFatturabile,
+		g.SolaDescrizione,
+		g.Descrizione,
+		g.Quantita,
+		g.IdUnitaMisura,
+		g.Importo,
+		g.Imponibile,
+		g.IdAliquotaIva,
+		g.IdConto
+	FROM
+		dbo.ufnImportiRifiuti_get_Applicazione(@Id) x
+		CROSS APPLY dbo.ufnImportiRifiuti_get_RigheImporto(x.Id, x.IdImporto, x.IdClienteFornitore) g
+);
+GO
+GO
+
 PRINT 'sql/functions/ufnFattureDocumenti_get_Rifiuti.sql';
 GO
 SET ANSI_NULLS ON
@@ -1412,7 +1639,8 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- Generazione automatica delle fatture: registrazioni dei rifiuti candidate, con l'importo e il cliente che
--- verrebbero applicati (ufnImportiRifiuti_get_Applicazione) e l'esito. Serve sia alla verifica
+-- verrebbero applicati (ufnImportiRifiuti_get_Applicazione_List: il confronto con gli importi è fatto una volta
+-- per tutte le registrazioni; le righe si leggono con ufnImportiRifiuti_get_RigheImporto) e l'esito. Serve sia alla verifica
 -- (uspFatture_get_Genera_List) sia alla generazione (uspFatture_ins_Genera), così leggono le stesse righe.
 --   @Id: una sola registrazione ("Genera la fattura" dalla scheda); altrimenti @IdAzienda e l'intervallo di date.
 --   @IdClienteFornitore: solo i documenti riconducibili a quel cliente (quelli che gli verrebbero fatturati).
@@ -1465,40 +1693,22 @@ RETURN
 			ELSE 0
 		END AS BIT)
 	FROM
-		dbo.tblRifiutiRegistrazioni r
-		INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-		INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
-		INNER JOIN dbo.tblRifiutiRegistri g ON m.IdRegistro = g.Id
-		INNER JOIN dbo.tblSedi sr ON g.IdSede = sr.Id
-		INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON g.IdSede = x.Id
-		CROSS APPLY dbo.ufnImportiRifiuti_get_Applicazione(r.Id) a
+		-- Registrazioni confermate di un'operazione fatturabile, non rettifiche, di @Id o dell'azienda nel
+		-- periodo, con l'importo e il cliente applicati: il confronto è fatto una volta per tutte
+		dbo.ufnImportiRifiuti_get_Applicazione_List(@Id, @IdAzienda, @DataDa, @DataA, 1) a
+		INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeRegistro = x.Id
 		OUTER APPLY (
 			SELECT
 				Totale = SUM(ISNULL(q.Imponibile, 0)),
 				Righe = COUNT(*),
 				SenzaIva = SUM(IIF(q.SolaDescrizione = 0 AND q.IdAliquotaIva IS NULL, 1, 0))
-			FROM dbo.ufnImportiRifiuti_get_ApplicazioneRighe(r.Id) q
+			FROM dbo.ufnImportiRifiuti_get_RigheImporto(a.Id, a.IdImporto, a.IdClienteFornitore) q
 		) t
 	WHERE
-		r.Lock = 0
-		AND o.IsFatturabile = 1
-		AND a.IsRettifica = 0
 		-- Non ancora in una fattura; in una pre-fattura solo se si includono
-		AND
 			(
 			a.IdFattura IS NULL
 			OR (a.IsPreFattura = 1 AND @IncludiPreFatture = 1)
-			)
-		AND
-			(
-				(@Id IS NOT NULL AND r.Id = @Id)
-				OR
-				(
-					@Id IS NULL
-					AND sr.IdAziendaInterna = @IdAzienda
-					AND r.[Data] >= @DataDa
-					AND r.[Data] <= @DataA
-				)
 			)
 		AND
 			(
@@ -2174,8 +2384,10 @@ BEGIN
 			INSERT dbo.tblImporti (Id, IdSede, IdPriorita, Lock)
 			VALUES (@returnId, @idAzienda, 4, 2);
 
-			INSERT dbo.tblImportiRifiuti (Id)
-			VALUES (@returnId);
+			-- IdSede: copia dell'azienda dell'importo (che non cambia più), per il confronto con i documenti
+			-- (ufnImportiRifiuti_get_Coincidenti)
+			INSERT dbo.tblImportiRifiuti (Id, IdSede)
+			VALUES (@returnId, @idAzienda);
 
 			IF @IdOffertaContratto IS NOT NULL
 				INSERT dbo.tblOfferteContrattiImporti (IdOffertaContratto, IdImporto)
@@ -6125,7 +6337,7 @@ BEGIN
 					RitenutaAcconto = CAST(NULL AS INT)
 				FROM
 					@doc d
-					CROSS APPLY dbo.ufnImportiRifiuti_get_ApplicazioneRighe(d.Id) g
+					CROSS APPLY dbo.ufnImportiRifiuti_get_RigheImporto(d.Id, d.IdImporto, d.IdClienteFornitore) g
 				WHERE
 					d.Fatturabile = 1
 					AND d.IdPreFattura IS NULL

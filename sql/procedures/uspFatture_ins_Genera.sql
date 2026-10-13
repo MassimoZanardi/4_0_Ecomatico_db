@@ -209,7 +209,7 @@ BEGIN
 					RitenutaAcconto = CAST(NULL AS INT)
 				FROM
 					@doc d
-					CROSS APPLY dbo.ufnImportiRifiuti_get_ApplicazioneRighe(d.Id) g
+					CROSS APPLY dbo.ufnImportiRifiuti_get_RigheImporto(d.Id, d.IdImporto, d.IdClienteFornitore) g
 				WHERE
 					d.Fatturabile = 1
 					AND d.IdPreFattura IS NULL

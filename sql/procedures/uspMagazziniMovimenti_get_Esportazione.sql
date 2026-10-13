@@ -23,6 +23,8 @@ CREATE OR ALTER PROCEDURE dbo.uspMagazziniMovimenti_get_Esportazione
 	@DdtDestinatario VARCHAR(50) = NULL,
 	@DdtTrasportatore VARCHAR(50) = NULL,
 	@DdtEmessi BIT = 0,
+	-- Testo contenuto nel nome di un'etichetta del DDT
+	@DdtEtichetta VARCHAR(50) = NULL,
 	@MaxRighe INT = NULL
 AS
 BEGIN
@@ -45,6 +47,7 @@ BEGIN
 		SET @DdtMittente = NULLIF(LTRIM(RTRIM(@DdtMittente)), '');
 		SET @DdtDestinatario = NULLIF(LTRIM(RTRIM(@DdtDestinatario)), '');
 		SET @DdtTrasportatore = NULLIF(LTRIM(RTRIM(@DdtTrasportatore)), '');
+		SET @DdtEtichetta = NULLIF(LTRIM(RTRIM(@DdtEtichetta)), '');
 		IF @ConDdt = 0
 		BEGIN
 			SET @DdtNumero = NULL;
@@ -52,6 +55,7 @@ BEGIN
 			SET @DdtMittente = NULL;
 			SET @DdtDestinatario = NULL;
 			SET @DdtTrasportatore = NULL;
+			SET @DdtEtichetta = NULL;
 		END
 
 		IF @IdSessione IS NULL
@@ -151,6 +155,7 @@ BEGIN
 			AND (@DdtMittente IS NULL OR EXISTS (SELECT 1 FROM dbo.tblSedi sm WHERE sm.Id = d.IdMittente AND sm.NomeCompleto + ISNULL(' ' + sm.IndirizzoCompleto, '') LIKE '%' + @DdtMittente + '%'))
 			AND (@DdtDestinatario IS NULL OR EXISTS (SELECT 1 FROM dbo.tblSedi sn WHERE sn.Id = d.IdDestinatario AND sn.NomeCompleto + ISNULL(' ' + sn.IndirizzoCompleto, '') LIKE '%' + @DdtDestinatario + '%'))
 			AND (@DdtTrasportatore IS NULL OR EXISTS (SELECT 1 FROM dbo.tblSedi st WHERE st.Id = d.IdTrasportatore AND st.NomeCompleto + ISNULL(' ' + st.IndirizzoCompleto, '') LIKE '%' + @DdtTrasportatore + '%'))
+			AND (@DdtEtichetta IS NULL OR EXISTS (SELECT 1 FROM dbo.tblMagazziniDdtEtichette te INNER JOIN dbo.tblEtichette et ON te.IdEtichetta = et.Id WHERE te.Id = d.Id AND et.Lock = 0 AND et.Nome LIKE '%' + @DdtEtichetta + '%'))
 		ORDER BY
 			IIF(@DdtEmessi = 1, d.[Data], m.[Data]) DESC,
 			IIF(@DdtEmessi = 1, d.Numero, m.Numero) DESC,

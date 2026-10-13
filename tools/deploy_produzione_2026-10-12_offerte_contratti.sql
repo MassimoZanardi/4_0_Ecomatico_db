@@ -755,14 +755,45 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_OfferteContrattiImport
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Importi_IdSede')
 	CREATE NONCLUSTERED INDEX IX_Importi_IdSede ON dbo.tblImporti (IdSede) INCLUDE (IdPriorita, Lock);
 
+-- Righe dell'importo applicato, lette per ogni documento da ufnImportiRifiuti_get_ApplicazioneRighe: con le
+-- colonne incluse non serve il lookup per riga. L'indice nato senza colonne incluse viene ricreato
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ImportiRighe_IdImporto')
+	AND NOT EXISTS (
+		SELECT 1
+		FROM
+			sys.indexes i
+			INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id
+											AND i.index_id = ic.index_id
+		WHERE
+			i.name = 'IX_ImportiRighe_IdImporto'
+			AND ic.is_included_column = 1
+	)
+	DROP INDEX IX_ImportiRighe_IdImporto ON dbo.tblImportiRighe;
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ImportiRighe_IdImporto')
-	CREATE NONCLUSTERED INDEX IX_ImportiRighe_IdImporto ON dbo.tblImportiRighe (IdImporto);
+	CREATE NONCLUSTERED INDEX IX_ImportiRighe_IdImporto ON dbo.tblImportiRighe (IdImporto) INCLUDE (Pos, IdTipo, Importo, MinimoFatturabile, Lock);
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_OfferteContratti_IdSede')
 	CREATE NONCLUSTERED INDEX IX_OfferteContratti_IdSede ON dbo.tblOfferteContratti (IdSede) INCLUDE (IdClienteFornitore, Tipo, Lock);
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_FattureDocumenti_IdFattura')
 	CREATE NONCLUSTERED INDEX IX_FattureDocumenti_IdFattura ON dbo.tblFattureDocumenti (IdFattura);
+
+-- Chiavi esterne di tblFattureDocumenti: senza indice, cancellare la bozza di un importo, di un contratto o di
+-- un cliente legge tutta la tabella, che cresce di una riga per ogni documento fatturato. Filtrati: le tre
+-- colonne sono vuote finche' il documento non viene fatturato o non gli si indica un cliente
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_FattureDocumenti_IdImporto')
+	CREATE NONCLUSTERED INDEX IX_FattureDocumenti_IdImporto ON dbo.tblFattureDocumenti (IdImporto) WHERE IdImporto IS NOT NULL;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_FattureDocumenti_IdOffertaContratto')
+	CREATE NONCLUSTERED INDEX IX_FattureDocumenti_IdOffertaContratto ON dbo.tblFattureDocumenti (IdOffertaContratto) WHERE IdOffertaContratto IS NOT NULL;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_FattureDocumenti_IdClienteFornitore')
+	CREATE NONCLUSTERED INDEX IX_FattureDocumenti_IdClienteFornitore ON dbo.tblFattureDocumenti (IdClienteFornitore) WHERE IdClienteFornitore IS NOT NULL;
+
+-- Contratti e offerte di un cliente: controllo di uspClientiFornitori_del e chiave esterna sul cliente
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_OfferteContratti_IdClienteFornitore')
+	CREATE NONCLUSTERED INDEX IX_OfferteContratti_IdClienteFornitore ON dbo.tblOfferteContratti (IdClienteFornitore) INCLUDE (Lock);
 
 -- 7. Modulo, area di menu, funzioni
 IF NOT EXISTS (SELECT 1 FROM dbo.tblModuli WHERE Id = 'OFC')

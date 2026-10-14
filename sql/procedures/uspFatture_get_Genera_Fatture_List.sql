@@ -6,7 +6,8 @@ GO
 -- generazione creerebbe con gli stessi criteri ("Visualizza" sulla riga delle fatture previste della finestra
 -- "Verifica"). Una riga per fattura: cliente, raggruppamento (la sede del produttore o il contratto, quando la
 -- scheda del cliente chiede una fattura per sede o per contratto), documenti, pre-fatture convertite, imponibile.
--- La sede è quella del produttore per le registrazioni dei rifiuti, il destinatario per i DDT di magazzino.
+-- La sede è quella del produttore per le registrazioni dei rifiuti, il destinatario per i DDT di magazzino, il
+-- richiedente per i servizi.
 -- Stessi documenti e stessi gruppi di uspFatture_ins_Genera (ufnFattureGenera_get_Documenti).
 -- Al massimo @MaxRighe righe (predefinito 1000): RowsCount dice quante sono in tutto.
 CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_Fatture_List

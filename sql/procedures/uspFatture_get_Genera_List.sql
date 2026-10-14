@@ -4,12 +4,13 @@ SET QUOTED_IDENTIFIER ON
 GO
 -- Fatturazione > Fatture clienti > Nuova > Tramite procedura automatica: elenco di dettaglio della verifica
 -- ("Visualizza" sulle righe della finestra "Verifica"; i conteggi sono in uspFatture_get_Genera_Riepilogo).
--- Elenca i documenti (registrazioni dei rifiuti e DDT di magazzino) dell'azienda interna corrente della sessione con data
+-- Elenca i documenti (registrazioni dei rifiuti, DDT di magazzino e servizi) dell'azienda interna corrente della sessione con data
 -- nell'intervallo, con il cliente, l'importo e l'imponibile che la generazione userebbe e l'esito:
 -- Fatturabile = 1 entra in una fattura, altrimenti Avviso dice perché resta fuori. Stesse righe di
 -- uspFatture_ins_Genera (ufnFattureGenera_get_Documenti).
---   @Rifiuti, @Magazzino: da quali documenti generare (registrazioni dei rifiuti, DDT di magazzino). I DDT
---        entrano solo con il modulo Magazzino attivo sul dominio; per un DDT Id è l'Id del movimento.
+--   @Rifiuti, @Magazzino, @Servizi: da quali documenti generare (registrazioni dei rifiuti, DDT, servizi). I DDT
+--        entrano solo con il modulo Magazzino attivo sul dominio, i servizi con il modulo Servizi; per un DDT Id è
+--        l'Id del movimento, per un servizio l'Id del servizio.
 --   @IdClienteFornitore: solo i documenti riconducibili a quel cliente.
 --   @IncludiPreFatture = 1: anche i documenti già in una pre-fattura, che verrà convertita in fattura con le
 --        sue righe; l'imponibile della pre-fattura è riportato sul suo primo documento.
@@ -92,10 +93,13 @@ BEGIN
 		SELECT TOP (@MaxRighe)
 			d.Id,
 			d.IdModulo,
-			Documento = CAST(IIF(d.IdModulo = 'MAG',
-				'DDT' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)) + ISNULL('/' + dd.Sezionale, ''), '') + ISNULL(' - ' + sd.NomeCompleto, ''),
-				'Registrazione' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)), '')
-					+ ISNULL(' - EER ' + e.Nome + IIF(e.Pericoloso = 1, '*', ''), '')) AS VARCHAR(200)),
+			Documento = CAST(CASE d.IdModulo
+				WHEN 'MAG' THEN 'DDT' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)) + ISNULL('/' + dd.Sezionale, ''), '') + ISNULL(' - ' + sd.NomeCompleto, '')
+				-- Il servizio non ha un numero: tipo e richiedente
+				WHEN 'SRV' THEN 'Servizio' + ISNULL(' ' + tp.Nome, '') + ISNULL(' - ' + sd.NomeCompleto, '')
+				ELSE 'Registrazione' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)), '')
+					+ ISNULL(' - EER ' + e.Nome + IIF(e.Pericoloso = 1, '*', ''), '')
+			END AS VARCHAR(200)),
 			d.[Data],
 			d.Quantita,
 			UnitaMisura = d.IdUnitaMisura,
@@ -111,11 +115,13 @@ BEGIN
 				WHEN 'P' THEN 'In pre-fattura del ' + ISNULL(CONVERT(VARCHAR(10), f.DataEmissione, 103), '') + ': viene convertita in fattura con le sue righe'
 				WHEN 'S' THEN 'Contratto non valido alla data: applicato l''importo standard'
 				WHEN 'A' THEN 'Registrazione annullata'
-				WHEN 'N' THEN IIF(d.IdModulo = 'MAG', 'Indicato', 'Indicata') + ' come non fatturabile'
+				WHEN 'N' THEN IIF(d.IdModulo IN ('MAG', 'SRV'), 'Indicato', 'Indicata') + ' come non fatturabile'
 				WHEN 'I' THEN IIF(d.IdModulo = 'MAG' AND d.IdImporto IS NOT NULL,
 					'L''importo "' + ISNULL(i.Nome, '') + '" non ha una riga per tutti gli articoli o i materiali del DDT',
-					IIF(d.IdModulo = 'MAG', 'Nessun importo coincide, o il DDT non ha righe di articoli o materiali', 'Nessun importo coincide'))
-				WHEN 'C' THEN 'Cliente non determinato: ' + IIF(d.IdModulo = 'MAG', 'il destinatario', 'il produttore') + ' non ha una scheda cliente'
+					IIF(d.IdModulo = 'SRV' AND d.IdImporto IS NOT NULL,
+						'L''importo "' + ISNULL(i.Nome, '') + '" non ha una riga per tutte le risorse del servizio',
+					IIF(d.IdModulo = 'MAG', 'Nessun importo coincide, o il DDT non ha righe di articoli o materiali', 'Nessun importo coincide')))
+				WHEN 'C' THEN 'Cliente non determinato: ' + CASE d.IdModulo WHEN 'MAG' THEN 'il destinatario' WHEN 'SRV' THEN 'il richiedente' ELSE 'il produttore' END + ' non ha una scheda cliente'
 				WHEN 'R' THEN 'L''importo non ha righe applicabili'
 				WHEN 'V' THEN 'Aliquota IVA non indicata né sull''importo né sulla scheda del cliente'
 			END AS VARCHAR(300)),
@@ -126,7 +132,11 @@ BEGIN
 			-- DDT: sezionale e destinatario (per un DDT d.Id è il movimento e d.IdProduttore il destinatario)
 			LEFT JOIN dbo.tblMagazziniDdt dd ON d.IdModulo = 'MAG'
 										  AND d.Id = dd.IdMovimento
-			LEFT JOIN dbo.tblSedi sd ON d.IdModulo = 'MAG'
+			-- Servizio: tipo; il richiedente è d.IdProduttore
+			LEFT JOIN dbo.tblServizi sv ON d.IdModulo = 'SRV'
+									 AND d.Id = sv.Id
+			LEFT JOIN dbo.tblTipi tp ON sv.IdTipo = tp.Id
+			LEFT JOIN dbo.tblSedi sd ON d.IdModulo IN ('MAG', 'SRV')
 									 AND d.IdProduttore = sd.Id
 			LEFT JOIN dbo.tblClientiFornitori c ON d.IdClienteFornitore = c.Id
 			LEFT JOIN dbo.tblSedi sc ON c.IdSede = sc.Id

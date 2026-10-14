@@ -15,9 +15,10 @@ GO
 --        per motivo (uno solo per documento, nell'ordine di ufnFattureGenera_get_Documenti.Esito).
 --   GiaFatturati: documenti del periodo già in una fattura (solo informativo: non rientrano).
 --   InPreFattura: documenti del periodo già in una pre-fattura, quando non si includono le pre-fatture.
---   DocumentiRifiuti, DocumentiMagazzino: i Documenti, divisi tra registrazioni dei rifiuti e DDT di magazzino.
--- @Rifiuti, @Magazzino: da quali documenti generare (registrazioni dei rifiuti, DDT di magazzino). I DDT entrano
--- solo con il modulo Magazzino attivo sul dominio.
+--   DocumentiRifiuti, DocumentiMagazzino, DocumentiServizi: i Documenti, divisi tra registrazioni dei rifiuti, DDT
+--        di magazzino e servizi.
+-- @Rifiuti, @Magazzino, @Servizi: da quali documenti generare (registrazioni dei rifiuti, DDT di magazzino,
+-- servizi). I DDT entrano solo con il modulo Magazzino attivo sul dominio, i servizi con il modulo Servizi.
 -- Senza azienda nel contesto tutto a zero.
 CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_Riepilogo
 	@IdSessione CHAR(16) = NULL,
@@ -159,10 +160,30 @@ BEGIN
 				AND (@IdClienteFornitore IS NULL OR f.IdClienteFornitore = @IdClienteFornitore)
 			OPTION (RECOMPILE);
 
+		-- Lo stesso per i servizi (stessa platea dei candidati: servizi confermati ed Eseguiti, non serie
+		-- ricorrenti, dei calendari delle sedi che la sessione vede)
+		IF @Servizi = 1
+			SELECT
+				@giaFatturati += ISNULL(SUM(IIF(f.IdTipo = 'TD00', 0, 1)), 0),
+				@inPreFattura += ISNULL(SUM(IIF(f.IdTipo = 'TD00', 1, 0)), 0)
+			FROM
+				dbo.ufnImportiServizi_get_Documenti(NULL, @idAzienda, @DataDa, @DataA) doc
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON doc.IdSedeInterna = x.Id
+				INNER JOIN dbo.tblFattureDocumenti fd ON doc.Id = fd.Id
+				INNER JOIN dbo.tblFatture f ON fd.IdFattura = f.Id
+			WHERE
+				doc.Lock = 0
+				AND doc.IsFatturabile = 1
+				AND doc.IsEseguito = 1
+				AND f.Lock IN (0, 2)
+				AND (@IdClienteFornitore IS NULL OR f.IdClienteFornitore = @IdClienteFornitore)
+			OPTION (RECOMPILE);
+
 		SELECT
 			Documenti = COUNT(*),
 			DocumentiRifiuti = ISNULL(SUM(IIF(d.IdModulo = 'RIF', 1, 0)), 0),
 			DocumentiMagazzino = ISNULL(SUM(IIF(d.IdModulo = 'MAG', 1, 0)), 0),
+			DocumentiServizi = ISNULL(SUM(IIF(d.IdModulo = 'SRV', 1, 0)), 0),
 			Fatturabili = ISNULL(SUM(IIF(d.Fatturabile = 1, 1, 0)), 0),
 			Fatture = (
 				SELECT COUNT(*)

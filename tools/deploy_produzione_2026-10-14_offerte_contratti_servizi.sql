@@ -23,7 +23,7 @@ oggetto impiegabile nei servizi), con il prezzo per la quantità della risorsa n
 5. Stored procedure modificate: uspImportiRighe_upd, _get_List e _get_Tipi_SelectList (risorsa della riga);
    uspFattureDocumenti_get, _get_Righe, _upd, _del_Fattura, _get_Clienti_List (anche per il modulo SRV);
    uspFatture_ins_Genera (un servizio con @IdModulo = 'SRV', parametro @Servizi); uspFatture_get_Genera_Riepilogo,
-   _Fatture_List e _List (parametro @Servizi); uspSessioni_upd_AziendaByContesto (contesto Calendario);
+   _Fatture_List e _List (parametro @Servizi: i servizi nella procedura automatica, solo con il modulo Servizi attivo); uspSessioni_upd_AziendaByContesto (contesto Calendario);
    uspPersone_del e uspOggetti_del (risorsa in un importo); uspSedi_del_SediEsterne, uspSedi_del_SediInterne e le
    due cancellazioni a cascata di sviluppo (via l'esecutore, sede interna, righe delle risorse).
 6. Servizi: uspServizi_upd (la serie ricorrente non può essere Eseguita), uspServizi_ins (l'occorrenza modificata
@@ -4479,7 +4479,8 @@ GO
 -- generazione creerebbe con gli stessi criteri ("Visualizza" sulla riga delle fatture previste della finestra
 -- "Verifica"). Una riga per fattura: cliente, raggruppamento (la sede del produttore o il contratto, quando la
 -- scheda del cliente chiede una fattura per sede o per contratto), documenti, pre-fatture convertite, imponibile.
--- La sede è quella del produttore per le registrazioni dei rifiuti, il destinatario per i DDT di magazzino.
+-- La sede è quella del produttore per le registrazioni dei rifiuti, il destinatario per i DDT di magazzino, il
+-- richiedente per i servizi.
 -- Stessi documenti e stessi gruppi di uspFatture_ins_Genera (ufnFattureGenera_get_Documenti).
 -- Al massimo @MaxRighe righe (predefinito 1000): RowsCount dice quante sono in tutto.
 CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_Fatture_List
@@ -4610,12 +4611,13 @@ SET QUOTED_IDENTIFIER ON
 GO
 -- Fatturazione > Fatture clienti > Nuova > Tramite procedura automatica: elenco di dettaglio della verifica
 -- ("Visualizza" sulle righe della finestra "Verifica"; i conteggi sono in uspFatture_get_Genera_Riepilogo).
--- Elenca i documenti (registrazioni dei rifiuti e DDT di magazzino) dell'azienda interna corrente della sessione con data
+-- Elenca i documenti (registrazioni dei rifiuti, DDT di magazzino e servizi) dell'azienda interna corrente della sessione con data
 -- nell'intervallo, con il cliente, l'importo e l'imponibile che la generazione userebbe e l'esito:
 -- Fatturabile = 1 entra in una fattura, altrimenti Avviso dice perché resta fuori. Stesse righe di
 -- uspFatture_ins_Genera (ufnFattureGenera_get_Documenti).
---   @Rifiuti, @Magazzino: da quali documenti generare (registrazioni dei rifiuti, DDT di magazzino). I DDT
---        entrano solo con il modulo Magazzino attivo sul dominio; per un DDT Id è l'Id del movimento.
+--   @Rifiuti, @Magazzino, @Servizi: da quali documenti generare (registrazioni dei rifiuti, DDT, servizi). I DDT
+--        entrano solo con il modulo Magazzino attivo sul dominio, i servizi con il modulo Servizi; per un DDT Id è
+--        l'Id del movimento, per un servizio l'Id del servizio.
 --   @IdClienteFornitore: solo i documenti riconducibili a quel cliente.
 --   @IncludiPreFatture = 1: anche i documenti già in una pre-fattura, che verrà convertita in fattura con le
 --        sue righe; l'imponibile della pre-fattura è riportato sul suo primo documento.
@@ -4698,10 +4700,13 @@ BEGIN
 		SELECT TOP (@MaxRighe)
 			d.Id,
 			d.IdModulo,
-			Documento = CAST(IIF(d.IdModulo = 'MAG',
-				'DDT' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)) + ISNULL('/' + dd.Sezionale, ''), '') + ISNULL(' - ' + sd.NomeCompleto, ''),
-				'Registrazione' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)), '')
-					+ ISNULL(' - EER ' + e.Nome + IIF(e.Pericoloso = 1, '*', ''), '')) AS VARCHAR(200)),
+			Documento = CAST(CASE d.IdModulo
+				WHEN 'MAG' THEN 'DDT' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)) + ISNULL('/' + dd.Sezionale, ''), '') + ISNULL(' - ' + sd.NomeCompleto, '')
+				-- Il servizio non ha un numero: tipo e richiedente
+				WHEN 'SRV' THEN 'Servizio' + ISNULL(' ' + tp.Nome, '') + ISNULL(' - ' + sd.NomeCompleto, '')
+				ELSE 'Registrazione' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)), '')
+					+ ISNULL(' - EER ' + e.Nome + IIF(e.Pericoloso = 1, '*', ''), '')
+			END AS VARCHAR(200)),
 			d.[Data],
 			d.Quantita,
 			UnitaMisura = d.IdUnitaMisura,
@@ -4717,11 +4722,13 @@ BEGIN
 				WHEN 'P' THEN 'In pre-fattura del ' + ISNULL(CONVERT(VARCHAR(10), f.DataEmissione, 103), '') + ': viene convertita in fattura con le sue righe'
 				WHEN 'S' THEN 'Contratto non valido alla data: applicato l''importo standard'
 				WHEN 'A' THEN 'Registrazione annullata'
-				WHEN 'N' THEN IIF(d.IdModulo = 'MAG', 'Indicato', 'Indicata') + ' come non fatturabile'
+				WHEN 'N' THEN IIF(d.IdModulo IN ('MAG', 'SRV'), 'Indicato', 'Indicata') + ' come non fatturabile'
 				WHEN 'I' THEN IIF(d.IdModulo = 'MAG' AND d.IdImporto IS NOT NULL,
 					'L''importo "' + ISNULL(i.Nome, '') + '" non ha una riga per tutti gli articoli o i materiali del DDT',
-					IIF(d.IdModulo = 'MAG', 'Nessun importo coincide, o il DDT non ha righe di articoli o materiali', 'Nessun importo coincide'))
-				WHEN 'C' THEN 'Cliente non determinato: ' + IIF(d.IdModulo = 'MAG', 'il destinatario', 'il produttore') + ' non ha una scheda cliente'
+					IIF(d.IdModulo = 'SRV' AND d.IdImporto IS NOT NULL,
+						'L''importo "' + ISNULL(i.Nome, '') + '" non ha una riga per tutte le risorse del servizio',
+					IIF(d.IdModulo = 'MAG', 'Nessun importo coincide, o il DDT non ha righe di articoli o materiali', 'Nessun importo coincide')))
+				WHEN 'C' THEN 'Cliente non determinato: ' + CASE d.IdModulo WHEN 'MAG' THEN 'il destinatario' WHEN 'SRV' THEN 'il richiedente' ELSE 'il produttore' END + ' non ha una scheda cliente'
 				WHEN 'R' THEN 'L''importo non ha righe applicabili'
 				WHEN 'V' THEN 'Aliquota IVA non indicata né sull''importo né sulla scheda del cliente'
 			END AS VARCHAR(300)),
@@ -4732,7 +4739,11 @@ BEGIN
 			-- DDT: sezionale e destinatario (per un DDT d.Id è il movimento e d.IdProduttore il destinatario)
 			LEFT JOIN dbo.tblMagazziniDdt dd ON d.IdModulo = 'MAG'
 										  AND d.Id = dd.IdMovimento
-			LEFT JOIN dbo.tblSedi sd ON d.IdModulo = 'MAG'
+			-- Servizio: tipo; il richiedente è d.IdProduttore
+			LEFT JOIN dbo.tblServizi sv ON d.IdModulo = 'SRV'
+									 AND d.Id = sv.Id
+			LEFT JOIN dbo.tblTipi tp ON sv.IdTipo = tp.Id
+			LEFT JOIN dbo.tblSedi sd ON d.IdModulo IN ('MAG', 'SRV')
 									 AND d.IdProduttore = sd.Id
 			LEFT JOIN dbo.tblClientiFornitori c ON d.IdClienteFornitore = c.Id
 			LEFT JOIN dbo.tblSedi sc ON c.IdSede = sc.Id
@@ -4781,9 +4792,10 @@ GO
 --        per motivo (uno solo per documento, nell'ordine di ufnFattureGenera_get_Documenti.Esito).
 --   GiaFatturati: documenti del periodo già in una fattura (solo informativo: non rientrano).
 --   InPreFattura: documenti del periodo già in una pre-fattura, quando non si includono le pre-fatture.
---   DocumentiRifiuti, DocumentiMagazzino: i Documenti, divisi tra registrazioni dei rifiuti e DDT di magazzino.
--- @Rifiuti, @Magazzino: da quali documenti generare (registrazioni dei rifiuti, DDT di magazzino). I DDT entrano
--- solo con il modulo Magazzino attivo sul dominio.
+--   DocumentiRifiuti, DocumentiMagazzino, DocumentiServizi: i Documenti, divisi tra registrazioni dei rifiuti, DDT
+--        di magazzino e servizi.
+-- @Rifiuti, @Magazzino, @Servizi: da quali documenti generare (registrazioni dei rifiuti, DDT di magazzino,
+-- servizi). I DDT entrano solo con il modulo Magazzino attivo sul dominio, i servizi con il modulo Servizi.
 -- Senza azienda nel contesto tutto a zero.
 CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_Riepilogo
 	@IdSessione CHAR(16) = NULL,
@@ -4925,10 +4937,30 @@ BEGIN
 				AND (@IdClienteFornitore IS NULL OR f.IdClienteFornitore = @IdClienteFornitore)
 			OPTION (RECOMPILE);
 
+		-- Lo stesso per i servizi (stessa platea dei candidati: servizi confermati ed Eseguiti, non serie
+		-- ricorrenti, dei calendari delle sedi che la sessione vede)
+		IF @Servizi = 1
+			SELECT
+				@giaFatturati += ISNULL(SUM(IIF(f.IdTipo = 'TD00', 0, 1)), 0),
+				@inPreFattura += ISNULL(SUM(IIF(f.IdTipo = 'TD00', 1, 0)), 0)
+			FROM
+				dbo.ufnImportiServizi_get_Documenti(NULL, @idAzienda, @DataDa, @DataA) doc
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON doc.IdSedeInterna = x.Id
+				INNER JOIN dbo.tblFattureDocumenti fd ON doc.Id = fd.Id
+				INNER JOIN dbo.tblFatture f ON fd.IdFattura = f.Id
+			WHERE
+				doc.Lock = 0
+				AND doc.IsFatturabile = 1
+				AND doc.IsEseguito = 1
+				AND f.Lock IN (0, 2)
+				AND (@IdClienteFornitore IS NULL OR f.IdClienteFornitore = @IdClienteFornitore)
+			OPTION (RECOMPILE);
+
 		SELECT
 			Documenti = COUNT(*),
 			DocumentiRifiuti = ISNULL(SUM(IIF(d.IdModulo = 'RIF', 1, 0)), 0),
 			DocumentiMagazzino = ISNULL(SUM(IIF(d.IdModulo = 'MAG', 1, 0)), 0),
+			DocumentiServizi = ISNULL(SUM(IIF(d.IdModulo = 'SRV', 1, 0)), 0),
 			Fatturabili = ISNULL(SUM(IIF(d.Fatturabile = 1, 1, 0)), 0),
 			Fatture = (
 				SELECT COUNT(*)

@@ -167,7 +167,7 @@ CREATE TABLE [dbo].[tblImportiRifiuti](
 	[IdDestinatario] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdIntermediario] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdEtichetta] [char](16) COLLATE Latin1_General_CI_AS NULL,
-	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
  CONSTRAINT [PK_tblImportiRifiuti] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
@@ -681,6 +681,7 @@ GO
 --   2. tblClientiFornitori.IdRaggruppamento: una fattura per cliente (C), per sede (S) o per contratto (T)
 --   3. tblImportiRighe.Pos: ordine delle righe dell'importo
 --   3b. tblImportiRifiuti.IdSede: azienda dell'importo, copiata sulle variabili per il confronto con i documenti
+--       (NOT NULL: un importo senza la copia sparirebbe dal confronto senza errori)
 --   4. tblFattureDocumenti: legame tra il documento fatturabile (registrazione, movimento con DDT, servizio)
 --      e la fattura, con "non fatturabile" e cliente indicato sul documento
 --   5. tblPagine.IdModulo: modulo che il dominio deve avere attivo, oltre a quello dell'area, per vedere la voce
@@ -776,6 +777,16 @@ FROM
 	dbo.tblImportiRifiuti r
 	INNER JOIN dbo.tblImporti i ON r.Id = i.Id
 WHERE r.IdSede IS NULL;
+
+-- La copia è obbligatoria: un importo senza l'azienda non verrebbe mai letto dal confronto con i documenti, e
+-- senza errori. L'indice sulla colonna va tolto prima di cambiarla e viene ricreato al punto 6
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tblImportiRifiuti') AND name = 'IdSede' AND is_nullable = 1)
+BEGIN
+	IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ImportiRifiuti_IdSede')
+		DROP INDEX IX_ImportiRifiuti_IdSede ON dbo.tblImportiRifiuti;
+
+	ALTER TABLE dbo.tblImportiRifiuti ALTER COLUMN IdSede CHAR(16) COLLATE Latin1_General_CI_AS NOT NULL;
+END
 
 -- Tipo di riga a litri: stesso stile di "KG (Kilogrammo)" e "T (Tonnellata)"
 UPDATE dbo.tblImportiRigheTipi SET Nome = 'L (Litro)' WHERE Id = 'RL' AND Nome <> 'L (Litro)';

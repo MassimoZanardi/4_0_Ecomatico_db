@@ -141,9 +141,9 @@ BEGIN
 				FROM dbo.tblServizi
 				WHERE IdEvento = @IdEvento;
 
-				-- Copia gli Osepe del servizio originale
-				INSERT INTO dbo.tblServiziOsepe (Id, IdOsepe)
-				SELECT @returnId, o.IdOsepe
+				-- Copia gli Osepe del servizio originale con la loro quantità (serve al prezzo per risorsa)
+				INSERT INTO dbo.tblServiziOsepe (Id, IdOsepe, Quantita)
+				SELECT @returnId, o.IdOsepe, o.Quantita
 				FROM dbo.tblServizi s
 				INNER JOIN dbo.tblServiziOsepe o ON s.Id = o.Id
 				WHERE s.IdEvento = @IdEvento;

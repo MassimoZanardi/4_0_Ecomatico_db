@@ -9,7 +9,7 @@ CREATE TABLE [dbo].[tblImportiMagazzino](
 	[IdDestinatarioParent] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdDestinatario] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdEtichetta] [char](16) COLLATE Latin1_General_CI_AS NULL,
-	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[IdSedePartenza] [char](16) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblImportiMagazzino] PRIMARY KEY CLUSTERED 
 (

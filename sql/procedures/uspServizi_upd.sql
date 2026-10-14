@@ -124,6 +124,20 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- La serie è solo pianificazione: si esegue (e si fattura) l'occorrenza modificata, che è un
+		-- servizio a sé. Serie = ricorrenza propria (casella Ricorre o "Questa e le successive"), mai
+		-- l'occorrenza modificata, che è il sostituto di un'eccezione della serie
+		IF @IdStato = 'E'
+		   AND (@Ricorre = 1 OR @OccorrenzaESuccessive = 1)
+		   AND NOT EXISTS (SELECT 1
+		FROM dbo.tblRicorrenzeEccezioni
+		WHERE IdEvento = @IdEvento)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Un servizio ricorrente non può essere eseguito: per segnare come eseguita un''occorrenza, modificare la sola occorrenza';
+			GOTO BRANCH_END;
+		END
+
 		IF @IdIntervallo = 'YY'
 		BEGIN
 			SET @frequenzaMax = DATEDIFF(YEAR, @Data, '20501231') - 1;

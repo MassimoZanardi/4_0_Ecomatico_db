@@ -13,7 +13,7 @@ GO
 --   1. tblMagazziniCausali.IsFatturabile: causali i cui DDT entrano nella fatturazione. Solo Vendita (V).
 --   2. tblImportiMagazzino: variabili sede di partenza (IdSedePartenza, la sede interna del DDT), destinatario
 --      (soggetto e sede: la sede si confronta con la destinazione finale della merce) ed etichetta; via il
---      mittente; IdSede, copia dell'azienda dell'importo, per il confronto con i documenti (come
+--      mittente; IdSede NOT NULL, copia dell'azienda dell'importo, per il confronto con i documenti (come
 --      tblImportiRifiuti.IdSede). Le colonne IdArticolo e IdMateriale, esistite solo in sviluppo, vengono tolte.
 --   3. tblImportiRigheMagazzino: articolo oppure materiale EoW a cui si applica il prezzo di una riga a quantità
 --      (tipo MA). Chiave esterna sulla riga ON DELETE CASCADE: cancellata la riga, sparisce da sola.
@@ -100,6 +100,16 @@ FROM
 	dbo.tblImportiMagazzino m
 	INNER JOIN dbo.tblImporti i ON m.Id = i.Id
 WHERE m.IdSede IS NULL;
+
+-- La copia è obbligatoria, come per i rifiuti: un importo senza l'azienda non verrebbe mai letto dal confronto
+-- con i DDT, e senza errori. L'indice sulla colonna va tolto prima di cambiarla e viene ricreato al punto 4
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tblImportiMagazzino') AND name = 'IdSede' AND is_nullable = 1)
+BEGIN
+	IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ImportiMagazzino_IdSede')
+		DROP INDEX IX_ImportiMagazzino_IdSede ON dbo.tblImportiMagazzino;
+
+	ALTER TABLE dbo.tblImportiMagazzino ALTER COLUMN IdSede CHAR(16) COLLATE Latin1_General_CI_AS NOT NULL;
+END
 
 -- 4. Indici
 -- Importi di magazzino dell'azienda con le loro variabili: il confronto con ogni DDT legge solo questi

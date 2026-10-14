@@ -13,7 +13,7 @@ CREATE TABLE [dbo].[tblImportiRifiuti](
 	[IdDestinatario] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdIntermediario] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdEtichetta] [char](16) COLLATE Latin1_General_CI_AS NULL,
-	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
  CONSTRAINT [PK_tblImportiRifiuti] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

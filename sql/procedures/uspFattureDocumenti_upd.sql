@@ -2,7 +2,7 @@
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Salva sul documento (registrazione dei rifiuti; DDT e servizi non ancora gestiti) il cliente a cui fatturarlo
+-- Salva sul documento (registrazione dei rifiuti, DDT di magazzino o servizio) il cliente a cui fatturarlo
 -- e la spunta "Non fatturabile". Si salvano da soli, senza il "Salva" della scheda: valgono anche per una
 -- registrazione già inviata al RENTRI, che non si può più modificare, perché non fanno parte del registro.
 --   @IdClienteFornitore NULL: nessun cliente indicato (lo decide l'importo applicato).
@@ -39,16 +39,16 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		IF ISNULL(@IdModulo, '') NOT IN ('RIF', 'MAG')
+		IF ISNULL(@IdModulo, '') NOT IN ('RIF', 'MAG', 'SRV')
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF o MAG';
+			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF, MAG o SRV';
 			GOTO BRANCH_END;
 		END
 
-		-- Permesso di modifica sul documento (registrazioni dei rifiuti o gestione del magazzino) e modulo Offerte e
+		-- Permesso di modifica sul documento (registrazioni dei rifiuti, gestione del magazzino o dei servizi) e modulo Offerte e
 		-- contratti attivo sul dominio
-		DECLARE @idFunzione CHAR(3) = IIF(@IdModulo = 'MAG', 'MAG', 'RRG');
+		DECLARE @idFunzione CHAR(3) = CASE @IdModulo WHEN 'MAG' THEN 'MAG' WHEN 'SRV' THEN 'SRV' ELSE 'RRG' END;
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,

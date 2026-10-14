@@ -16,6 +16,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_Fatture_List
 	@IdClienteFornitore CHAR(16) = NULL,
 	@Rifiuti BIT = 1,
 	@Magazzino BIT = 0,
+	@Servizi BIT = 0,
 	@IncludiPreFatture BIT = 0,
 	@MaxRighe INT = NULL
 AS
@@ -29,6 +30,7 @@ BEGIN
 		SET @IdClienteFornitore = NULLIF(NULLIF(LTRIM(RTRIM(@IdClienteFornitore)), ''), REPLICATE('0', 16));
 		SET @Rifiuti = ISNULL(@Rifiuti, 1);
 		SET @Magazzino = ISNULL(@Magazzino, 0);
+		SET @Servizi = ISNULL(@Servizi, 0);
 		SET @IncludiPreFatture = ISNULL(@IncludiPreFatture, 0);
 		SET @MaxRighe = IIF(ISNULL(@MaxRighe, 0) < 1, 1000, @MaxRighe);
 
@@ -67,6 +69,9 @@ BEGIN
 		-- I DDT entrano solo con il modulo Magazzino attivo sul dominio
 		IF ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('MAG', @IdSessione), 0) = 0
 			SET @Magazzino = 0;
+		-- I servizi entrano solo con il modulo Servizi attivo sul dominio
+		IF ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('SRV', @IdSessione), 0) = 0
+			SET @Servizi = 0;
 
 		DECLARE @idAzienda CHAR(16);
 		SELECT @idAzienda = IdAzienda
@@ -97,7 +102,7 @@ BEGIN
 					Documenti = COUNT(*),
 					PreFatture = COUNT(DISTINCT d.IdPreFattura),
 					Imponibile = SUM(ISNULL(d.Imponibile, 0))
-				FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, @Magazzino) d
+				FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, @Magazzino, @Servizi) d
 				WHERE
 					d.Fatturabile = 1
 				GROUP BY d.IdClienteFornitore, d.GruppoSede, d.GruppoContratto

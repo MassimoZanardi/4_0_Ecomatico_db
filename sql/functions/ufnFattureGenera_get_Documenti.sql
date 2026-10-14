@@ -3,9 +3,10 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- Generazione automatica delle fatture: i documenti candidati, cioè le registrazioni dei rifiuti
--- (ufnFattureDocumenti_get_Rifiuti, con @Rifiuti = 1) e i DDT di magazzino (ufnFattureDocumenti_get_Magazzino,
--- con @Magazzino = 1), con in più ciò che serve a raggrupparli in fatture e a riepilogarli. IdModulo dice da
--- quale dei due viene il documento (RIF, MAG): per un DDT, Id è l'Id del movimento.
+-- (ufnFattureDocumenti_get_Rifiuti, con @Rifiuti = 1), i DDT di magazzino (ufnFattureDocumenti_get_Magazzino,
+-- con @Magazzino = 1) e i servizi (ufnFattureDocumenti_get_Servizi, con @Servizi = 1), con in più ciò che serve a
+-- raggrupparli in fatture e a riepilogarli. IdModulo dice da quale viene il documento (RIF, MAG, SRV): per un DDT,
+-- Id è l'Id del movimento; un servizio non ha un numero (Numero NULL).
 -- La leggono il riepilogo (uspFatture_get_Genera_Riepilogo), l'anteprima delle fatture
 -- (uspFatture_get_Genera_Fatture_List), l'elenco di dettaglio (uspFatture_get_Genera_List) e la generazione
 -- (uspFatture_ins_Genera): così contano, mostrano e generano le stesse cose.
@@ -29,7 +30,8 @@ CREATE OR ALTER FUNCTION dbo.ufnFattureGenera_get_Documenti (
 	@IdClienteFornitore CHAR(16),
 	@IncludiPreFatture BIT,
 	@Rifiuti BIT,
-	@Magazzino BIT)
+	@Magazzino BIT,
+	@Servizi BIT)
 RETURNS TABLE
 AS
 RETURN
@@ -116,6 +118,12 @@ RETURN
 					SELECT IdModulo = CAST('MAG' AS CHAR(3)), Id, [Data], Numero, IdAzienda, IdProduttore, IdEer, IdUnitaMisura, Quantita, IsAnnullata, NonFatturabile, IdPreFattura, IdImporto, IdOffertaContratto, IdClienteFornitore, ClienteOrigine, IdImportoScartato, SenzaImporto, Righe, Totale, SenzaIva, Fatturabile
 					FROM dbo.ufnFattureDocumenti_get_Magazzino(@IdSessione, @IdAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture)
 					WHERE @Magazzino = 1
+
+					UNION ALL
+
+					SELECT IdModulo = CAST('SRV' AS CHAR(3)), Id, [Data], Numero, IdAzienda, IdProduttore, IdEer, IdUnitaMisura, Quantita, IsAnnullata, NonFatturabile, IdPreFattura, IdImporto, IdOffertaContratto, IdClienteFornitore, ClienteOrigine, IdImportoScartato, SenzaImporto, Righe, Totale, SenzaIva, Fatturabile
+					FROM dbo.ufnFattureDocumenti_get_Servizi(@IdSessione, @IdAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture)
+					WHERE @Servizi = 1
 				) d
 				LEFT JOIN dbo.tblClientiFornitori c ON d.IdClienteFornitore = c.Id
 		) t

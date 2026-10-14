@@ -3,7 +3,7 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- "Verifica importo e cliente": righe di fattura che la generazione automatica creerebbe per il documento, con
--- l'importo che gli viene applicato (ufnImportiRifiuti_get_ApplicazioneRighe). Stessi controlli di accesso di
+-- l'importo che gli viene applicato (rifiuti, DDT di magazzino o servizi). Stessi controlli di accesso di
 -- uspFattureDocumenti_get: senza accesso, o per un modulo non gestito, nessuna riga e nessun errore.
 CREATE OR ALTER PROCEDURE dbo.uspFattureDocumenti_get_Righe
 	@Id CHAR(16) = NULL,
@@ -88,6 +88,34 @@ BEGIN
 				LEFT JOIN dbo.tblFattureConti c ON g.IdConto = c.Id
 			WHERE a.IsFatturabile = 1
 			ORDER BY g.Gruppo, g.PosDdt, g.IdRigaDdt, ISNULL(g.Pos, 0), g.Id
+			OPTION (RECOMPILE);
+		END
+
+		-- Servizi: le righe dell'importo applicato, prima quelle delle risorse, poi quelle una volta per servizio
+		IF ISNULL(@IdModulo, '') = 'SRV'
+			AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 1
+			AND dbo.ufnFunzioni_get_PermessoBySessione('SRV', @IdSessione) >= 1
+		BEGIN
+			SELECT
+				g.Id,
+				Pos = CAST(ROW_NUMBER() OVER (ORDER BY g.Gruppo, g.PosServizio, ISNULL(g.Pos, 0), g.Id) AS INT),
+				g.Descrizione,
+				g.SolaDescrizione,
+				g.MinimoFatturabile,
+				g.Quantita,
+				UnitaMisura = g.IdUnitaMisura,
+				g.Importo,
+				g.Imponibile,
+				AliquotaIvaNome = v.Nome,
+				ContoNome = ISNULL(c.Codice + ' - ', '') + c.Nome
+			FROM
+				dbo.ufnImportiServizi_get_Applicazione_List(@Id, NULL, NULL, NULL, 0) a
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeInterna = x.Id
+				CROSS APPLY dbo.ufnImportiServizi_get_RigheFattura(a.Id, a.IdClienteFornitore) g
+				LEFT JOIN dbo.tblAliquoteIva v ON g.IdAliquotaIva = v.Id
+				LEFT JOIN dbo.tblFattureConti c ON g.IdConto = c.Id
+			WHERE a.IsFatturabile = 1
+			ORDER BY g.Gruppo, g.PosServizio, ISNULL(g.Pos, 0), g.Id
 			OPTION (RECOMPILE);
 		END
 

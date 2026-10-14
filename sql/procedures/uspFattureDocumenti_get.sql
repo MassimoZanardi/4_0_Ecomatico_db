@@ -6,9 +6,8 @@ GO
 -- rifiuti, DDT di magazzino e servizi): cliente indicato sul documento, spunta "Non fatturabile", fattura in
 -- cui è finito e l'anteprima di ciò che la generazione automatica userebbe ("Verifica importo e cliente":
 -- cliente, importo, contratto, totale e avvisi). Le righe dell'anteprima: uspFattureDocumenti_get_Righe.
--- @IdModulo: RIF registrazione dei rifiuti, MAG movimento di magazzino con il suo DDT (SRV non ancora gestito:
--- nessuna riga). Per il DDT il confronto è per riga: importo, priorità e contratto si vedono solo se sono gli
--- stessi per tutte le righe.
+-- @IdModulo: RIF registrazione dei rifiuti, MAG movimento di magazzino con il suo DDT, SRV servizio (una serie
+-- ricorrente non ha il blocco: si fattura la sola occorrenza modificata). Un solo importo per documento.
 -- Sempre una riga al massimo; nessuna riga (e nessun errore) se il blocco non va mostrato: modulo Offerte e
 -- contratti non attivo sul dominio, documento non accessibile, operazione non fatturabile, rettifica. Così la
 -- scheda del documento non dipende da questo modulo.
@@ -218,6 +217,95 @@ BEGIN
 					-- Articoli e materiali del DDT che l'importo applicato non prezza, per l'avviso
 					SELECT Voci = STRING_AGG(CAST('"' + ISNULL(r.Voce, '') + '"' AS VARCHAR(MAX)), ', ') WITHIN GROUP (ORDER BY ISNULL(r.Pos, 0), r.IdRiga)
 					FROM dbo.ufnImportiMagazzino_get_ApplicazioneRighe_List(@Id, NULL, NULL, NULL, 0) r
+					WHERE r.IdRigaImporto IS NULL
+				) n
+			WHERE a.IsFatturabile = 1
+			OPTION (RECOMPILE);
+		END
+
+		-- Servizi, con il modulo Offerte e contratti attivo sul dominio e almeno la lettura dei servizi. L'importo è
+		-- uno solo per servizio e deve avere una riga per ogni sua risorsa. Il blocco c'è per ogni servizio che non
+		-- sia una serie ricorrente: si fattura solo quando è Eseguito
+		DECLARE @permessoSrv TINYINT = dbo.ufnFunzioni_get_PermessoBySessione('SRV', @IdSessione);
+		IF ISNULL(@IdModulo, '') = 'SRV'
+			AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 1
+			AND @permessoSrv >= 1
+		BEGIN
+			SELECT
+				a.Id,
+				IdModulo = CAST('SRV' AS CHAR(3)),
+				Modificabile = CAST(IIF(@permessoSrv >= 2 AND a.Lock = 0 AND a.IdFattura IS NULL, 1, 0) AS BIT),
+				IdClienteIndicato = a.IdClienteIndicato,
+				ClienteIndicato = si.NomeCompleto + ISNULL(' ' + si.IndirizzoCompleto, ''),
+				a.NonFatturabile,
+				a.IdFattura,
+				Fattura = IIF(a.IdFattura IS NULL, NULL, IIF(f.IdTipo = 'TD00', 'Pre-fattura', 'Fattura'))
+					+ ISNULL(' ' + CAST(f.Numero AS VARCHAR(10)) + ISNULL('/' + f.Sezionale, ''), '')
+					+ ISNULL(' del ' + CONVERT(VARCHAR(10), f.DataEmissione, 103), ''),
+				-- Anteprima
+				a.IdClienteFornitore,
+				Cliente = sc.NomeCompleto + ISNULL(' ' + sc.IndirizzoCompleto, ''),
+				a.ClienteOrigine,
+				ClienteOrigineDescrizione = CASE a.ClienteOrigine
+					WHEN 'D' THEN 'indicato sul servizio'
+					WHEN 'C' THEN 'dal contratto dell''importo'
+					WHEN 'P' THEN 'richiedente del servizio (importo standard)'
+				END,
+				a.IdImporto,
+				Importo = i.Nome,
+				Priorita = p.Nome,
+				Contratto = CASE
+					WHEN a.IdImporto IS NULL THEN NULL
+					WHEN a.IdOffertaContratto IS NULL THEN 'Nessuno (importo standard)'
+					ELSE 'Contratto' + ISNULL(' ' + so.NomeCompleto, '')
+						+ ISNULL(' dal ' + CONVERT(VARCHAR(10), oc.DataInizio, 103), '')
+						+ ISNULL(' al ' + CONVERT(VARCHAR(10), oc.DataFine, 103), '')
+				END,
+				Totale = t.Totale,
+				Fatturabile = CAST(IIF(
+					a.Lock = 0 AND a.IsEseguito = 1 AND a.NonFatturabile = 0 AND a.IdFattura IS NULL
+					AND a.IdImporto IS NOT NULL AND a.RisorseSenzaImporto = 0
+					AND a.IdClienteFornitore IS NOT NULL AND ISNULL(t.Righe, 0) > 0 AND ISNULL(t.SenzaIva, 0) = 0, 1, 0) AS BIT),
+				Avvisi = CAST(STUFF(
+					IIF(a.Lock <> 0, '|Il servizio non è ancora salvato: salvarlo prima di fatturarlo', '')
+					+ IIF(a.Lock = 0 AND a.IsEseguito = 0, '|Il servizio non è ancora eseguito: viene fatturato quando il suo stato è Eseguito', '')
+					+ IIF(a.IdFattura IS NOT NULL, '|Il servizio è già stato fatturato', '')
+					+ IIF(a.NonFatturabile = 1, '|Il servizio è indicato come non fatturabile', '')
+					+ IIF(a.IdImporto IS NULL, '|Nessun importo coincide con il servizio: non viene fatturato', '')
+					+ IIF(a.IdImporto IS NOT NULL AND a.RisorseSenzaImporto > 0, '|L''importo "' + ISNULL(i.Nome, '') + '" non ha una riga per ' + ISNULL(n.Voci, '')
+						+ ': il servizio non viene fatturato', '')
+					+ IIF(a.IdImporto IS NOT NULL AND a.RisorseSenzaImporto = 0 AND ISNULL(t.Righe, 0) = 0, '|L''importo "' + ISNULL(i.Nome, '') + '" non genera righe per questo servizio: non viene fatturato', '')
+					+ IIF(a.IdImportoScartato IS NOT NULL, '|L''importo "' + ISNULL(isc.Nome, '') + '" coincide con il servizio, ma il suo contratto non è valido alla data del servizio'
+						+ IIF(a.IdImporto IS NOT NULL AND a.IdOffertaContratto IS NULL, ': è stato applicato l''importo standard', ''), '')
+					+ IIF(a.IdClienteFornitore IS NULL, '|Cliente non determinato: il richiedente non ha una scheda cliente. Indicare il cliente sul servizio', '')
+					+ IIF(a.IdClienteFornitore IS NOT NULL AND ISNULL(t.SenzaIva, 0) > 0, '|Aliquota IVA non indicata né sulle righe dell''importo né sulla scheda del cliente', '')
+					, 1, 1, '') AS VARCHAR(2000))
+			FROM
+				dbo.ufnImportiServizi_get_Applicazione_List(@Id, NULL, NULL, NULL, 0) a
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeInterna = x.Id
+				LEFT JOIN dbo.tblClientiFornitori ci ON a.IdClienteIndicato = ci.Id
+				LEFT JOIN dbo.tblSedi si ON ci.IdSede = si.Id
+				LEFT JOIN dbo.tblClientiFornitori cc ON a.IdClienteFornitore = cc.Id
+				LEFT JOIN dbo.tblSedi sc ON cc.IdSede = sc.Id
+				LEFT JOIN dbo.tblFatture f ON a.IdFattura = f.Id
+				LEFT JOIN dbo.tblImporti i ON a.IdImporto = i.Id
+				LEFT JOIN dbo.tblImportiPriorita p ON i.IdPriorita = p.Id
+				LEFT JOIN dbo.tblImporti isc ON a.IdImportoScartato = isc.Id
+				LEFT JOIN dbo.tblOfferteContratti oc ON a.IdOffertaContratto = oc.Id
+				LEFT JOIN dbo.tblClientiFornitori co ON oc.IdClienteFornitore = co.Id
+				LEFT JOIN dbo.tblSedi so ON co.IdSede = so.Id
+				OUTER APPLY (
+					-- Righe che entrano in fattura
+					SELECT
+						Totale = SUM(ISNULL(g.Imponibile, 0)),
+						Righe = COUNT(*),
+						SenzaIva = SUM(IIF(g.SolaDescrizione = 0 AND g.IdAliquotaIva IS NULL, 1, 0))
+					FROM dbo.ufnImportiServizi_get_RigheFattura(@Id, a.IdClienteFornitore) g
+				) t
+				OUTER APPLY (
+					-- Risorse del servizio che l'importo applicato non prezza, per l'avviso
+					SELECT Voci = STRING_AGG(CAST('"' + ISNULL(r.Voce, '') + '"' AS VARCHAR(MAX)), ', ') WITHIN GROUP (ORDER BY r.Pos)
+					FROM dbo.ufnImportiServizi_get_ApplicazioneRighe_List(@Id, NULL, NULL, NULL, 0) r
 					WHERE r.IdRigaImporto IS NULL
 				) n
 			WHERE a.IsFatturabile = 1

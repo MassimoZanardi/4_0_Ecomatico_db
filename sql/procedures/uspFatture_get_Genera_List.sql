@@ -25,6 +25,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Genera_List
 	@Esito CHAR(1) = NULL,
 	@Rifiuti BIT = 1,
 	@Magazzino BIT = 0,
+	@Servizi BIT = 0,
 	@IncludiPreFatture BIT = 0,
 	@MaxRighe INT = NULL
 AS
@@ -39,6 +40,7 @@ BEGIN
 		SET @Esito = NULLIF(UPPER(LTRIM(RTRIM(@Esito))), '');
 		SET @Rifiuti = ISNULL(@Rifiuti, 1);
 		SET @Magazzino = ISNULL(@Magazzino, 0);
+		SET @Servizi = ISNULL(@Servizi, 0);
 		SET @IncludiPreFatture = ISNULL(@IncludiPreFatture, 0);
 		SET @MaxRighe = IIF(ISNULL(@MaxRighe, 0) < 1, 1000, @MaxRighe);
 
@@ -77,6 +79,9 @@ BEGIN
 		-- I DDT entrano solo con il modulo Magazzino attivo sul dominio
 		IF ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('MAG', @IdSessione), 0) = 0
 			SET @Magazzino = 0;
+		-- I servizi entrano solo con il modulo Servizi attivo sul dominio
+		IF ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('SRV', @IdSessione), 0) = 0
+			SET @Servizi = 0;
 
 		DECLARE @idAzienda CHAR(16);
 		SELECT @idAzienda = IdAzienda
@@ -116,7 +121,7 @@ BEGIN
 			END AS VARCHAR(300)),
 			RowsCount = COUNT(*) OVER ()
 		FROM
-			dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, @Magazzino) d
+			dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, @Magazzino, @Servizi) d
 			LEFT JOIN dbo.tblRifiutiEer e ON d.IdEer = e.Id
 			-- DDT: sezionale e destinatario (per un DDT d.Id è il movimento e d.IdProduttore il destinatario)
 			LEFT JOIN dbo.tblMagazziniDdt dd ON d.IdModulo = 'MAG'

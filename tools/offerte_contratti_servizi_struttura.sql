@@ -17,7 +17,7 @@ GO
 --   2. tblImportiRigheServizi: risorsa a cui si applica il prezzo di una riga a quantità (tipo SU). Chiave
 --      esterna sulla riga ON DELETE CASCADE: cancellata la riga, sparisce da sola.
 --   3. Il tipo di riga SU si chiama "Risorsa" (era "Unità", dalla 3.1, dove il prezzo era per unità di misura).
---   4. Indici.
+--   4. Indici (anche IX_Eventi_IdCalendario_Data, per leggere i servizi di un periodo).
 -- Rieseguibile. Da eseguire dopo offerte_contratti_struttura.sql.
 
 BEGIN TRANSACTION;
@@ -91,6 +91,12 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ImportiServizi_IdSede'
 -- Righe di importo di una risorsa: controllo di cancellazione della persona o dell'oggetto e chiave esterna
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ImportiRigheServizi_IdOsepe')
 	CREATE NONCLUSTERED INDEX IX_ImportiRigheServizi_IdOsepe ON dbo.tblImportiRigheServizi (IdOsepe);
+
+-- Eventi di un calendario in un periodo: la fatturazione legge i servizi dell'azienda per data
+-- (ufnImportiServizi_get_Documenti)
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Eventi_IdCalendario_Data')
+	CREATE NONCLUSTERED INDEX IX_Eventi_IdCalendario_Data ON dbo.tblEventi (IdCalendario, [Data])
+		INCLUDE (IdStato, Lock);
 
 COMMIT TRANSACTION;
 GO

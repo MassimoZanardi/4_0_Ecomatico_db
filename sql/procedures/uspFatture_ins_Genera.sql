@@ -2,15 +2,15 @@
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Generazione automatica delle fatture clienti dai documenti fatturabili (registrazioni dei rifiuti e DDT di magazzino),
+-- Generazione automatica delle fatture clienti dai documenti fatturabili (registrazioni dei rifiuti, DDT di magazzino e servizi),
 -- con gli importi del modulo Offerte e contratti (regole O5 e O6 di docs/regole/offerte-contratti.md).
---   @Id (con @IdModulo = 'RIF' o 'MAG'): un solo documento, registrazione dei rifiuti o DDT di magazzino
+--   @Id (con @IdModulo = 'RIF', 'MAG' o 'SRV'): un solo documento, registrazione dei rifiuti, DDT di magazzino o servizio
 --        ("Genera la fattura" dalla scheda); l'azienda è quella del
 --        documento. Se il documento non è fatturabile la SP lo rifiuta.
 --   Senza @Id: i documenti dell'azienda interna corrente della sessione con data tra @DataDa e @DataA,
 --        eventualmente riconducibili al solo cliente @IdClienteFornitore (Fatture clienti > Nuovo > Tramite
---        procedura automatica). @Rifiuti e @Magazzino dicono da quali documenti generare (registrazioni dei
---        rifiuti, DDT di magazzino).
+--        procedura automatica). @Rifiuti, @Magazzino e @Servizi dicono da quali documenti generare (registrazioni dei
+--        rifiuti, DDT di magazzino, servizi).
 -- Entrano solo i documenti fatturabili, raggruppati come li mostra la verifica (ufnFattureGenera_get_Documenti).
 -- Una fattura per cliente; secondo il raggruppamento della scheda del cliente (tblClientiFornitori.
 -- IdRaggruppamento) una per sede del produttore (S) o una per contratto (T): solo in quest'ultimo caso la
@@ -39,6 +39,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_ins_Genera
 	@PreFattura BIT = 0,
 	@Rifiuti BIT = 1,
 	@Magazzino BIT = 0,
+	@Servizi BIT = 0,
 	@IncludiPreFatture BIT = 0,
 	@RimuoviPreFatture BIT = 0
 AS
@@ -56,6 +57,7 @@ BEGIN
 		SET @PreFattura = ISNULL(@PreFattura, 0);
 		SET @Rifiuti = ISNULL(@Rifiuti, 1);
 		SET @Magazzino = ISNULL(@Magazzino, 0);
+		SET @Servizi = ISNULL(@Servizi, 0);
 		SET @IncludiPreFatture = ISNULL(@IncludiPreFatture, 0);
 		SET @RimuoviPreFatture = ISNULL(@RimuoviPreFatture, 0);
 
@@ -65,10 +67,10 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		IF @Id IS NOT NULL AND ISNULL(@IdModulo, '') NOT IN ('RIF', 'MAG')
+		IF @Id IS NOT NULL AND ISNULL(@IdModulo, '') NOT IN ('RIF', 'MAG', 'SRV')
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF o MAG';
+			SET @returnMessage = 'Il parametro @IdModulo deve essere RIF, MAG o SRV';
 			GOTO BRANCH_END;
 		END
 		IF @Id IS NULL AND (@DataDa IS NULL OR @DataA IS NULL)
@@ -120,15 +122,20 @@ BEGIN
 		END
 		ELSE
 		BEGIN
-			-- Un solo documento, del suo modulo (registrazione dei rifiuti o DDT di magazzino), senza pre-fatture
+			-- Un solo documento, del suo modulo (registrazione dei rifiuti, DDT di magazzino o servizio), senza pre-fatture
 			SET @Rifiuti = IIF(@IdModulo = 'RIF', 1, 0);
 			SET @Magazzino = IIF(@IdModulo = 'MAG', 1, 0);
+			SET @Servizi = IIF(@IdModulo = 'SRV', 1, 0);
 			SET @IncludiPreFatture = 0;
 		END
 
 		-- Procedura automatica: i DDT entrano solo con il modulo Magazzino attivo sul dominio
 		IF @Id IS NULL AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('MAG', @IdSessione), 0) = 0
 			SET @Magazzino = 0;
+
+		-- Procedura automatica: i servizi entrano solo con il modulo Servizi attivo sul dominio
+		IF @Id IS NULL AND ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('SRV', @IdSessione), 0) = 0
+			SET @Servizi = 0;
 
 		-- Documenti da fatturare, con il raggruppamento della scheda del cliente
 		DECLARE @doc TABLE (
@@ -162,7 +169,7 @@ BEGIN
 			d.GruppoSede,
 			d.GruppoContratto,
 			d.Fatturabile
-		FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, @Magazzino) d
+		FROM dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, @Id, @DataDa, @DataA, @IdClienteFornitore, @IncludiPreFatture, @Rifiuti, @Magazzino, @Servizi) d
 		WHERE
 			(@Id IS NOT NULL OR d.Fatturabile = 1)
 		OPTION (RECOMPILE);
@@ -249,6 +256,31 @@ BEGIN
 					d.Fatturabile = 1
 					AND d.IdPreFattura IS NULL
 					AND d.IdModulo = 'MAG'
+
+				UNION ALL
+
+				-- Servizi: le righe dell'importo applicato, prima quelle delle risorse, poi quelle una volta per servizio
+				SELECT
+					IdDocumento = d.Id,
+					d.[Data],
+					d.Numero,
+					Pos = g.Gruppo * 100000000 + g.PosServizio * 10000 + ISNULL(g.Pos, 0),
+					Ordine = g.Id,
+					g.Descrizione,
+					g.SolaDescrizione,
+					g.Quantita,
+					g.IdUnitaMisura,
+					g.Importo,
+					g.IdAliquotaIva,
+					g.IdConto,
+					RitenutaAcconto = CAST(NULL AS INT)
+				FROM
+					@doc d
+					CROSS APPLY dbo.ufnImportiServizi_get_RigheFattura(d.Id, d.IdClienteFornitore) g
+				WHERE
+					d.Fatturabile = 1
+					AND d.IdPreFattura IS NULL
+					AND d.IdModulo = 'SRV'
 
 				UNION ALL
 

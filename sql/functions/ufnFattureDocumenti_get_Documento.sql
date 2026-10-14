@@ -3,11 +3,12 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- Blocco "Cliente a cui fatturare": il documento @Id del modulo @IdModulo (RIF registrazione dei rifiuti, MAG
--- movimento di magazzino con il suo DDT), se la sessione lo vede (titolarità sulla sede del registro o del DDT).
--- Una riga al massimo. Serve alle SP uspFattureDocumenti_*, così permessi e dati di base del documento sono
--- letti nello stesso modo per ogni modulo.
+-- movimento di magazzino con il suo DDT, SRV servizio), se la sessione lo vede (titolarità sulla sede del registro,
+-- del DDT o del calendario del servizio). Una riga al massimo. Serve alle SP uspFattureDocumenti_*, così permessi
+-- e dati di base del documento sono letti nello stesso modo per ogni modulo.
 -- IsFatturabile: registrazione di un'operazione fatturabile e non rettifica; DDT emesso di un movimento di
--- scarico con una causale fatturabile. Lock: 0 se il documento è confermato.
+-- scarico con una causale fatturabile; servizio che non è una serie ricorrente. Lock: 0 se il documento è
+-- confermato.
 CREATE OR ALTER FUNCTION dbo.ufnFattureDocumenti_get_Documento (
 	@Id CHAR(16),
 	@IdModulo CHAR(3),
@@ -43,5 +44,20 @@ RETURN
 		dbo.ufnImportiMagazzino_get_Applicazione_List(@Id, NULL, NULL, NULL, 0) a
 		INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeDdt = x.Id
 	WHERE @IdModulo = 'MAG'
+
+	UNION ALL
+
+	SELECT
+		a.Id,
+		IdModulo = CAST('SRV' AS CHAR(3)),
+		a.IdAzienda,
+		a.Lock,
+		a.IsFatturabile,
+		a.IdFattura,
+		a.IdClienteIndicato
+	FROM
+		dbo.ufnImportiServizi_get_Applicazione_List(@Id, NULL, NULL, NULL, 0) a
+		INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) x ON a.IdSedeInterna = x.Id
+	WHERE @IdModulo = 'SRV'
 );
 GO

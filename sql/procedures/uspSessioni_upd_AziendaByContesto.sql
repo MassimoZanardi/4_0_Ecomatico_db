@@ -60,6 +60,22 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 		END
+		ELSE IF @Contesto = 5 -- Calendario: l'azienda è quella della sede del calendario
+		BEGIN
+			UPDATE e
+			SET IdAzienda = s.IdAziendaInterna
+			FROM dbo.tblSessioni e
+			INNER JOIN dbo.tblCalendari c ON e.IdCalendario = c.Id
+			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
+			WHERE e.Id = @Id;
+
+			IF @@ROWCOUNT = 0
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Sessione non trovata o calendario non impostato';
+				GOTO BRANCH_END;
+			END
+		END
 		ELSE
 		BEGIN
 			SET @returnValue = -1;

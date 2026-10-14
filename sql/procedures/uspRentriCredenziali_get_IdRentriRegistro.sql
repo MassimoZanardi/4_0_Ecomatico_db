@@ -28,12 +28,21 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Controlla il permesso sulla funzione
+		-- Controlla il permesso sulla funzione: configurazione RENTRI (RNT) oppure Firma remota (RFX), che collega la credenziale di firma
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
 			@IdFunzione = 'RNT',
 			@Permesso = @permesso OUTPUT;
+		SET @permesso = ISNULL(@permesso, 0);
+
+		DECLARE @permessoRfx TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'RFX',
+			@Permesso = @permessoRfx OUTPUT;
+		IF ISNULL(@permessoRfx, 0) > @permesso SET @permesso = @permessoRfx;
+
 		IF 1 > @permesso
 		BEGIN
 			SET @returnValue = -1;

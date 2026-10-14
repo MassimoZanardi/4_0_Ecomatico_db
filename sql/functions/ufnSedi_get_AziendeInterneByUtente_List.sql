@@ -23,8 +23,10 @@ RETURN
 		AND s.Lock = 0
 	UNION ALL -- ✅ i due rami sono mutualmente esclusivi: UNION ALL evita DISTINCT inutile
 
-	-- Utenti standard: solo le aziende interne direttamente associate
-	SELECT
+	-- Utenti standard: solo le aziende interne direttamente associate. DISTINCT: un utente associato a più sedi
+	-- della stessa azienda la riceverebbe più volte, e con lei ogni sede esterna, persona e oggetto dell'azienda
+	-- (errore 1505 sull'indice unico di #sediUtente in uspRifiutiAutorizzazioni_get_SelectList)
+	SELECT DISTINCT
 		i.Id,
 		i.IdDominio
 	FROM

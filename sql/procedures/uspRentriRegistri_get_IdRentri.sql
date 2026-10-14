@@ -28,12 +28,28 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Controlla il permesso sulla funzione
+		-- Controlla il permesso sulla funzione: configurazione RENTRI (RNT) oppure le pagine che inviano e leggono dal RENTRI (Registrazioni RRG, Formulari RFR)
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
 			@IdFunzione = 'RNT',
 			@Permesso = @permesso OUTPUT;
+		SET @permesso = ISNULL(@permesso, 0);
+
+		DECLARE @permessoRrg TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'RRG',
+			@Permesso = @permessoRrg OUTPUT;
+		IF ISNULL(@permessoRrg, 0) > @permesso SET @permesso = @permessoRrg;
+
+		DECLARE @permessoRfr TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'RFR',
+			@Permesso = @permessoRfr OUTPUT;
+		IF ISNULL(@permessoRfr, 0) > @permesso SET @permesso = @permessoRfr;
+
 		IF 1 > @permesso
 		BEGIN
 			SET @returnValue = -1;

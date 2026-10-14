@@ -32,7 +32,12 @@ BEGIN
 		END
 
 		DECLARE @idDominioSessione CHAR(16);
-		SELECT @idDominioSessione = a.IdDominio
+		DECLARE @idUtenteSessione CHAR(16);
+		DECLARE @isAdminSessione BIT;
+		SELECT
+			@idDominioSessione = a.IdDominio,
+			@idUtenteSessione = a.Id,
+			@isAdminSessione = CAST(IIF(a.IdRuolo = 'AD', 1, 0) AS BIT)
 		FROM dbo.tblSessioni s INNER JOIN dbo.tblUtenti a ON a.Id = s.IdUtente
 		WHERE s.Id = @IdSessione;
 
@@ -73,6 +78,12 @@ BEGIN
 			u.IdDominio = @IdDominio
 			AND u.Lock = 0
 			AND ISNULL(u.[Master], 0) = 0
+			-- Chi non è Amministratore vede solo se stesso (Firma remota: ognuno collega la propria)
+			AND
+				(
+				@isAdminSessione = 1
+				OR u.Id = @idUtenteSessione
+				)
 		ORDER BY Pos, [Text];
 
 	END TRY

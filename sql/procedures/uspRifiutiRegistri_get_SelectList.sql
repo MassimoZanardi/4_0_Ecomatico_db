@@ -21,12 +21,42 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Controlla il permesso sulla funzione
+		-- Controlla il permesso sulla funzione: Registri rifiuti (RRT) oppure le pagine che lavorano con il registro nel contesto (Registrazioni RRG, Formulari RFR, Modelli RMD, Gestione EoW EOW)
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
 			@IdFunzione = 'RRT',
 			@Permesso = @permesso OUTPUT;
+		SET @permesso = ISNULL(@permesso, 0);
+
+		DECLARE @permessoRrg TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'RRG',
+			@Permesso = @permessoRrg OUTPUT;
+		IF ISNULL(@permessoRrg, 0) > @permesso SET @permesso = @permessoRrg;
+
+		DECLARE @permessoRfr TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'RFR',
+			@Permesso = @permessoRfr OUTPUT;
+		IF ISNULL(@permessoRfr, 0) > @permesso SET @permesso = @permessoRfr;
+
+		DECLARE @permessoRmd TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'RMD',
+			@Permesso = @permessoRmd OUTPUT;
+		IF ISNULL(@permessoRmd, 0) > @permesso SET @permesso = @permessoRmd;
+
+		DECLARE @permessoEow TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'EOW',
+			@Permesso = @permessoEow OUTPUT;
+		IF ISNULL(@permessoEow, 0) > @permesso SET @permesso = @permessoEow;
+
 		IF 1 > @permesso
 		BEGIN
 			SET @returnValue = -1;

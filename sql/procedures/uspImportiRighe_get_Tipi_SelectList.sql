@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 -- Select dei tipi di riga di un importo per il modulo indicato (RIF, MAG, SRV): dato di riferimento
 -- (tblImportiRigheTipi). Il tipo dice per che cosa si moltiplica l'importo della riga: una volta per documento
--- (Movimento, Servizio) oppure per la quantità (KG, T, L, articolo, unità).
+-- (Movimento, Servizio) oppure per la quantità (KG, T, L, articolo, risorsa).
 CREATE OR ALTER PROCEDURE dbo.uspImportiRighe_get_Tipi_SelectList
 	@IdModulo CHAR(3) = NULL,
 	@IdSelected CHAR(2) = NULL

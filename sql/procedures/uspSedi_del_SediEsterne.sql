@@ -213,7 +213,7 @@ BEGIN
 					SELECT 1
 					FROM dbo.tblImportiServizi v
 					INNER JOIN dbo.tblImporti i ON v.Id = i.Id
-					WHERE i.Lock = 0 AND @Id IN (v.IdRichiedenteParent, v.IdRichiedente, v.IdEsecutore)
+					WHERE i.Lock = 0 AND @Id IN (v.IdRichiedenteParent, v.IdRichiedente)
 				)
 			BEGIN
 				SET @returnValue = -1;

@@ -110,6 +110,23 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Risorsa con un prezzo in un importo dei servizi attivo (riga di tipo Risorsa)
+			IF EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblImportiRigheServizi x
+					INNER JOIN dbo.tblImportiRighe g ON x.Id = g.Id
+					INNER JOIN dbo.tblImporti i ON g.IdImporto = i.Id
+				WHERE
+					x.IdOsepe = @Id
+					AND i.Lock = 0
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Una persona indicata in un importo non può essere cancellata';
+				GOTO BRANCH_END;
+			END
+
 			BEGIN TRANSACTION;
 				UPDATE dbo.tblPersone
 				SET Lock = 4

@@ -21,7 +21,9 @@ CREATE OR ALTER PROCEDURE dbo.uspImportiRighe_upd
 	@Descrizione VARCHAR(1000) = NULL,
 	-- Solo per gli importi di magazzino: articolo oppure materiale EoW della riga a quantità (tipo MA)
 	@IdArticolo CHAR(16) = NULL,
-	@IdMateriale CHAR(2) = NULL
+	@IdMateriale CHAR(2) = NULL,
+	-- Solo per gli importi dei servizi: risorsa (persona o oggetto) della riga a quantità (tipo SU)
+	@IdOsepe CHAR(16) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -39,6 +41,7 @@ BEGIN
 		SET @Descrizione = NULLIF(LTRIM(RTRIM(@Descrizione)), '');
 		SET @IdArticolo = NULLIF(NULLIF(LTRIM(RTRIM(@IdArticolo)), ''), REPLICATE('0', 16));
 		SET @IdMateriale = NULLIF(NULLIF(LTRIM(RTRIM(@IdMateriale)), ''), REPLICATE('0', 2));
+		SET @IdOsepe = NULLIF(NULLIF(LTRIM(RTRIM(@IdOsepe)), ''), REPLICATE('0', 16));
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -207,6 +210,65 @@ BEGIN
 				SET @IdMateriale = NULL;
 			END
 
+			-- Importi dei servizi: l'importo è un listino. La riga a quantità (SU) senza minimo indica la risorsa
+			-- (persona o oggetto impiegabile nei servizi) a cui si applica il prezzo, per la quantità della risorsa
+			-- nel servizio: obbligatoria (una riga generica nasconderebbe le risorse nuove non ancora prezzate) e
+			-- una sola volta per importo; le altre righe non la indicano
+			IF @idModulo = 'SRV' AND @IdTipo = 'SU' AND @MinimoFatturabile = 0
+			BEGIN
+				IF @IdOsepe IS NULL
+				BEGIN
+					SET @returnValue = -1;
+					SET @returnMessage = 'Indicare la risorsa a cui si applica l''importo della riga';
+					GOTO BRANCH_END;
+				END
+				-- Tra quelle che l'utente vede (dell'azienda o condivise nel dominio), come nella select; quella già
+				-- sulla riga resta valida
+				IF NOT EXISTS (SELECT 1 FROM dbo.tblImportiRigheServizi x WHERE x.Id = @Id AND x.IdOsepe = @IdOsepe)
+				   AND NOT EXISTS (
+					SELECT 1
+					FROM
+						dbo.tblSessioni e
+						CROSS APPLY dbo.ufnOsepe_get_ByUtente_List(e.IdUtente) u
+					WHERE
+						e.Id = @IdSessione
+						AND u.Id = @IdOsepe
+						AND
+							(
+								(
+								u.IdDominio = e.IdDominio
+								AND u.Condivisa = 1
+								)
+							OR u.IdSede = @idAzienda
+							)
+						AND u.Tipo IN ('P', 'O')
+						AND u.Disabilitata = 0
+						AND u.ImpiegabileServizi = 1
+				)
+				BEGIN
+					SET @returnValue = -1;
+					SET @returnMessage = 'La risorsa indicata non esiste o non è impiegabile nei servizi';
+					GOTO BRANCH_END;
+				END
+				IF EXISTS (
+					SELECT 1
+					FROM
+						dbo.tblImportiRighe g
+						INNER JOIN dbo.tblImportiRigheServizi x ON g.Id = x.Id
+					WHERE
+						g.IdImporto = @IdImporto
+						AND (@Id IS NULL OR g.Id <> @Id)
+						AND x.IdOsepe = @IdOsepe
+				)
+				BEGIN
+					SET @returnValue = -1;
+					SET @returnMessage = 'L''importo ha già una riga per questa risorsa';
+					GOTO BRANCH_END;
+				END
+			END
+			ELSE
+				SET @IdOsepe = NULL;
+
 			-- Al massimo una riga con il minimo fatturabile per importo
 			IF @MinimoFatturabile = 1 AND EXISTS (
 				SELECT 1
@@ -235,6 +297,7 @@ BEGIN
 			SET @IdConto = NULL;
 			SET @IdArticolo = NULL;
 			SET @IdMateriale = NULL;
+			SET @IdOsepe = NULL;
 		END
 
 		-- Nuova riga: uspId_get FUORI dalla transazione
@@ -277,6 +340,14 @@ BEGIN
 			IF @IdArticolo IS NOT NULL OR @IdMateriale IS NOT NULL
 				INSERT dbo.tblImportiRigheMagazzino (Id, IdArticolo, IdMateriale)
 				VALUES (@Id, @IdArticolo, @IdMateriale);
+
+			-- Risorsa della riga a quantità di un importo dei servizi
+			DELETE dbo.tblImportiRigheServizi
+			WHERE Id = @Id;
+
+			IF @IdOsepe IS NOT NULL
+				INSERT dbo.tblImportiRigheServizi (Id, IdOsepe)
+				VALUES (@Id, @IdOsepe);
 		COMMIT TRANSACTION;
 
 		SELECT Id = @Id;

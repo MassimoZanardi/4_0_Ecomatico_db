@@ -21,7 +21,8 @@ BEGIN
 			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		IF @IdUtente IS NULL
+		-- Senza utente, con @Reset = 1, si tolgono tutte le assegnazioni dell'evento (nessun utente spuntato)
+		IF @IdUtente IS NULL AND ISNULL(@Reset, 0) = 0
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Il parametro @IdUtente non può essere vuoto';
@@ -44,6 +45,46 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Gli utenti li assegna solo un amministratore, l'unico che vede gli utenti del dominio
+		IF NOT EXISTS (
+			SELECT 1
+			FROM dbo.tblSessioni s
+			INNER JOIN dbo.tblUtenti u ON s.IdUtente = u.Id
+			WHERE
+				s.Id = @IdSessione
+				AND u.IdRuolo = 'AD'
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Togliere tutte le assegnazioni: basta che l'evento sia di un calendario accessibile
+		IF @IdUtente IS NULL
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1
+				FROM dbo.tblEventi e
+				INNER JOIN dbo.tblCalendari c ON e.IdCalendario = c.Id
+				INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i ON c.IdSede = i.Id
+				WHERE e.Id = @Id
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Evento o utente non validi';
+				GOTO BRANCH_END;
+			END
+
+			BEGIN TRANSACTION;
+				DELETE dbo.tblEventiUtenti
+				WHERE Id = @Id;
+			COMMIT TRANSACTION;
+
+			SELECT @returnValue AS ReturnValue;
 			GOTO BRANCH_END;
 		END
 

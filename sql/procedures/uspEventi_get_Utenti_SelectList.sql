@@ -38,6 +38,21 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Gli utenti del dominio li vede, e li assegna, solo un amministratore
+		IF NOT EXISTS (
+			SELECT 1
+			FROM dbo.tblSessioni s
+			INNER JOIN dbo.tblUtenti u ON s.IdUtente = u.Id
+			WHERE
+				s.Id = @IdSessione
+				AND u.IdRuolo = 'AD'
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
 		-- Titolarità: mancava la verifica che @Id (l'Evento) appartenesse a un
 		-- calendario/sede accessibile dalla sessione — presente invece nei SP
 		-- "fratelli" upd_Utente/upd_Proprieta. Stesso pattern applicato qui.

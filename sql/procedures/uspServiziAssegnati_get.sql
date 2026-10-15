@@ -45,7 +45,8 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Verifica che il servizio appartenga a un calendario accessibile dalla sessione
+		-- Verifica che il servizio appartenga a un calendario accessibile dalla sessione e sia assegnato all'utente
+		-- della sessione: in Servizi > Assegnati ognuno vede e gestisce solo i propri servizi
 		IF NOT EXISTS (
 			SELECT 1
 			FROM dbo.tblServizi s
@@ -53,6 +54,8 @@ BEGIN
 			INNER JOIN dbo.tblCalendari c ON e.IdCalendario = c.Id
 			INNER JOIN dbo.ufnSedi_get_SediInterneBySessione_List(@IdSessione) i
 					   ON c.IdSede = i.Id
+			INNER JOIN dbo.tblEventiUtenti u ON e.Id = u.Id
+			INNER JOIN dbo.tblSessioni ss ON u.IdUtente = ss.IdUtente AND ss.Id = @IdSessione
 			WHERE s.Id = @Id)
 		BEGIN
 			SET @returnValue = -1;

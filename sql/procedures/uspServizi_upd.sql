@@ -110,10 +110,11 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		IF @Ricorre = 1 AND @Data < '20220101'
+		-- Limiti della serie: le date ammesse dall'applicazione (ufnDate_get_Min / _Max = Constants.SQL.MinDate / MaxDate)
+		IF @Ricorre = 1 AND @Data < dbo.ufnDate_get_Min()
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'La data minima per le scadenze ricorrenti è il 01/01/2022';
+			SET @returnMessage = 'La data minima per i servizi ricorrenti è il ' + FORMAT(dbo.ufnDate_get_Min(), 'dd/MM/yyyy');
 			GOTO BRANCH_END;
 		END
 
@@ -140,7 +141,7 @@ BEGIN
 
 		IF @IdIntervallo = 'YY'
 		BEGIN
-			SET @frequenzaMax = DATEDIFF(YEAR, @Data, '20501231') - 1;
+			SET @frequenzaMax = DATEDIFF(YEAR, @Data, dbo.ufnDate_get_Max()) - 1;
 			IF @Frequenza > @frequenzaMax
 			BEGIN
 				SET @returnValue = -1;
@@ -150,7 +151,7 @@ BEGIN
 		END
 		ELSE IF @IdIntervallo = 'MM'
 		BEGIN
-			SET @frequenzaMax = DATEDIFF(MONTH, @Data, '20501231') - 1;
+			SET @frequenzaMax = DATEDIFF(MONTH, @Data, dbo.ufnDate_get_Max()) - 1;
 			IF @Frequenza > @frequenzaMax
 			BEGIN
 				SET @returnValue = -1;

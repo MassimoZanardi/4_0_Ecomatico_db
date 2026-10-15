@@ -104,6 +104,8 @@ BEGIN
 
 			NessunaRegistrazioneAssociata = CASE
 														WHEN r.Lock = 2 THEN 0
+														-- Solo scarico a terzi (S): procedura semplificata dei centri di raccolta
+														WHEN m.IdOperazione <> 'S' THEN 0
 														WHEN EXISTS(
 															SELECT 1
 															FROM dbo.tblRifiutiRegistrazioniRelazioni rel

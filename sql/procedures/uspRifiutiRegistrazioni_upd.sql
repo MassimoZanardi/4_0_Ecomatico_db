@@ -135,6 +135,22 @@ BEGIN
 		DECLARE @rentriData DATETIME2(0);
 		DECLARE @conservazioneSostitutiva BIT;
 
+		-- "Nessuna registrazione associata" vale solo per lo scarico a terzi (S, aT): procedura semplificata del
+		-- RENTRI per i centri di raccolta. Sulle altre operazioni viene ignorata, salvo per le rettifiche, che la
+		-- impostano sempre (uspRifiutiRegistrazioni_upd_Rettifica: non hanno mai relazioni proprie)
+		IF @NessunaRegistrazioneAssociata = 1
+			AND NOT EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblRifiutiRegistrazioni r
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				WHERE
+					r.Id = @Id
+					AND m.IdOperazione = 'S'
+			)
+			AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriRegistrazioniRettifiche WHERE IdRettifica = @Id)
+			SET @NessunaRegistrazioneAssociata = 0;
+
 		-- Recupero dati registrazione
 		SELECT
 			@idMovimento = r.IdMovimento,

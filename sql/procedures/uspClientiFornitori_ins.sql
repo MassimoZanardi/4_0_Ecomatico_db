@@ -59,10 +59,11 @@ BEGIN
 		-- uspId_get FUORI dalla transazione
 		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
 
-		-- Bozza: il soggetto si sceglie nella scheda. Valori predefiniti: valuta euro; decorrenza delle rate dalla data fattura (DF); giorno del mese, importo minimo fatturabile e ritenuta d'acconto a 0
+		-- Bozza: il soggetto si sceglie nella scheda. Valori predefiniti: valuta euro; decorrenza delle rate dalla data fattura (DF); giorno del mese, importo minimo fatturabile e ritenuta d'acconto a 0; per un cliente
+		-- le fatture della procedura automatica raggruppate per cliente (C)
 		BEGIN TRANSACTION;
-			INSERT dbo.tblClientiFornitori (Id, IdAziendaInterna, Tipo, IdValuta, IdRataInizio, SplitPayment, RataGiorniInizio, ImportoMinimoFatturabile, RitenutaAcconto, Lock)
-			VALUES (@returnId, @idAzienda, @Tipo, 'EUR', 'DF', 0, 0, 0, 0, 2);
+			INSERT dbo.tblClientiFornitori (Id, IdAziendaInterna, Tipo, IdValuta, IdRataInizio, SplitPayment, RataGiorniInizio, ImportoMinimoFatturabile, RitenutaAcconto, IdRaggruppamento, Lock)
+			VALUES (@returnId, @idAzienda, @Tipo, 'EUR', 'DF', 0, 0, 0, 0, IIF(@Tipo = 'C', 'C', NULL), 2);
 		COMMIT TRANSACTION;
 
 		SELECT Id = @returnId;

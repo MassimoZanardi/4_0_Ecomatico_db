@@ -86,6 +86,8 @@ BEGIN
 			c.CodiceDestinatario,
 			c.PecDestinatario,
 			c.Note,
+			-- Raggruppamento delle fatture: per i clienti, per cliente (C) se non indicato
+			IdRaggruppamento = IIF(c.Tipo = 'C', ISNULL(c.IdRaggruppamento, 'C'), NULL),
 			c.Lock,
 			SedeNomeCompleto = s.NomeCompleto,
 			SedeIndirizzoCompleto = s.IndirizzoCompleto,

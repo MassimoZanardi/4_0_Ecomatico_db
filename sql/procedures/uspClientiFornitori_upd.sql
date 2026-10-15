@@ -19,7 +19,8 @@ CREATE OR ALTER PROCEDURE dbo.uspClientiFornitori_upd
 	@RitenutaAcconto INT = NULL,
 	@CodiceDestinatario VARCHAR(20) = NULL,
 	@PecDestinatario VARCHAR(100) = NULL,
-	@Note VARCHAR(1000) = NULL
+	@Note VARCHAR(1000) = NULL,
+	@IdRaggruppamento CHAR(1) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -47,6 +48,7 @@ BEGIN
 		SET @CodiceDestinatario = NULLIF(UPPER(REPLACE(LTRIM(RTRIM(@CodiceDestinatario)), ' ', '')), '');
 		SET @PecDestinatario = NULLIF(LOWER(LTRIM(RTRIM(@PecDestinatario))), '');
 		SET @Note = dbo.ufnStringhe_get_SenzaSpazi(@Note, 0, 1);
+		SET @IdRaggruppamento = NULLIF(UPPER(LTRIM(RTRIM(@IdRaggruppamento))), '');
 
 		IF @Id IS NULL
 		BEGIN
@@ -267,6 +269,21 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Raggruppamento delle fatture della procedura automatica (tblFattureRaggruppamenti): solo per i clienti,
+		-- per cliente (C) se non indicato; i fornitori non ne hanno
+		IF @tipo = 'C'
+		BEGIN
+			SET @IdRaggruppamento = ISNULL(@IdRaggruppamento, 'C');
+			IF NOT EXISTS (SELECT 1 FROM dbo.tblFattureRaggruppamenti WHERE Id = @IdRaggruppamento)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Il raggruppamento delle fatture indicato non esiste';
+				GOTO BRANCH_END;
+			END
+		END
+		ELSE
+			SET @IdRaggruppamento = NULL;
+
 		BEGIN TRANSACTION;
 			UPDATE dbo.tblClientiFornitori
 			SET
@@ -285,7 +302,8 @@ BEGIN
 				RitenutaAcconto = @RitenutaAcconto,
 				CodiceDestinatario = @CodiceDestinatario,
 				PecDestinatario = @PecDestinatario,
-				Note = @Note
+				Note = @Note,
+				IdRaggruppamento = @IdRaggruppamento
 			WHERE
 				Id = @Id
 				AND Lock <= 2;

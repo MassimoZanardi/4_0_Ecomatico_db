@@ -113,10 +113,16 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			IF ISNULL(@accreditamentoPrimaria, '') = 'D' AND ISNULL(@accreditamentoSecondaria, '') = 'D'
+			-- La seconda credenziale serve solo alle associazioni di categoria: la credenziale da
+			-- Delegato per le API che prevedono l'accreditamento, quella da Operatore del cliente per
+			-- le altre (formulari digitali). Ogni altra coppia non ha senso.
+			IF NOT (
+				(ISNULL(@accreditamentoPrimaria, '') = 'D' AND ISNULL(@accreditamentoSecondaria, '') = 'O')
+				OR (ISNULL(@accreditamentoPrimaria, '') = 'O' AND ISNULL(@accreditamentoSecondaria, '') = 'D')
+			)
 			BEGIN
 				SET @returnValue = -1;
-				SET @returnMessage = 'Non è possibile associare due credenziali con accreditamento Delegato';
+				SET @returnMessage = 'Due credenziali si associano solo se una è da Delegato e l''altra da Operatore';
 				GOTO BRANCH_END;
 			END
 		END
@@ -138,6 +144,15 @@ BEGIN
 		END
 
 		BEGIN TRANSACTION;
+
+			-- Collegamento hub tra la sede da Delegato e la credenziale da Operatore del cliente
+			-- (tblSediOperatori): si toglie qui e si riscrive in fondo dalle posizioni finali
+			DELETE [1_0_rentri]..tblSediOperatori
+			WHERE Id COLLATE DATABASE_DEFAULT IN (
+				SELECT rcs.IdRentri COLLATE DATABASE_DEFAULT
+				FROM dbo.tblRentriCredenzialiSedi rcs
+				WHERE rcs.IdSede = @IdSede
+			);
 
 			-- Rimuove le associazioni esistenti non più presenti nelle 2 posizioni finali
 			DELETE [1_0_rentri]..tblSedi
@@ -201,6 +216,13 @@ BEGIN
 					INSERT INTO dbo.tblRentriCredenzialiSedi (IdSede, IdCredenziale, IdRentri, Pos)
 					VALUES (@IdSede, @idCredenzialePos1, @idRentriAssocPos1, 1);
 				END
+
+				-- Con due credenziali la posizione 0 è sempre da Delegato e la 1 da Operatore:
+				-- l'hub usa la seconda per i formulari digitali (uspConnector_get_ByRegistro_Operatore)
+				INSERT INTO [1_0_rentri]..tblSediOperatori (Id, IdCredenziale)
+				SELECT rcs.IdRentri, @idRentriCredPos1
+				FROM dbo.tblRentriCredenzialiSedi rcs
+				WHERE rcs.IdSede = @IdSede AND rcs.IdCredenziale = @idCredenzialePos0;
 			END
 
 		COMMIT TRANSACTION;

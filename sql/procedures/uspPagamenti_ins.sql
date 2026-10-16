@@ -6,8 +6,11 @@ GO
 -- (@Tipo = C, incasso) o dei fornitori (@Tipo = F, pagamento). Un pagamento può coprire più rate, anche di
 -- fatture diverse: l'importo si distribuisce sulle rate in ordine di scadenza, fino al residuo di ciascuna.
 -- Ammesso il pagamento parziale, non un importo superiore al residuo complessivo. Le rate delle note di
--- credito si pagano da sole (nessuna compensazione): il movimento ha il verso opposto (uscita verso un
--- cliente, entrata da un fornitore). Si registra anche su una fattura in sola lettura: il pagamento non
+-- credito pagate da sole hanno il verso opposto (uscita verso un cliente, entrata da un fornitore).
+-- Rate di fatture e di note di credito insieme (solo dello stesso cliente o fornitore) = pagamento al netto:
+-- la parte più piccola si chiude per intero, sulla più grande si distribuiscono la parte più piccola più
+-- l'importo pagato, che non supera il netto e può essere zero (sola compensazione); il verso è quello della
+-- parte più grande. Si registra anche su una fattura in sola lettura: il pagamento non
 -- modifica il documento. @DataContabile è la data del movimento, @DataRegistrazione quella in cui lo si registra
 -- (oggi se non indicata).
 -- Restituisce l'Id del pagamento.
@@ -124,7 +127,7 @@ BEGIN
 			SET @returnMessage = 'La causale non può superare i 100 caratteri';
 			GOTO BRANCH_END;
 		END
-		IF @Importo IS NULL OR @Importo <= 0
+		IF @Importo IS NULL OR @Importo < 0
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'L''importo del pagamento deve essere maggiore di zero';
@@ -143,14 +146,16 @@ BEGIN
 			DataScadenza DATE NOT NULL,
 			Residuo DECIMAL(18, 2) NOT NULL,
 			NotaCredito BIT NOT NULL,
+			IdClienteFornitore CHAR(16) COLLATE DATABASE_DEFAULT NULL,
 			Quota DECIMAL(18, 2) NOT NULL DEFAULT 0
 		);
-		INSERT @rate (Id, DataScadenza, Residuo, NotaCredito)
+		INSERT @rate (Id, DataScadenza, Residuo, NotaCredito, IdClienteFornitore)
 		SELECT
 			r.Id,
 			ISNULL(r.DataScadenza, '99991231'),
 			ISNULL(r.Importo, 0) - ISNULL(r.Abbuono, 0) - x.Pagato,
-			IIF(f.IdTipo = 'TD04', 1, 0)
+			IIF(f.IdTipo = 'TD04', 1, 0),
+			f.IdClienteFornitore
 		FROM
 			@richieste q
 			INNER JOIN dbo.tblFattureRate r ON q.Id = r.Id
@@ -183,25 +188,39 @@ BEGIN
 			SET @returnMessage = 'Una delle rate selezionate è già saldata';
 			GOTO BRANCH_END;
 		END
-		IF (SELECT COUNT(DISTINCT NotaCredito) FROM @rate) > 1
+		-- Fatture e note di credito insieme: pagamento al netto, solo verso lo stesso cliente o fornitore
+		DECLARE @mista BIT = IIF((SELECT COUNT(DISTINCT NotaCredito) FROM @rate) > 1, 1, 0);
+		IF @mista = 1 AND (SELECT COUNT(DISTINCT ISNULL(IdClienteFornitore, '')) FROM @rate) > 1
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Le rate delle note di credito si pagano separatamente da quelle delle fatture';
+			SET @returnMessage = 'Le rate delle fatture e delle note di credito si pagano insieme solo se sono dello stesso ' + IIF(@Tipo = 'C', 'cliente', 'fornitore');
+			GOTO BRANCH_END;
+		END
+		-- Importo zero solo per la compensazione tra fatture e note di credito
+		IF @Importo = 0 AND @mista = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'L''importo del pagamento deve essere maggiore di zero';
 			GOTO BRANCH_END;
 		END
 
-		DECLARE @residuo DECIMAL(18, 2) = (SELECT SUM(Residuo) FROM @rate);
-		IF @Importo > @residuo
+		-- Parte più grande (fatture o note di credito): su di essa si distribuiscono la parte più piccola, che si
+		-- chiude per intero, più l'importo pagato; senza note di credito (o senza fatture) la parte più piccola è zero
+		DECLARE @fatture DECIMAL(18, 2) = (SELECT ISNULL(SUM(Residuo), 0) FROM @rate WHERE NotaCredito = 0);
+		DECLARE @noteCredito DECIMAL(18, 2) = (SELECT ISNULL(SUM(Residuo), 0) FROM @rate WHERE NotaCredito = 1);
+		DECLARE @grandeNotaCredito BIT = IIF(@noteCredito > @fatture, 1, 0);
+		DECLARE @piccola DECIMAL(18, 2) = IIF(@grandeNotaCredito = 1, @fatture, @noteCredito);
+		DECLARE @netto DECIMAL(18, 2) = ABS(@fatture - @noteCredito);
+		IF @Importo > @netto
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'L''importo supera il residuo delle rate selezionate (' + FORMAT(@residuo, 'N2', 'it-IT') + ')';
+			SET @returnMessage = 'L''importo supera ' + IIF(@mista = 1, 'il netto', 'il residuo') + ' delle rate selezionate (' + FORMAT(@netto, 'N2', 'it-IT') + ')';
 			GOTO BRANCH_END;
 		END
 
-		-- Verso del movimento: entrata per l'incasso da un cliente e per la restituzione da un fornitore
-		-- (nota di credito ricevuta), uscita negli altri casi
-		DECLARE @notaCredito BIT = (SELECT MAX(CAST(NotaCredito AS INT)) FROM @rate);
-		DECLARE @verso CHAR(1) = IIF((@Tipo = 'C' AND @notaCredito = 0) OR (@Tipo = 'F' AND @notaCredito = 1), 'E', 'U');
+		-- Verso del movimento, quello della parte più grande: entrata per l'incasso da un cliente e per la
+		-- restituzione da un fornitore (nota di credito ricevuta), uscita negli altri casi
+		DECLARE @verso CHAR(1) = IIF((@Tipo = 'C' AND @grandeNotaCredito = 0) OR (@Tipo = 'F' AND @grandeNotaCredito = 1), 'E', 'U');
 
 		-- uspId_get FUORI dalla transazione
 		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
@@ -225,7 +244,13 @@ BEGIN
 							AND g.Lock = 0
 					) x;
 
-			IF EXISTS (SELECT 1 FROM @rate WHERE Residuo <= 0) OR @Importo > (SELECT SUM(Residuo) FROM @rate)
+			SET @fatture = (SELECT ISNULL(SUM(Residuo), 0) FROM @rate WHERE NotaCredito = 0);
+			SET @noteCredito = (SELECT ISNULL(SUM(Residuo), 0) FROM @rate WHERE NotaCredito = 1);
+			SET @piccola = IIF(@grandeNotaCredito = 1, @fatture, @noteCredito);
+
+			IF EXISTS (SELECT 1 FROM @rate WHERE Residuo <= 0)
+				OR @grandeNotaCredito <> IIF(@noteCredito > @fatture, 1, 0)
+				OR @Importo > ABS(@fatture - @noteCredito)
 			BEGIN
 				ROLLBACK TRANSACTION;
 				SET @returnValue = -1;
@@ -233,11 +258,14 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			-- Distribuzione in ordine di scadenza: ogni rata prende fino al suo residuo
+			-- La parte più piccola si chiude per intero; sulla più grande si distribuiscono, in ordine di scadenza,
+			-- la parte più piccola più l'importo pagato: ogni rata prende fino al suo residuo
+			DECLARE @distribuito DECIMAL(18, 2) = @piccola + @Importo;
 			UPDATE t
 			SET Quota = CASE
-				WHEN c.Prima + t.Residuo <= @Importo THEN t.Residuo
-				WHEN c.Prima < @Importo THEN @Importo - c.Prima
+				WHEN t.NotaCredito <> @grandeNotaCredito THEN t.Residuo
+				WHEN c.Prima + t.Residuo <= @distribuito THEN t.Residuo
+				WHEN c.Prima < @distribuito THEN @distribuito - c.Prima
 				ELSE 0
 			END
 			FROM
@@ -247,8 +275,12 @@ BEGIN
 						SELECT Prima = ISNULL(SUM(p.Residuo), 0)
 						FROM @rate p
 						WHERE
-							p.DataScadenza < t.DataScadenza
-							OR (p.DataScadenza = t.DataScadenza AND p.Id < t.Id)
+							p.NotaCredito = t.NotaCredito
+							AND
+								(
+								p.DataScadenza < t.DataScadenza
+								OR (p.DataScadenza = t.DataScadenza AND p.Id < t.Id)
+								)
 					) c;
 
 			INSERT dbo.tblPagamenti (Id, IdSede, IdBancaCassa, IdModalita, Tipo, Causale, DataRegistrazione, DataContabile, Importo, Lock)

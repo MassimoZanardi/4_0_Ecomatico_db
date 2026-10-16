@@ -167,6 +167,7 @@ BEGIN
 			TipoNome = p.Nome,
 			f.IdModalita,
 			f.IdBancaCassa,
+			f.IdClienteFornitore,
 			t.NomeCompleto,
 			NotaCredito = CAST(IIF(f.IdTipo = 'TD04', 1, 0) AS BIT),
 			SolaLettura = ISNULL(f.SolaLettura, 0),

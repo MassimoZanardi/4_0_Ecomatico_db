@@ -1,19 +1,76 @@
 ﻿/*
 Deploy produzione 2026-10-18 - Stampe PDF: Impostazioni > Report layout, stampa del DDT e della fattura cliente
 
-Indipendente dagli altri script. Rieseguibile. Eseguire con sqlcmd -f 65001 -I (oppure da SSMS).
-Eseguire PRIMA di pubblicare l'app: con l'app vecchia gli oggetti nuovi non vengono usati.
-Nessuna modifica di struttura: usa le tabelle esistenti tblSediReport e tblReportLayout.
+Indipendente dagli altri script. Rieseguibile (anche dopo un'esecuzione interrotta). Eseguire con
+sqlcmd -f 65001 -I (oppure da SSMS). Eseguire PRIMA di pubblicare l'app: con l'app vecchia gli oggetti nuovi non
+vengono usati.
 
+0. Struttura: tblReportLayout e tblSediReport (layout di stampa per azienda interna), create solo se mancano, con i
+   12 layout della 3.2 (inseriti solo se mancano). Stessa definizione di sql/tables del repo.
 1. ufnSediReport_get_Layout: layout di stampa di un'azienda con i valori predefiniti (unico punto).
 2. uspSediReport_get, _upd, _upd_Logo, uspReportLayout_get_SelectList: pagina Impostazioni > Report layout
    (funzione AZI).
 3. uspMagazziniDdt_get_Stampa, _Righe: stampa del DDT emesso e confermato (funzione MAG).
 4. uspFatture_get_Stampa, _Righe, _Iva, _Rate: stampa della fattura cliente salvata (funzione FTT).
 5. uspSedi_del_SediInterne, uspSYS_del_SedeInternaCascade: cancellano anche il layout dell'azienda.
-6. Dati: i 12 layout di tblReportLayout se mancano; pagina RLY e voce di menu AZ5 (Impostazioni, dopo Utenti).
+6. Dati: pagina RLY e voce di menu AZ5 (Impostazioni, dopo Utenti).
 Regole in docs/regole/stampe.md (repo app).
 */
+
+-- ===== 0. Struttura: tblReportLayout, tblSediReport (solo se mancano)
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+IF OBJECT_ID('dbo.tblReportLayout', 'U') IS NULL
+BEGIN
+	CREATE TABLE [dbo].[tblReportLayout](
+		[Id] [char](2) COLLATE Latin1_General_CI_AS NOT NULL,
+		[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
+		CONSTRAINT [PK_tblReportLayout] PRIMARY KEY CLUSTERED ([Id] ASC)
+	);
+END
+GO
+IF OBJECT_ID('dbo.tblSediReport', 'U') IS NULL
+BEGIN
+	CREATE TABLE [dbo].[tblSediReport](
+		[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+		[IdLayout] [char](2) COLLATE Latin1_General_CI_AS NULL,
+		[Intestazione] [varchar](1000) COLLATE Latin1_General_CI_AS NULL,
+		[Piepagina] [varchar](1000) COLLATE Latin1_General_CI_AS NULL,
+		[IntestazioneColore] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
+		[IntestazioneFontSize] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
+		[IntestazioneAllineamento] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
+		[PiepaginaColore] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
+		[PiepaginaFontSize] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
+		[PiepaginaAllineamento] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
+		[Logo] [varbinary](max) NULL,
+		CONSTRAINT [PK_tblSediReport] PRIMARY KEY CLUSTERED ([Id] ASC)
+	);
+END
+GO
+IF OBJECT_ID('dbo.FK_tblSediReport_tblReportLayout', 'F') IS NULL
+	ALTER TABLE [dbo].[tblSediReport] WITH CHECK ADD CONSTRAINT [FK_tblSediReport_tblReportLayout] FOREIGN KEY([IdLayout]) REFERENCES [dbo].[tblReportLayout] ([Id]);
+GO
+IF OBJECT_ID('dbo.FK_tblSediReport_tblSedi', 'F') IS NULL
+	ALTER TABLE [dbo].[tblSediReport] WITH CHECK ADD CONSTRAINT [FK_tblSediReport_tblSedi] FOREIGN KEY([Id]) REFERENCES [dbo].[tblSedi] ([Id]);
+GO
+
+-- Layout di stampa (tblReportLayout), gli stessi della 3.2, se mancano
+SET NOCOUNT ON;
+GO
+MERGE dbo.tblReportLayout AS t
+USING (VALUES
+	('01', 'Intestazione a dx'), ('02', 'Intestazione a sx'),
+	('03', 'Intestazione a dx + piè di pagina'), ('04', 'Intestazione a sx + piè di pagina'),
+	('05', 'Logo a dx'), ('06', 'Logo a sx'),
+	('07', 'Logo a dx + piè di pagina'), ('08', 'Logo a sx + piè di pagina'),
+	('09', 'Intestazione a dx + logo'), ('10', 'Intestazione a sx + logo'),
+	('11', 'Intestazione a dx + logo + piè di pagina'), ('12', 'Intestazione a sx + logo + piè di pagina')
+) AS s (Id, Nome)
+ON t.Id = s.Id
+WHEN NOT MATCHED THEN INSERT (Id, Nome) VALUES (s.Id, s.Nome);
+GO
 -- ===== ufnSediReport_get_Layout
 SET ANSI_NULLS ON
 GO
@@ -2463,21 +2520,6 @@ BEGIN
 END;
 GO
 
--- ===== Dati: layout di stampa (tblReportLayout), gli stessi della 3.2, se mancano
-SET NOCOUNT ON;
-GO
-MERGE dbo.tblReportLayout AS t
-USING (VALUES
-	('01', 'Intestazione a dx'), ('02', 'Intestazione a sx'),
-	('03', 'Intestazione a dx + piè di pagina'), ('04', 'Intestazione a sx + piè di pagina'),
-	('05', 'Logo a dx'), ('06', 'Logo a sx'),
-	('07', 'Logo a dx + piè di pagina'), ('08', 'Logo a sx + piè di pagina'),
-	('09', 'Intestazione a dx + logo'), ('10', 'Intestazione a sx + logo'),
-	('11', 'Intestazione a dx + logo + piè di pagina'), ('12', 'Intestazione a sx + logo + piè di pagina')
-) AS s (Id, Nome)
-ON t.Id = s.Id
-WHEN NOT MATCHED THEN INSERT (Id, Nome) VALUES (s.Id, s.Nome);
-GO
 -- ===== report_layout_menu_registration
 -- Report layout: pagina e voce di menu di Impostazioni > Report layout (layout di stampa di DDT e fatture per
 -- azienda interna, tblSediReport). Funzione AZI (Aziende interne), la stessa della scheda dell'azienda: nessuna

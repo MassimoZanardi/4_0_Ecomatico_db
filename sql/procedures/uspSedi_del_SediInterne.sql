@@ -745,6 +745,8 @@ BEGIN
 				-- Tabelle 1:1 sulla sede (FK NO_ACTION): una bozza di norma non ne ha
 				DELETE dbo.tblSediDatiEstesi
 				WHERE Id = @Id;
+				DELETE dbo.tblSediReport
+				WHERE Id = @Id;
 				DELETE dbo.tblSediRecapiti
 				WHERE Id = @Id;
 				DELETE dbo.tblSediIndirizzi

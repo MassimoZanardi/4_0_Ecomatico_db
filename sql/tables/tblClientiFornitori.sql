@@ -15,6 +15,7 @@ CREATE TABLE [dbo].[tblClientiFornitori](
 	[IdBancaCassa] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdAliquotaIva] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[IdValuta] [char](3) COLLATE Latin1_General_CI_AS NULL,
+	[IdRaggruppamento] [char](1) COLLATE Latin1_General_CI_AS NULL,
 	[SplitPayment] [bit] NULL,
 	[Iban] [varchar](34) COLLATE Latin1_General_CI_AS NULL,
 	[RataGiorniInizio] [int] NULL,
@@ -24,7 +25,6 @@ CREATE TABLE [dbo].[tblClientiFornitori](
 	[PecDestinatario] [varchar](100) COLLATE Latin1_General_CI_AS NULL,
 	[Note] [varchar](1000) COLLATE Latin1_General_CI_AS NULL,
 	[Lock] [tinyint] NULL,
-	[IdRaggruppamento] [char](1) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblClientiFornitori] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

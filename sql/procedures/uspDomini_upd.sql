@@ -157,6 +157,9 @@ BEGIN
 				INSERT INTO dbo.tblUtentiDefault (Id)
 				VALUES (@returnIdUtente);
 
+				INSERT INTO dbo.tblOsepe (Id, Tipo)
+				VALUES (@returnIdSede, 'S');
+
 				INSERT INTO dbo.tblSedi
 					(Id, IdParent, IdAziendaInterna, InternaEsterna, IdTipo,
 					 Disabilitata, Nome, CodiceFiscale, PartitaIva,
@@ -182,7 +185,10 @@ BEGIN
 				INSERT INTO dbo.tblDominiModuli (Id, IdModulo)
 				SELECT @Id, Id
 				FROM dbo.tblModuli
-				WHERE Id IN ('BAS', 'IMP');
+				WHERE
+					Id IN ('BAS', 'IMP')
+					-- già aggiunti alla bozza dalla pagina (anche come dipendenza di un altro modulo)
+					AND Id NOT IN ( SELECT IdModulo FROM dbo.tblDominiModuli WHERE Id = @Id );
 			END
 
 			DELETE f

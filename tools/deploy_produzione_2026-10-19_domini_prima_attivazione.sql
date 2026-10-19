@@ -1,13 +1,17 @@
 ﻿/*
-Deploy produzione 2026-10-19 - Domini: prima attivazione con lo storico password dell'utente collegato
+Deploy produzione 2026-10-19 - Domini: prima attivazione di un dominio
 
-Indipendente dagli altri script. Rieseguibile. Eseguire con sqlcmd -f 65001 -I (oppure da SSMS). Nessuna modifica
-all'app.
+Indipendente dagli altri script. Rieseguibile (anche se la prima versione di oggi e' gia' stata eseguita). Eseguire
+con sqlcmd -f 65001 -I (oppure da SSMS). Nessuna modifica all'app.
 
-1. uspDomini_upd: alla prima attivazione di un dominio l'utente amministratore creato riceveva tutte le righe di
-   tblUtentiPassword dell'utente collegato (lo storico, fino a 5) con la stessa Data, e con piu' di una password
-   nello storico la chiave (Id, Data) si ripeteva: "Violation of PRIMARY KEY constraint 'PK_tblUtentiPassword'".
-   Ora copia solo la password piu' recente.
+1. uspDomini_upd, al primo salvataggio di un dominio nuovo (creazione dell'utente amministratore e dell'azienda
+   interna "(Da indicare)"):
+   - password: l'utente creato riceveva tutte le righe di tblUtentiPassword dell'utente collegato (lo storico, fino
+     a 5) con la stessa Data, e la chiave (Id, Data) si ripeteva ("Violation of PRIMARY KEY constraint
+     'PK_tblUtentiPassword'"). Ora copia solo la password piu' recente;
+   - azienda interna: mancava la riga del supertipo tblOsepe (Tipo 'S'), come in uspSedi_ins ("The INSERT
+     statement conflicted with the FOREIGN KEY constraint 'FK_tblSedi_tblOsepe'");
+   - moduli BAS e IMP: inseriti solo se non gia' aggiunti alla bozza dalla pagina.
 */
 
 -- ===== 1. uspDomini_upd
@@ -170,6 +174,9 @@ BEGIN
 				INSERT INTO dbo.tblUtentiDefault (Id)
 				VALUES (@returnIdUtente);
 
+				INSERT INTO dbo.tblOsepe (Id, Tipo)
+				VALUES (@returnIdSede, 'S');
+
 				INSERT INTO dbo.tblSedi
 					(Id, IdParent, IdAziendaInterna, InternaEsterna, IdTipo,
 					 Disabilitata, Nome, CodiceFiscale, PartitaIva,
@@ -195,7 +202,10 @@ BEGIN
 				INSERT INTO dbo.tblDominiModuli (Id, IdModulo)
 				SELECT @Id, Id
 				FROM dbo.tblModuli
-				WHERE Id IN ('BAS', 'IMP');
+				WHERE
+					Id IN ('BAS', 'IMP')
+					-- già aggiunti alla bozza dalla pagina (anche come dipendenza di un altro modulo)
+					AND Id NOT IN ( SELECT IdModulo FROM dbo.tblDominiModuli WHERE Id = @Id );
 			END
 
 			DELETE f

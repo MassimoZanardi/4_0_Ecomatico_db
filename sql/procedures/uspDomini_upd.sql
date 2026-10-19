@@ -145,11 +145,14 @@ BEGIN
 					 '20501231',
 					 1, 0, 8, 0, 0);
 
+				-- Solo la password corrente dell'utente collegato: lo storico (fino a 5 righe)
+				-- avrebbe la stessa Data e violerebbe la chiave (Id, Data)
 				INSERT INTO dbo.tblUtentiPassword (Id, [Password], [Data])
-				SELECT @returnIdUtente, p.[Password], GETDATE()
+				SELECT TOP 1 @returnIdUtente, p.[Password], GETDATE()
 				FROM dbo.tblUtentiPassword p
 				INNER JOIN dbo.tblSessioni e ON p.Id = e.IdUtente
-				WHERE e.Id = @IdSessione;
+				WHERE e.Id = @IdSessione
+				ORDER BY p.[Data] DESC;
 
 				INSERT INTO dbo.tblUtentiDefault (Id)
 				VALUES (@returnIdUtente);

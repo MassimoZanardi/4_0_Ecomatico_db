@@ -154,23 +154,6 @@ BEGIN
 				WHERE rcs.IdSede = @IdSede
 			);
 
-			-- Rimuove le associazioni esistenti non più presenti nelle 2 posizioni finali
-			DELETE [1_0_rentri]..tblSedi
-			WHERE Id COLLATE DATABASE_DEFAULT IN (
-				SELECT rcs.IdRentri COLLATE DATABASE_DEFAULT
-				FROM dbo.tblRentriCredenzialiSedi rcs
-				WHERE
-					rcs.IdSede = @IdSede
-					AND rcs.IdCredenziale <> @idCredenzialePos0
-					AND (@idCredenzialePos1 IS NULL OR rcs.IdCredenziale <> @idCredenzialePos1)
-			);
-
-			DELETE dbo.tblRentriCredenzialiSedi
-			WHERE
-				IdSede = @IdSede
-				AND IdCredenziale <> @idCredenzialePos0
-				AND (@idCredenzialePos1 IS NULL OR IdCredenziale <> @idCredenzialePos1);
-
 			-- Posizione 0 (primaria effettiva): l'Identificativo Sede va sempre aggiornato qui
 			IF EXISTS (SELECT 1 FROM dbo.tblRentriCredenzialiSedi WHERE IdSede = @IdSede AND IdCredenziale = @idCredenzialePos0)
 			BEGIN
@@ -224,6 +207,36 @@ BEGIN
 				FROM dbo.tblRentriCredenzialiSedi rcs
 				WHERE rcs.IdSede = @IdSede AND rcs.IdCredenziale = @idCredenzialePos0;
 			END
+
+			-- I registri della sede ereditano la credenziale primaria (C6.1): puntano sempre alla riga hub
+			-- della posizione 0, anche quando la primaria cambia o diventa primaria una nuova credenziale
+			-- da Delegato. Va fatto prima di togliere le associazioni vecchie (FK_tblRegistri_tblSedi)
+			UPDATE h
+			SET IdSede = p0.IdRentri
+			FROM
+				[1_0_rentri]..tblRegistri h
+				INNER JOIN dbo.tblRentriCredenzialiSedi rcs ON h.IdSede COLLATE DATABASE_DEFAULT = rcs.IdRentri COLLATE DATABASE_DEFAULT
+				INNER JOIN dbo.tblRentriCredenzialiSedi p0 ON rcs.IdSede = p0.IdSede AND p0.IdCredenziale = @idCredenzialePos0
+			WHERE
+				rcs.IdSede = @IdSede
+				AND rcs.IdCredenziale <> @idCredenzialePos0;
+
+			-- Rimuove le associazioni esistenti non più presenti nelle 2 posizioni finali
+			DELETE [1_0_rentri]..tblSedi
+			WHERE Id COLLATE DATABASE_DEFAULT IN (
+				SELECT rcs.IdRentri COLLATE DATABASE_DEFAULT
+				FROM dbo.tblRentriCredenzialiSedi rcs
+				WHERE
+					rcs.IdSede = @IdSede
+					AND rcs.IdCredenziale <> @idCredenzialePos0
+					AND (@idCredenzialePos1 IS NULL OR rcs.IdCredenziale <> @idCredenzialePos1)
+			);
+
+			DELETE dbo.tblRentriCredenzialiSedi
+			WHERE
+				IdSede = @IdSede
+				AND IdCredenziale <> @idCredenzialePos0
+				AND (@idCredenzialePos1 IS NULL OR IdCredenziale <> @idCredenzialePos1);
 
 		COMMIT TRANSACTION;
 

@@ -23,22 +23,27 @@ BEGIN
 			SET @returnMessage = 'Il parametro @Password non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		-- Aggiorna solo l'ultima password inserita per questo utente
-		UPDATE TOP (1) dbo.tblUtentiPassword
-		SET
-			[Password] = @Password,
-			[Data] = GETDATE(),
-			Temporanea = @Temporanea
-		WHERE
-			Id = @Id
-			AND [Data] = ( SELECT MAX([Data]) FROM dbo.tblUtentiPassword WHERE Id = @Id );
-		-- Verifica che l'UPDATE abbia effettivamente modificato una riga
-		IF @@ROWCOUNT = 0
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Nessuna password trovata per l''utente specificato';
-			GOTO BRANCH_END;
-		END
+		BEGIN TRANSACTION;
+			-- Aggiorna solo l'ultima password inserita per questo utente
+			UPDATE TOP (1) dbo.tblUtentiPassword
+			SET
+				[Password] = @Password,
+				[Data] = GETDATE(),
+				Temporanea = @Temporanea
+			WHERE
+				Id = @Id
+				AND [Data] = ( SELECT MAX([Data]) FROM dbo.tblUtentiPassword WHERE Id = @Id );
+			-- Verifica che l'UPDATE abbia effettivamente modificato una riga
+			IF @@ROWCOUNT = 0
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Nessuna password trovata per l''utente specificato';
+				GOTO BRANCH_END;
+			END
+			-- Se @Id è l'amministratore del dominio Master, allinea la password degli utenti Master
+			EXEC dbo.uspUtenti_upd_PasswordMaster @Id = @Id;
+		COMMIT TRANSACTION;
 		-- Restituisce LoginResponse per login immediato post-cambio password
 		-- Tabelle base invece di viewUtenti: evita OUTER APPLY su tblUtentiPassword
 		SELECT

@@ -203,32 +203,8 @@ BEGIN
 				WHERE Id = @Id;
 			END
 
-			-- Sincronizza la password corrente (la più recente) di tutti gli utenti
-			-- Master con quella dell'Admin del Dominio Master
-			IF EXISTS (
-				SELECT 1
-				FROM dbo.tblUtenti u
-				INNER JOIN dbo.tblDomini d ON u.IdDominio = d.Id
-				WHERE
-					u.Id = @Id
-					AND u.IdRuolo = 'AD'
-					AND u.Lock = 0
-					AND d.[Master] = 1
-			)
-			BEGIN
-				UPDATE up
-				SET [Password] = mp.[Password]
-				FROM dbo.tblUtentiPassword up
-				INNER JOIN dbo.tblUtenti uu ON up.Id = uu.Id
-					   -- TOP 1 ORDER BY: solo la password più recente dell'Admin Master
-				CROSS JOIN (
-						   SELECT TOP 1 [Password]
-						   FROM dbo.tblUtentiPassword
-						   WHERE Id = @Id
-						   ORDER BY [Data] DESC
-					   ) mp
-				WHERE uu.[Master] = 1;
-			END
+			-- Se @Id è l'amministratore del dominio Master, allinea la password degli utenti Master
+			EXEC dbo.uspUtenti_upd_PasswordMaster @Id = @Id;
 
 			-- Invalida i permessi salvati nelle sessioni attive dell'utente
 			DELETE p

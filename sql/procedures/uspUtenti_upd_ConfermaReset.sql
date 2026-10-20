@@ -62,6 +62,8 @@ BEGIN
 			WHERE
 				Id = @IdUtente
 				AND Lock <= 2;
+			-- Se l'utente è l'amministratore del dominio Master, allinea la password degli utenti Master
+			EXEC dbo.uspUtenti_upd_PasswordMaster @Id = @IdUtente;
 		COMMIT TRANSACTION;
 		SELECT @returnValue AS ReturnValue;
 	END TRY

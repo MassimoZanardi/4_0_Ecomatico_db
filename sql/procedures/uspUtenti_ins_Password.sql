@@ -119,6 +119,10 @@ BEGIN
 				Id = @IdUtente
 				AND [Data] NOT IN ( SELECT TOP 5 [Data] FROM dbo.tblUtentiPassword WHERE Id = @IdUtente ORDER BY [Data] DESC );
 
+			-- Se l'utente è l'amministratore del dominio Master, allinea la password degli utenti
+			-- Master (con una password temporanea non fa nulla: si propaga quella scelta al cambio)
+			EXEC dbo.uspUtenti_upd_PasswordMaster @Id = @IdUtente;
+
 		COMMIT TRANSACTION;
 
 		SET @returnValue = CASE @GiaEsiste

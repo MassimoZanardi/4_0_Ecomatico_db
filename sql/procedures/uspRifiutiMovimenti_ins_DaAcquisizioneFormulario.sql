@@ -278,7 +278,8 @@ BEGIN
 
 		DECLARE @analisiDataFinale DATE = TRY_CAST(@AnalisiData AS DATE);
 
-		DECLARE @registrazioneData DATE = COALESCE(CAST(@dataOraInizioTrasportoFinale AS DATE), CAST(@DataOraFineTrasporto AS DATE), CAST(GETDATE() AS DATE));
+		-- Data di registrazione proposta: sempre quella odierna (non le date del trasporto del FIR)
+		DECLARE @registrazioneData DATE = CAST(GETDATE() AS DATE);
 
 		CREATE TABLE #numero (Rtn INT);
 		INSERT #numero EXEC dbo.uspRifiutiRegistrazioni_get_UltimoNumero @IdRegistro = @IdRegistro, @Data = @registrazioneData, @IdSessione = @IdSessione;
@@ -288,12 +289,43 @@ BEGIN
 		DECLARE @idMovimento CHAR(16), @idRegistrazione CHAR(16), @idFormulario CHAR(16);
 
 		EXEC dbo.uspId_get @IdSessione = @IdSessione, @NoLog = 1, @Id = @idMovimento OUTPUT;
+
+		-- Produttore senza autorizzazioni: uspRifiutiAutorizzazioni_get_MatchImportazione (passo 3) restituisce
+		-- l'Id della Sede, che va convertito nell'autorizzazione "Nessuna" della sede, creata se manca - stesso
+		-- principio di uspRifiutiRegistrazioni_upd (la FK di tblRifiutiMovimentiProduttori non accetta una Sede)
+		DECLARE @idSedeProduttoreNessuna CHAR(16) = NULL;
+		IF EXISTS (SELECT 1 FROM dbo.tblSedi WHERE Id = @idAutorizzazioneProduttoreDetentore)
+		BEGIN
+			DECLARE @idSedeProduttore CHAR(16) = @idAutorizzazioneProduttoreDetentore;
+			SET @idAutorizzazioneProduttoreDetentore = NULL;
+
+			SELECT @idAutorizzazioneProduttoreDetentore = Id
+			FROM dbo.tblRifiutiAutorizzazioni
+			WHERE
+				IdSede = @idSedeProduttore
+				AND IdRuolo = 'P'
+				AND Nessuna = 1
+				AND Lock = 0;
+
+			IF @idAutorizzazioneProduttoreDetentore IS NULL
+			BEGIN
+				SET @idSedeProduttoreNessuna = @idSedeProduttore;
+				EXEC dbo.uspId_get @IdSessione = @IdSessione, @NoLog = 1, @Id = @idAutorizzazioneProduttoreDetentore OUTPUT;
+			END
+		END
+
 		IF @ModalitaRitorno = 'R'
 			EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @idRegistrazione OUTPUT;
 		ELSE
 			EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @idFormulario OUTPUT;
 
 		BEGIN TRANSACTION;
+
+			IF @idSedeProduttoreNessuna IS NOT NULL
+				INSERT dbo.tblRifiutiAutorizzazioni
+					(Id, IdSede, IdRuolo, DataInizio, DataFine, Nessuna, Disabilitata, Lock)
+				VALUES
+					(@idAutorizzazioneProduttoreDetentore, @idSedeProduttoreNessuna, 'P', '19000101', '20501231', 1, 0, 0);
 
 			INSERT dbo.tblRifiutiMovimenti
 				(Id, IdRegistro, IdOperazione, IdEer, EerDescrizione, IdStatoFisico, IdAttivita, IdUnitaMisura, IdProvenienza, Quantita, FormularioNumero, RentriFormularioStato, DataInizioTrasporto, Note)

@@ -466,6 +466,8 @@ BEGIN
             -- colonna da azzerare) - si cancella la riga di associazione, mai tblRentriCredenziali stessa.
             DELETE FROM dbo.tblRentriCredenzialiSedi WHERE IdSede IN (SELECT Id FROM #Sedi);
 
+            -- tblDiwassOperatori: collegamento della sede all'operatore DIWASS (FK su tblSedi)
+            DELETE FROM dbo.tblDiwassOperatori WHERE Id IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediDatiEstesi WHERE Id IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediReport WHERE Id IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediIndirizzi WHERE Id IN (SELECT Id FROM #Sedi);

@@ -124,6 +124,9 @@ BEGIN
         SELECT Id INTO #RifiutiLimiti FROM dbo.tblRifiutiLimiti
         WHERE IdSede IN (SELECT Id FROM #Sedi) OR IdRegistro IN (SELECT Id FROM #RifiutiRegistri);
 
+        -- tblDiwassCredenziali.IdAziendaInterna: credenziale DIWASS dell'azienda interna, con la sua riga nell'hub
+        SELECT Id, IdDiwass INTO #DiwassCredenziali FROM dbo.tblDiwassCredenziali WHERE IdAziendaInterna IN (SELECT Id FROM #Sedi);
+
         SELECT Id INTO #RifiutiMovimenti
         FROM dbo.tblRifiutiMovimenti
         WHERE IdSedeProduttoreDetentore IN (SELECT Id FROM #Sedi)
@@ -468,6 +471,9 @@ BEGIN
             DELETE FROM dbo.tblSediIndirizzi WHERE Id IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediRecapiti  WHERE Id IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediEsterne   WHERE Id IN (SELECT Id FROM #Sedi);
+            -- tblDiwassCredenziali prima di tblSediInterne (FK su IdAziendaInterna), con la riga dell'hub 1_0_diwass
+            DELETE FROM [1_0_diwass]..tblCredenziali WHERE Id IN (SELECT IdDiwass FROM #DiwassCredenziali);
+            DELETE FROM dbo.tblDiwassCredenziali WHERE Id IN (SELECT Id FROM #DiwassCredenziali);
             DELETE FROM dbo.tblSediInterne   WHERE Id IN (SELECT Id FROM #Sedi);
 
             -- Radice e sotto-sedi cancellate in un'unica istruzione set-based: i vincoli
@@ -511,6 +517,7 @@ BEGIN
                 UNION SELECT Id FROM #RifiutiRegistri
                 UNION SELECT Id FROM #RifiutiRegistrazioni
                 UNION SELECT Id FROM #RifiutiLimiti
+                UNION SELECT Id FROM #DiwassCredenziali
                 UNION SELECT Id FROM #Scadenze
                 UNION SELECT Id FROM #Servizi
                 UNION SELECT Id FROM #Tipi

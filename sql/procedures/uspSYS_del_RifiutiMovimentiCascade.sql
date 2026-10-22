@@ -49,6 +49,8 @@ BEGIN
             -- per violazione FK se esiste anche una sola rettifica.
             DELETE dbo.tblRentriRegistrazioniRettifiche;
             DELETE dbo.tblRifiutiFormulari;
+            -- tblDiwassAllegatiVii.IdRegistrazione: gli Allegati VII restano, perdono la registrazione di partenza
+            UPDATE dbo.tblDiwassAllegatiVii SET IdRegistrazione = NULL WHERE IdRegistrazione IS NOT NULL;
             DELETE dbo.tblRifiutiRegistrazioni;
             DELETE dbo.tblRifiutiMovimentiLog;
             DELETE dbo.tblRifiutiMovimenti;

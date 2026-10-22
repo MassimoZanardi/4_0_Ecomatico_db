@@ -98,6 +98,8 @@ BEGIN
             WHERE Id       IN (SELECT Id FROM #RifiutiRegistrazioni)
                OR IdParent IN (SELECT Id FROM #RifiutiRegistrazioni);
 
+            -- tblDiwassAllegatiVii.IdRegistrazione: l'Allegato VII resta, perde solo la registrazione di partenza
+            UPDATE dbo.tblDiwassAllegatiVii SET IdRegistrazione = NULL WHERE IdRegistrazione IN (SELECT Id FROM #RifiutiRegistrazioni);
             DELETE FROM dbo.tblRifiutiRegistrazioni WHERE Id IN (SELECT Id FROM #RifiutiRegistrazioni);
 
             DELETE FROM dbo.tblRifiutiMovimenti WHERE Id IN (SELECT Id FROM #RifiutiMovimenti);

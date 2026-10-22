@@ -333,6 +333,15 @@ BEGIN
             DELETE FROM dbo.tblRifiutiRegistrazioniRelazioni
             WHERE Id       IN (SELECT Id FROM #RifiutiRegistrazioni)
                OR IdParent IN (SELECT Id FROM #RifiutiRegistrazioni);
+            -- tblDiwassAllegatiVii.IdRegistrazione: l'Allegato VII resta, perde solo la registrazione di partenza
+            UPDATE dbo.tblDiwassAllegatiVii SET IdRegistrazione = NULL WHERE IdRegistrazione IN (SELECT Id FROM #RifiutiRegistrazioni);
+            -- Allegati VII DIWASS delle aziende cancellate (con i soggetti), soggetti delle sedi cancellate negli altri
+            -- Allegati VII, codici e ruoli di firma ricordati per le aziende
+            SELECT Id INTO #DiwassAllegatiVii FROM dbo.tblDiwassAllegatiVii WHERE IdAziendaInterna IN (SELECT Id FROM #Sedi);
+            DELETE FROM dbo.tblDiwassAllegatiViiSoggetti WHERE Id IN (SELECT Id FROM #DiwassAllegatiVii) OR IdSede IN (SELECT Id FROM #Sedi);
+            DELETE FROM dbo.tblDiwassAllegatiVii WHERE Id IN (SELECT Id FROM #DiwassAllegatiVii);
+            DELETE FROM dbo.tblDiwassCodiciRifiutiUsati WHERE IdAziendaInterna IN (SELECT Id FROM #Sedi);
+            DELETE FROM dbo.tblDiwassFirmeRuoli WHERE IdAziendaInterna IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblRifiutiRegistrazioni WHERE Id IN (SELECT Id FROM #RifiutiRegistrazioni);
 
             -- tblRifiutiLimiti* va rimosso prima di tblRifiutiRegistri: FK NO_ACTION su IdRegistro
@@ -520,6 +529,7 @@ BEGIN
                 UNION SELECT Id FROM #RifiutiRegistrazioni
                 UNION SELECT Id FROM #RifiutiLimiti
                 UNION SELECT Id FROM #DiwassCredenziali
+                UNION SELECT Id FROM #DiwassAllegatiVii
                 UNION SELECT Id FROM #Scadenze
                 UNION SELECT Id FROM #Servizi
                 UNION SELECT Id FROM #Tipi

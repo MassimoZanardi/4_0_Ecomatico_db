@@ -1,5 +1,11 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- @Tipo: NULL tutte le operazioni, 'R' solo recupero, 'D' solo smaltimento; l'operazione selezionata resta sempre in elenco
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAttivitaRecuperoSmaltimento_get_SelectList]
-	@IdSelected CHAR(2) = NULL
+	@IdSelected CHAR(2) = NULL,
+	@Tipo CHAR(1) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -9,6 +15,7 @@ BEGIN
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 
 		SET @IdSelected = NULLIF(LTRIM(RTRIM(@IdSelected)), '');
+		SET @Tipo = NULLIF(LTRIM(RTRIM(@Tipo)), '');
 
 		SELECT
 			Id = CAST('00' AS CHAR(2)),
@@ -23,6 +30,10 @@ BEGIN
 			Selected = CAST(IIF(Id = @IdSelected, 1, 0) AS BIT)
 		FROM
 			dbo.tblRifiutiAttivitaRecuperoSmaltimento
+		WHERE
+			@Tipo IS NULL
+			OR Codice LIKE @Tipo + '%'
+			OR Id = @IdSelected
 		ORDER BY
 			Id;
 

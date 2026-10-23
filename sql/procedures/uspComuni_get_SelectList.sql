@@ -1,4 +1,11 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspComuni_get_SelectList]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Comuni per le select degli indirizzi (prime 10 righe). Con @Search, ordine per pertinenza: nome uguale al testo, poi
+-- che inizia con il testo, poi che lo contiene, infine i comuni trovati solo per la provincia (così "Milano" propone
+-- per primo il comune, non i comuni della provincia di Milano in ordine alfabetico)
+CREATE OR ALTER PROCEDURE [dbo].[uspComuni_get_SelectList]
 	@IdSelected CHAR(6) = NULL,
 	@Search VARCHAR(50) = NULL
 AS
@@ -19,7 +26,8 @@ BEGIN
 				Id = CAST('000000' AS CHAR(6)),
 				[Text] = CAST('(Selezionare)' AS VARCHAR(100)),
 				Selected = CAST(0 AS BIT),
-				Pos = 0
+				Pos = 0,
+				Pertinenza = 0
 
 			UNION ALL -- rami mutualmente esclusivi per Id e Pos
 
@@ -28,7 +36,8 @@ BEGIN
 				c.Id,
 				[Text] = c.Nome + ' (' + ISNULL(p.Nome, '') + ' - ' + ISNULL(p.Sigla, '') + ')',
 				Selected = CAST(1 AS BIT),
-				Pos = 1
+				Pos = 1,
+				Pertinenza = 0
 			FROM
 				dbo.tblComuni c
 				LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
@@ -42,7 +51,14 @@ BEGIN
 				c.Id,
 				[Text] = c.Nome + ' (' + ISNULL(p.Nome, '') + ' - ' + ISNULL(p.Sigla, '') + ')',
 				Selected = CAST(0 AS BIT),
-				Pos = 2
+				Pos = 2,
+				Pertinenza = CASE
+					WHEN @Search IS NULL THEN 0
+					WHEN c.Nome = @Search THEN 0
+					WHEN c.Nome LIKE @Search + '%' THEN 1
+					WHEN c.Nome LIKE '%' + @Search + '%' THEN 2
+					ELSE 3
+				END
 			FROM
 				dbo.tblComuni c
 				LEFT JOIN dbo.tblProvince p ON c.IdProvincia = p.Id
@@ -60,7 +76,7 @@ BEGIN
 			[Text],
 			Selected
 		FROM cte
-		ORDER BY Pos, [Text]
+		ORDER BY Pos, Pertinenza, [Text]
 		OPTION (RECOMPILE);
 
 	END TRY

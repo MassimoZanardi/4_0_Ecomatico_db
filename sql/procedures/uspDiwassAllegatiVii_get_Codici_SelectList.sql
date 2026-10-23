@@ -4,11 +4,13 @@ SET QUOTED_IDENTIFIER ON
 GO
 -- Codici internazionali del rifiuto per l'Allegato VII (Id = "lista|codice"): prima i suggeriti per l'EER
 -- (tblDiwassCodiciRifiutiEer), poi tutti gli altri della lista verde (Basel B, OCSE G.., allegati IIIA e IIIB: i codici OCSE A..
--- e R.. sono della lista ambra, fuori dall'Allegato VII)
+-- e R.. sono della lista ambra, fuori dall'Allegato VII). @Search filtra su "codice - descrizione"; "(Selezionare)" e il
+-- codice selezionato restano sempre in elenco
 CREATE OR ALTER PROCEDURE [dbo].[uspDiwassAllegatiVii_get_Codici_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@IdEer CHAR(6) = NULL,
-	@IdSelected NVARCHAR(40) = NULL
+	@IdSelected NVARCHAR(40) = NULL,
+	@Search VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -19,6 +21,7 @@ BEGIN
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdEer = NULLIF(LTRIM(RTRIM(@IdEer)), '');
 		SET @IdSelected = NULLIF(LTRIM(RTRIM(@IdSelected)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -60,15 +63,31 @@ BEGIN
 				dbo.tblDiwassCodiciRifiuti c
 				LEFT JOIN dbo.tblDiwassCodiciRifiutiEer g ON c.Lista = g.Lista AND c.Codice = g.Codice AND g.IdEer = @IdEer
 			WHERE
-				(c.Lista IN ('basel_b', 'wsr_a3a', 'wsr_a3b') OR (c.Lista = 'oecd' AND c.Codice LIKE 'G%'))
-				OR c.Lista + '|' + c.Codice = @IdSelected
+				c.Lista + '|' + c.Codice = @IdSelected
+				OR
+					(
+						(
+						c.Lista IN ('basel_b', 'wsr_a3a', 'wsr_a3b')
+						OR
+							(
+							c.Lista = 'oecd'
+							AND c.Codice LIKE 'G%'
+							)
+						)
+					AND
+						(
+						@Search IS NULL
+						OR c.Codice + N' - ' + c.Descrizione LIKE N'%' + @Search + N'%'
+						)
+					)
 		)
 		SELECT
 			Id,
 			[Text],
 			Selected
 		FROM cte
-		ORDER BY Gruppo, Pos, Id;
+		ORDER BY Gruppo, Pos, Id
+		OPTION (RECOMPILE);
 
 	END TRY
 	BEGIN CATCH

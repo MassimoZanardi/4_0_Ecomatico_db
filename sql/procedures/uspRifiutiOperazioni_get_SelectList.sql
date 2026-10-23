@@ -6,7 +6,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiOperazioni_get_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@IsRentri BIT = NULL,
 	@IsFormulario BIT = NULL,
-	@IsIntegrazioneFir BIT = NULL
+	@IsIntegrazioneFir BIT = NULL,
+	@Operazione CHAR(1) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -14,6 +15,7 @@ BEGIN
 		DECLARE @returnValue INT = 0;
 		DECLARE @returnMessage NVARCHAR(200) = NULL;
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Operazione = NULLIF(LTRIM(RTRIM(@Operazione)), '');
 		IF @IdSessione IS NULL
 		BEGIN
 			SET @returnValue = -1;
@@ -25,6 +27,8 @@ BEGIN
 		-- @IsIntegrazioneFir = NULL → nessun filtro; = 1 → solo operazioni che integrano un FIR altrui
 		--                     (Rifiuti/Registrazioni, importazione da formulario digitale RENTRI - piu' ampio
 		--                     di IsFormulario: include anche Z/I che non emettono un proprio FIR)
+		-- @Operazione        = NULL → nessun filtro; altrimenti solo le operazioni del raggruppamento
+		--                     (C carico, S scarico, X carico e scarico - ricerca di Rifiuti/Registrazioni)
 
 		IF @IsFormulario = 1 SET @IsRentri = NULL;
 		IF @IsIntegrazioneFir = 1 SET @IsRentri = NULL;
@@ -61,6 +65,11 @@ BEGIN
 				(
 				@IsIntegrazioneFir IS NULL
 				OR ISNULL(o.IsIntegrazioneFir, 0) = @IsIntegrazioneFir
+				)
+			AND
+				(
+				@Operazione IS NULL
+				OR o.Operazione = @Operazione
 				)
 		ORDER BY Pos
 		OPTION (RECOMPILE);

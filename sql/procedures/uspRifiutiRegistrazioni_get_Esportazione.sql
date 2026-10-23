@@ -21,6 +21,8 @@ CREATE OR ALTER PROCEDURE dbo.uspRifiutiRegistrazioni_get_Esportazione
 	@Formulario VARCHAR(50) = NULL,
 	@Numeri VARCHAR(50) = NULL,
 	@Etichetta VARCHAR(50) = NULL,
+	@Operazione CHAR(1) = NULL,
+	@IdOperazione CHAR(1) = NULL,
 	@NonTrasmesseRentri BIT = 0,
 	@NonInConservazione BIT = 0,
 	@SenzaEsito BIT = 0,
@@ -43,6 +45,8 @@ BEGIN
 		SET @Formulario = dbo.ufnStringhe_get_SenzaSpazi(@Formulario, 0, 1);
 		SET @Numeri = dbo.ufnStringhe_get_SenzaSpazi(@Numeri, 0, 1);
 		SET @Etichetta = dbo.ufnStringhe_get_SenzaSpazi(@Etichetta, 0, 1);
+		SET @Operazione = NULLIF(LTRIM(RTRIM(@Operazione)), '');
+		SET @IdOperazione = NULLIF(LTRIM(RTRIM(@IdOperazione)), '');
 		SET @MaxRighe = IIF(ISNULL(@MaxRighe, 0) < 1, 50000, @MaxRighe);
 
 		IF @IdSessione IS NULL
@@ -74,7 +78,9 @@ BEGIN
             @Soggetto    VARCHAR(50),
             @Eer         VARCHAR(50),
             @Formulario  VARCHAR(50),
-            @Etichetta   VARCHAR(50)';
+            @Etichetta   VARCHAR(50),
+            @Operazione   CHAR(1),
+            @IdOperazione CHAR(1)';
 
 		-- Scope: registro corrente della sessione (tblSessioni.IdRegistro); senza registro nessuna riga
 		SET @stmt = N'
@@ -173,6 +179,12 @@ BEGIN
 					  + N'    INNER JOIN dbo.tblEtichette et ON t.IdEtichetta = et.Id'
 					  + N'    WHERE et.Nome LIKE ''%'' + @Etichetta + ''%'')';
 
+		IF @Operazione IS NOT NULL
+			SET @stmt = @stmt + N' AND r.Operazione = @Operazione';
+
+		IF @IdOperazione IS NOT NULL
+			SET @stmt = @stmt + N' AND m.IdOperazione = @IdOperazione';
+
 		IF @Eer IS NOT NULL
 			SET @stmt = @stmt + N' AND m.IdEer LIKE ''%'' + REPLACE(@Eer, ''.'', '''') + ''%''';
 
@@ -223,7 +235,9 @@ BEGIN
 			@Soggetto = @Soggetto,
 			@Eer = @Eer,
 			@Formulario = @Formulario,
-			@Etichetta = @Etichetta;
+			@Etichetta = @Etichetta,
+			@Operazione = @Operazione,
+			@IdOperazione = @IdOperazione;
 
 	END TRY
 	BEGIN CATCH

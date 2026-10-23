@@ -3,10 +3,12 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- Soggetti proponibili in un Allegato VII: sedi del contesto o condivise (ufnDiwassOperatori_get_SediBySessione_List)
--- collegate a DIWASS con il ruolo WSR nuovo o valido. @IdSelected resta in elenco anche se nel frattempo non lo è più
+-- collegate a DIWASS con il ruolo WSR nuovo o valido. @IdSelected resta in elenco anche se nel frattempo non lo è più, e
+-- anche quando @Search (filtro sul testo "azienda - sede (indirizzo)") lo escluderebbe
 CREATE OR ALTER PROCEDURE [dbo].[uspDiwassAllegatiVii_get_Soggetti_SelectList]
 	@IdSessione CHAR(16) = NULL,
-	@IdSelected CHAR(16) = NULL
+	@IdSelected CHAR(16) = NULL,
+	@Search VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -16,6 +18,7 @@ BEGIN
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdSelected = ISNULL(NULLIF(LTRIM(RTRIM(@IdSelected)), ''), REPLICATE('0', 16));
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -57,15 +60,24 @@ BEGIN
 				INNER JOIN dbo.tblDiwassOperatori o ON s.Id = o.Id
 				LEFT JOIN dbo.tblSedi p ON s.IdParent = p.Id
 			WHERE
-				o.Stato IN ('NEW', 'VALID')
-				OR s.Id = @IdSelected
+				s.Id = @IdSelected
+				OR
+					(
+					o.Stato IN ('NEW', 'VALID')
+					AND
+						(
+						@Search IS NULL
+						OR ISNULL(p.NomeCompleto + ' - ', '') + s.NomeCompleto + ' (' + s.IndirizzoCompleto + ')' LIKE '%' + @Search + '%'
+						)
+					)
 		)
 		SELECT
 			Id,
 			[Text],
 			Selected
 		FROM cte
-		ORDER BY Pos, [Text];
+		ORDER BY Pos, [Text]
+		OPTION (RECOMPILE);
 
 	END TRY
 	BEGIN CATCH

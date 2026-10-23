@@ -1,21 +1,118 @@
 ﻿/*
-Deploy produzione 2026-10-22 - Modulo DIWASS: Allegato VII (Diwass > Allegati VII)
+Deploy produzione 2026-10-23 - Modulo DIWASS completo in 4_0_ecomatico (credenziali, operatori, Allegato VII)
 
-Richiede gli script DIWASS precedenti dello stesso giorno (credenziali, operatori). Rieseguibile. Eseguire con
-sqlcmd -f 65001 -I (oppure da SSMS) sul DB 4_0_ecomatico. App e hub 1_0_DiwassApi da pubblicare insieme.
+Sostituisce i tre script del 2026-10-22 (mai eseguiti in produzione). Rieseguibile. Eseguire con sqlcmd -f 65001 -I -b
+(oppure da SSMS) sul DB 4_0_ecomatico, DOPO 1_0_diwass\tools\deploy_produzione_2026-10-22_creazione.sql (le SP delle
+credenziali leggono e scrivono [1_0_diwass]..tblCredenziali). App e hub 1_0_DiwassApi da pubblicare insieme.
 
-1. Codifiche DIWASS dei rifiuti: tblDiwassCodiciRifiuti (codici ufficiali Basel A e B, OCSE, allegati IIIA e IIIB) e
-   tblDiwassCodiciRifiutiEer (codici suggeriti per EER), come tools/diwass_codici_rifiuti.sql.
-2. Tabelle dell'Allegato VII: tblDiwassAllegatiVii, tblDiwassAllegatiViiSoggetti, tblDiwassCodiciRifiutiUsati,
-   tblDiwassFirmeRuoli; funzione DWA (Allegati VII DIWASS, assegnabile agli utenti standard), pagina DWA, menu AL3 in
-   cima all'area Diwass (Operatori e Credenziali dopo).
-3. Funzioni ufnDiwassAllegatiVii_* e SP uspDiwassAllegatiVii_* (creazione da registrazione o da zero, scheda,
-   salvataggio, elenco ed esportazione, cancellazione, dati e controlli per l'invio, esito, select).
-4. uspSYS_del_SedeInterna/SedeEsterna/Registro/RifiutiMovimentiCascade (solo uso tecnico): chiavi esterne nuove.
-   Regole D5 in docs/regole/diwass.md (repo app).
+0. Controllo: 4_0_ecomatico e 1_0_diwass devono avere la collation Latin1_General_CI_AS, altrimenti lo script si ferma
+   senza modificare nulla (i confronti tra i due DB richiedono la stessa collation). In SSMS, dopo il messaggio
+   "Script interrotto" possono comparire errori di compilazione degli oggetti successivi: non eseguono nulla.
+1. Tabelle e configurazione:
+   - tblDiwassCredenziali; modulo DWS (Diwass, attivarlo attiva anche l'Anagrafica), funzione DWC riservata agli
+     amministratori, area Diwass dopo Rentri (Impostazioni in coda), pagina DWZ Credenziali, menu AL0 e AL1;
+   - tblDiwassOperatori; funzione DWO, pagina DWP Operatori, menu AL2;
+   - codifiche: tblDiwassCodiciRifiuti (182 codici ufficiali Basel, OCSE, allegati IIIA e IIIB) e
+     tblDiwassCodiciRifiutiEer (48 codici suggeriti per EER);
+   - tblDiwassAllegatiVii, tblDiwassAllegatiViiSoggetti, tblDiwassCodiciRifiutiUsati, tblDiwassFirmeRuoli; funzione
+     DWA, pagina DWA Allegati VII, menu AL3 in cima all'area (poi Operatori e Credenziali).
+   Il modulo NON viene attivato su nessun dominio: si attiva da Impostazioni > Domini.
+2. Funzioni ufnDiwass* e SP uspDiwass* (credenziali, operatori, Allegato VII), nella versione attuale del repo.
+3. SP esistenti modificate: uspRifiutiAttivitaRecuperoSmaltimento_get_SelectList (parametro facoltativo Tipo, per le
+   sole operazioni di recupero dell'Allegato VII) e uspSYS_del_SedeInterna/SedeEsterna/Registro/RifiutiMovimentiCascade
+   (solo uso tecnico: chiavi esterne delle tabelle DIWASS).
+Regole in docs/regole/diwass.md (repo app).
 */
+-- ===== 0. Controllo della collation
+IF CAST(DATABASEPROPERTYEX(DB_NAME(), 'Collation') AS NVARCHAR(128)) <> N'Latin1_General_CI_AS'
+	OR DB_ID('1_0_diwass') IS NULL
+	OR CAST(DATABASEPROPERTYEX('1_0_diwass', 'Collation') AS NVARCHAR(128)) <> N'Latin1_General_CI_AS'
+BEGIN
+	RAISERROR('Script interrotto: 4_0_ecomatico e 1_0_diwass devono esistere con la collation Latin1_General_CI_AS (eseguire prima lo script di 1_0_diwass)', 16, 1);
+	SET NOEXEC ON;
+END
+GO
+-- ===== 1. Tabelle e configurazione: credenziali
+-- ----- tblDiwassCredenziali
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+IF OBJECT_ID('dbo.tblDiwassCredenziali', 'U') IS NULL
+BEGIN
+	CREATE TABLE dbo.tblDiwassCredenziali (
+		Id CHAR(16) NOT NULL,
+		IdDominio CHAR(16) NOT NULL,
+		IdAziendaInterna CHAR(16) NULL,
+		IdDiwass CHAR(16) NULL,
+		Nome VARCHAR(50) NULL,
+		Lock TINYINT NULL,
+		CONSTRAINT PK_tblDiwassCredenziali PRIMARY KEY CLUSTERED (Id ASC),
+		CONSTRAINT FK_tblDiwassCredenziali_tblDomini FOREIGN KEY (IdDominio) REFERENCES dbo.tblDomini (Id),
+		CONSTRAINT FK_tblDiwassCredenziali_tblSediInterne FOREIGN KEY (IdAziendaInterna) REFERENCES dbo.tblSediInterne (Id)
+	);
+	CREATE NONCLUSTERED INDEX IX_DiwassCredenziali_IdDominio_Lock ON dbo.tblDiwassCredenziali (IdDominio ASC, Lock ASC);
+	CREATE UNIQUE NONCLUSTERED INDEX UX_DiwassCredenziali_IdAziendaInterna ON dbo.tblDiwassCredenziali (IdAziendaInterna ASC)
+	WHERE Lock = 0 AND IdAziendaInterna IS NOT NULL;
+END
+GO
 
--- ===== 1. Codifiche DIWASS dei rifiuti
+-- ----- Configurazione del modulo e del menu
+IF NOT EXISTS (SELECT 1 FROM dbo.tblModuli WHERE Id = 'DWS')
+	INSERT INTO dbo.tblModuli (Id, Nome, Attivo) VALUES ('DWS', 'Diwass', 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFunzioni WHERE Id = 'DWC')
+	INSERT INTO dbo.tblFunzioni (Id, Nome, [Master], Admin, Attiva) VALUES ('DWC', 'Diwass', 0, 1, 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.tblModuliFunzioni WHERE Id = 'DWS' AND IdFunzione = 'DWC')
+	INSERT INTO dbo.tblModuliFunzioni (Id, IdFunzione) VALUES ('DWS', 'DWC');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblModuliRelazioni WHERE Id = 'ANA' AND IdParent = 'DWS')
+	INSERT INTO dbo.tblModuliRelazioni (Id, IdParent) VALUES ('ANA', 'DWS');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblPagineAree WHERE Id = 'DWS')
+	INSERT INTO dbo.tblPagineAree (Id, Nome, Icon) VALUES ('DWS', 'Diwass', 'fal fa-globe-europe');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblPagine WHERE Id = 'DWZ')
+	INSERT INTO dbo.tblPagine (Id, IdFunzione, Nome, Url) VALUES ('DWZ', 'DWC', 'Credenziali', NULL);
+UPDATE dbo.tblMenu SET Pos = 11 WHERE Id = 'AZ0';
+IF NOT EXISTS (SELECT 1 FROM dbo.tblMenu WHERE Id = 'AL0')
+	INSERT INTO dbo.tblMenu (Id, IdParent, IdArea, IdPagina, Pos) VALUES ('AL0', NULL, 'DWS', NULL, 10);
+IF NOT EXISTS (SELECT 1 FROM dbo.tblMenu WHERE Id = 'AL1')
+	INSERT INTO dbo.tblMenu (Id, IdParent, IdArea, IdPagina, Pos) VALUES ('AL1', 'AL0', NULL, 'DWZ', 0);
+GO
+
+-- ===== 1. Tabelle e configurazione: operatori
+-- ----- tblDiwassOperatori
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+IF OBJECT_ID('dbo.tblDiwassOperatori', 'U') IS NULL
+BEGIN
+	CREATE TABLE dbo.tblDiwassOperatori (
+		Id CHAR(16) NOT NULL,
+		OperatorInternalId BIGINT NOT NULL,
+		LinkedOperatorInternalId BIGINT NULL,
+		Nome VARCHAR(250) NULL,
+		Indirizzo VARCHAR(500) NULL,
+		Paese CHAR(2) NULL,
+		Identificativo VARCHAR(100) NULL,
+		Stato VARCHAR(20) NULL,
+		DataVerifica SMALLDATETIME NULL,
+		CONSTRAINT PK_tblDiwassOperatori PRIMARY KEY CLUSTERED (Id ASC),
+		CONSTRAINT FK_tblDiwassOperatori_tblSedi FOREIGN KEY (Id) REFERENCES dbo.tblSedi (Id)
+	);
+	CREATE NONCLUSTERED INDEX IX_DiwassOperatori_OperatorInternalId ON dbo.tblDiwassOperatori (OperatorInternalId ASC);
+END
+GO
+
+-- ----- Configurazione
+IF NOT EXISTS (SELECT 1 FROM dbo.tblFunzioni WHERE Id = 'DWO')
+	INSERT INTO dbo.tblFunzioni (Id, Nome, [Master], Admin, Attiva) VALUES ('DWO', 'Operatori DIWASS', 0, 0, 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.tblModuliFunzioni WHERE Id = 'DWS' AND IdFunzione = 'DWO')
+	INSERT INTO dbo.tblModuliFunzioni (Id, IdFunzione) VALUES ('DWS', 'DWO');
+IF NOT EXISTS (SELECT 1 FROM dbo.tblPagine WHERE Id = 'DWP')
+	INSERT INTO dbo.tblPagine (Id, IdFunzione, Nome, Url) VALUES ('DWP', 'DWO', 'Operatori', NULL);
+IF NOT EXISTS (SELECT 1 FROM dbo.tblMenu WHERE Id = 'AL2')
+	INSERT INTO dbo.tblMenu (Id, IdParent, IdArea, IdPagina, Pos) VALUES ('AL2', 'AL0', NULL, 'DWP', 1);
+GO
+
+-- ===== 1. Tabelle e configurazione: codifiche e Allegato VII
+-- ----- Codifiche DIWASS dei rifiuti
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
@@ -288,7 +385,7 @@ WHEN MATCHED AND ISNULL(t.Pos, 0) <> s.Pos THEN UPDATE SET Pos = s.Pos
 WHEN NOT MATCHED BY TARGET THEN INSERT (IdEer, Lista, Codice, Pos) VALUES (s.IdEer, s.Lista, s.Codice, s.Pos);
 GO
 
--- ===== 2. Struttura e configurazione
+-- ----- Struttura e configurazione
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
@@ -406,73 +503,8 @@ GO
 IF COL_LENGTH('dbo.tblDiwassAllegatiVii', 'DaInviare') IS NULL
 	ALTER TABLE dbo.tblDiwassAllegatiVii ADD DaInviare BIT NULL;
 GO
--- ===== 3. ufnDiwassAllegatiVii_get_StatoDescrizione
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
--- Stato dell'Allegato VII in italiano: NULL = bozza in Ecomatico, gli altri sono gli stati di DIWASS
-CREATE OR ALTER FUNCTION [dbo].[ufnDiwassAllegatiVii_get_StatoDescrizione] (
-	@Stato VARCHAR(20))
-RETURNS VARCHAR(50)
-WITH SCHEMABINDING
-AS
-BEGIN
-	RETURN CASE @Stato
-		WHEN 'ANNOUNCED' THEN 'Annunciato'
-		WHEN 'MOVING' THEN 'In viaggio'
-		WHEN 'RECEIVED' THEN 'Ricevuto'
-		WHEN 'COMPLETED' THEN 'Completato'
-		WHEN 'CANCELLED' THEN 'Annullato'
-		WHEN 'TAKE_BACK' THEN 'Ripresa'
-		ELSE ISNULL(@Stato, 'Bozza')
-	END;
-END;
-GO
 
--- ===== 3. ufnDiwassAllegatiVii_get_SedeCollegata
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
--- Sede da indicare nell'Allegato VII per una sede di Ecomatico: la sede stessa se è collegata a DIWASS, altrimenti
--- la sua azienda se collegata (Sostituita = 1: sul documento comparirà l'azienda, docs/regole/diwass.md D4.2).
--- Nessuna riga se né la sede né l'azienda sono collegate. Solo operatori con il ruolo WSR nuovo o valido
-CREATE OR ALTER FUNCTION [dbo].[ufnDiwassAllegatiVii_get_SedeCollegata] (
-	@IdSede CHAR(16))
-RETURNS TABLE
-AS
-RETURN
-(
-	SELECT TOP 1
-		IdSede = c.Id,
-		Sostituita = c.Sostituita
-	FROM (
-		SELECT
-			o.Id,
-			Sostituita = CAST(0 AS BIT),
-			Ordine = 0
-		FROM dbo.tblDiwassOperatori o
-		WHERE
-			o.Id = @IdSede
-			AND o.Stato IN ('NEW', 'VALID')
-		UNION ALL
-		SELECT
-			o.Id,
-			Sostituita = CAST(1 AS BIT),
-			Ordine = 1
-		FROM
-			dbo.tblSedi s
-			INNER JOIN dbo.tblDiwassOperatori o ON s.IdParent = o.Id
-		WHERE
-			s.Id = @IdSede
-			AND o.Stato IN ('NEW', 'VALID')
-	) c
-	ORDER BY c.Ordine
-);
-GO
-
--- ===== 3. ufnDiwassAllegatiVii_get_Contatto
+-- ===== 2. ufnDiwassAllegatiVii_get_Contatto
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -516,7 +548,117 @@ RETURN
 );
 GO
 
--- ===== 3. uspDiwassAllegatiVii_del
+-- ===== 2. ufnDiwassAllegatiVii_get_SedeCollegata
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Sede da indicare nell'Allegato VII per una sede di Ecomatico: la sede stessa se è collegata a DIWASS, altrimenti
+-- la sua azienda se collegata (Sostituita = 1: sul documento comparirà l'azienda, docs/regole/diwass.md D4.2).
+-- Nessuna riga se né la sede né l'azienda sono collegate. Solo operatori con il ruolo WSR nuovo o valido
+CREATE OR ALTER FUNCTION [dbo].[ufnDiwassAllegatiVii_get_SedeCollegata] (
+	@IdSede CHAR(16))
+RETURNS TABLE
+AS
+RETURN
+(
+	SELECT TOP 1
+		IdSede = c.Id,
+		Sostituita = c.Sostituita
+	FROM (
+		SELECT
+			o.Id,
+			Sostituita = CAST(0 AS BIT),
+			Ordine = 0
+		FROM dbo.tblDiwassOperatori o
+		WHERE
+			o.Id = @IdSede
+			AND o.Stato IN ('NEW', 'VALID')
+		UNION ALL
+		SELECT
+			o.Id,
+			Sostituita = CAST(1 AS BIT),
+			Ordine = 1
+		FROM
+			dbo.tblSedi s
+			INNER JOIN dbo.tblDiwassOperatori o ON s.IdParent = o.Id
+		WHERE
+			s.Id = @IdSede
+			AND o.Stato IN ('NEW', 'VALID')
+	) c
+	ORDER BY c.Ordine
+);
+GO
+
+-- ===== 2. ufnDiwassAllegatiVii_get_StatoDescrizione
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Stato dell'Allegato VII in italiano: NULL = bozza in Ecomatico, gli altri sono gli stati di DIWASS
+CREATE OR ALTER FUNCTION [dbo].[ufnDiwassAllegatiVii_get_StatoDescrizione] (
+	@Stato VARCHAR(20))
+RETURNS VARCHAR(50)
+WITH SCHEMABINDING
+AS
+BEGIN
+	RETURN CASE @Stato
+		WHEN 'ANNOUNCED' THEN 'Annunciato'
+		WHEN 'MOVING' THEN 'In viaggio'
+		WHEN 'RECEIVED' THEN 'Ricevuto'
+		WHEN 'COMPLETED' THEN 'Completato'
+		WHEN 'CANCELLED' THEN 'Annullato'
+		WHEN 'TAKE_BACK' THEN 'Ripresa'
+		ELSE ISNULL(@Stato, 'Bozza')
+	END;
+END;
+GO
+
+-- ===== 2. ufnDiwassOperatori_get_SediBySessione_List
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Sedi collegabili a DIWASS per la sessione (Diwass > Operatori): aziende e sedi, interne ed esterne, dell'azienda
+-- interna del contesto (Condivisa = 0, modificabili) più i soggetti condivisi da altre aziende nelle Aree, con le
+-- loro sedi (Condivisa = 1, sola lettura: il collegamento lo gestisce l'azienda proprietaria). Stesso perimetro di
+-- uspSedi_get_AziendeEsterne_List. Senza azienda nel contesto nessuna riga
+CREATE OR ALTER FUNCTION [dbo].[ufnDiwassOperatori_get_SediBySessione_List] (
+	@IdSessione CHAR(16))
+RETURNS TABLE
+AS
+RETURN
+(
+	SELECT
+		s.Id,
+		Condivisa = CAST(0 AS BIT),
+		Area = CAST(NULL AS VARCHAR(50))
+	FROM
+		dbo.tblSedi s
+		INNER JOIN dbo.tblSessioni e ON s.IdAziendaInterna = e.IdAzienda
+	WHERE
+		e.Id = @IdSessione
+		AND s.Lock = 0
+	UNION ALL -- rami mutualmente esclusivi: il secondo esclude le sedi dell'azienda del contesto
+
+	SELECT
+		s.Id,
+		Condivisa = CAST(1 AS BIT),
+		Area = CAST(MIN(c.Area) AS VARCHAR(50))
+	FROM
+		dbo.tblSessioni e
+		CROSS APPLY dbo.ufnSedi_get_AziendeEsterneCondiviseByUtente_List(e.IdUtente) c
+		INNER JOIN dbo.tblSedi s ON s.Id = c.Id OR s.IdParent = c.Id
+	WHERE
+		e.Id = @IdSessione
+		AND c.IdAziendaInterna <> e.IdAzienda
+		AND s.IdAziendaInterna <> e.IdAzienda
+		AND s.Lock = 0
+	GROUP BY s.Id
+);
+GO
+
+-- ===== 2. uspDiwassAllegatiVii_del
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -667,7 +809,7 @@ BEGIN
 END;
 GO
 
--- ===== 3. uspDiwassAllegatiVii_del_Undo
+-- ===== 2. uspDiwassAllegatiVii_del_Undo
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -736,7 +878,7 @@ BEGIN
 END;
 GO
 
--- ===== 3. uspDiwassAllegatiVii_get
+-- ===== 2. uspDiwassAllegatiVii_get
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -863,18 +1005,20 @@ BEGIN
 END;
 GO
 
--- ===== 3. uspDiwassAllegatiVii_get_Codici_SelectList
+-- ===== 2. uspDiwassAllegatiVii_get_Codici_SelectList
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- Codici internazionali del rifiuto per l'Allegato VII (Id = "lista|codice"): prima i suggeriti per l'EER
 -- (tblDiwassCodiciRifiutiEer), poi tutti gli altri della lista verde (Basel B, OCSE G.., allegati IIIA e IIIB: i codici OCSE A..
--- e R.. sono della lista ambra, fuori dall'Allegato VII)
+-- e R.. sono della lista ambra, fuori dall'Allegato VII). @Search filtra su "codice - descrizione"; "(Selezionare)" e il
+-- codice selezionato restano sempre in elenco
 CREATE OR ALTER PROCEDURE [dbo].[uspDiwassAllegatiVii_get_Codici_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@IdEer CHAR(6) = NULL,
-	@IdSelected NVARCHAR(40) = NULL
+	@IdSelected NVARCHAR(40) = NULL,
+	@Search VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -885,6 +1029,7 @@ BEGIN
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdEer = NULLIF(LTRIM(RTRIM(@IdEer)), '');
 		SET @IdSelected = NULLIF(LTRIM(RTRIM(@IdSelected)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -926,15 +1071,31 @@ BEGIN
 				dbo.tblDiwassCodiciRifiuti c
 				LEFT JOIN dbo.tblDiwassCodiciRifiutiEer g ON c.Lista = g.Lista AND c.Codice = g.Codice AND g.IdEer = @IdEer
 			WHERE
-				(c.Lista IN ('basel_b', 'wsr_a3a', 'wsr_a3b') OR (c.Lista = 'oecd' AND c.Codice LIKE 'G%'))
-				OR c.Lista + '|' + c.Codice = @IdSelected
+				c.Lista + '|' + c.Codice = @IdSelected
+				OR
+					(
+						(
+						c.Lista IN ('basel_b', 'wsr_a3a', 'wsr_a3b')
+						OR
+							(
+							c.Lista = 'oecd'
+							AND c.Codice LIKE 'G%'
+							)
+						)
+					AND
+						(
+						@Search IS NULL
+						OR c.Codice + N' - ' + c.Descrizione LIKE N'%' + @Search + N'%'
+						)
+					)
 		)
 		SELECT
 			Id,
 			[Text],
 			Selected
 		FROM cte
-		ORDER BY Gruppo, Pos, Id;
+		ORDER BY Gruppo, Pos, Id
+		OPTION (RECOMPILE);
 
 	END TRY
 	BEGIN CATCH
@@ -951,7 +1112,7 @@ BEGIN
 END;
 GO
 
--- ===== 3. uspDiwassAllegatiVii_get_Esportazione
+-- ===== 2. uspDiwassAllegatiVii_get_Esportazione
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -1060,7 +1221,7 @@ BEGIN
 END;
 GO
 
--- ===== 3. uspDiwassAllegatiVii_get_Invio
+-- ===== 2. uspDiwassAllegatiVii_get_Invio
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -1378,7 +1539,7 @@ BEGIN
 END;
 GO
 
--- ===== 3. uspDiwassAllegatiVii_get_List
+-- ===== 2. uspDiwassAllegatiVii_get_List
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -1495,7 +1656,7 @@ BEGIN
 END;
 GO
 
--- ===== 3. uspDiwassAllegatiVii_get_Soggetti
+-- ===== 2. uspDiwassAllegatiVii_get_Soggetti
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -1587,16 +1748,18 @@ BEGIN
 END;
 GO
 
--- ===== 3. uspDiwassAllegatiVii_get_Soggetti_SelectList
+-- ===== 2. uspDiwassAllegatiVii_get_Soggetti_SelectList
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 -- Soggetti proponibili in un Allegato VII: sedi del contesto o condivise (ufnDiwassOperatori_get_SediBySessione_List)
--- collegate a DIWASS con il ruolo WSR nuovo o valido. @IdSelected resta in elenco anche se nel frattempo non lo è più
+-- collegate a DIWASS con il ruolo WSR nuovo o valido. @IdSelected resta in elenco anche se nel frattempo non lo è più, e
+-- anche quando @Search (filtro sul testo "azienda - sede (indirizzo)") lo escluderebbe
 CREATE OR ALTER PROCEDURE [dbo].[uspDiwassAllegatiVii_get_Soggetti_SelectList]
 	@IdSessione CHAR(16) = NULL,
-	@IdSelected CHAR(16) = NULL
+	@IdSelected CHAR(16) = NULL,
+	@Search VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -1606,6 +1769,7 @@ BEGIN
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdSelected = ISNULL(NULLIF(LTRIM(RTRIM(@IdSelected)), ''), REPLICATE('0', 16));
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -1647,15 +1811,24 @@ BEGIN
 				INNER JOIN dbo.tblDiwassOperatori o ON s.Id = o.Id
 				LEFT JOIN dbo.tblSedi p ON s.IdParent = p.Id
 			WHERE
-				o.Stato IN ('NEW', 'VALID')
-				OR s.Id = @IdSelected
+				s.Id = @IdSelected
+				OR
+					(
+					o.Stato IN ('NEW', 'VALID')
+					AND
+						(
+						@Search IS NULL
+						OR ISNULL(p.NomeCompleto + ' - ', '') + s.NomeCompleto + ' (' + s.IndirizzoCompleto + ')' LIKE '%' + @Search + '%'
+						)
+					)
 		)
 		SELECT
 			Id,
 			[Text],
 			Selected
 		FROM cte
-		ORDER BY Pos, [Text];
+		ORDER BY Pos, [Text]
+		OPTION (RECOMPILE);
 
 	END TRY
 	BEGIN CATCH
@@ -1672,7 +1845,7 @@ BEGIN
 END;
 GO
 
--- ===== 3. uspDiwassAllegatiVii_ins
+-- ===== 2. uspDiwassAllegatiVii_ins
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -1982,7 +2155,7 @@ BEGIN
 END;
 GO
 
--- ===== 3. uspDiwassAllegatiVii_upd
+-- ===== 2. uspDiwassAllegatiVii_upd
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -2341,7 +2514,7 @@ BEGIN
 END;
 GO
 
--- ===== 3. uspDiwassAllegatiVii_upd_Invio
+-- ===== 2. uspDiwassAllegatiVii_upd_Invio
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -2484,7 +2657,1764 @@ BEGIN
 END;
 GO
 
--- ===== 4. uspSYS_del_SedeInternaCascade
+-- ===== 2. uspDiwassCredenziali_del
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspDiwassCredenziali_del]
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@Reset BIT = 0
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWC',
+			@Permesso = @permesso OUTPUT;
+
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Idempotenza: un @Id mai esistito o già cancellato è trattato come cancellazione
+		-- già avvenuta con successo, non come errore.
+		IF NOT EXISTS (SELECT 1
+		FROM dbo.tblDiwassCredenziali
+		WHERE Id = @Id)
+		BEGIN
+			SET @returnValue = 0;
+		END
+		ELSE
+		BEGIN
+
+			-- Controlla il permesso sul record (titolarità)
+			IF NOT EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblDiwassCredenziali c
+					INNER JOIN dbo.tblSessioni e ON c.IdDominio = e.IdDominio
+				WHERE
+					c.Id = @Id
+					AND e.Id = @IdSessione
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Non si dispone dei diritti necessari';
+				GOTO BRANCH_END;
+			END
+
+			DECLARE @lock INT = (SELECT Lock
+			FROM dbo.tblDiwassCredenziali
+			WHERE Id = @Id);
+
+			-- ── CASO 1: credenziale attiva (Lock = 0) → soft delete ────────────────
+			-- La riga hub NON viene toccata, per non perdere dati in caso di Undo.
+			IF @lock = 0
+			BEGIN
+				BEGIN TRANSACTION;
+					UPDATE dbo.tblDiwassCredenziali
+					SET Lock = 4
+					WHERE
+						Id = @Id
+						AND Lock = 0;
+
+					IF @@ROWCOUNT = 0
+					BEGIN
+						ROLLBACK TRANSACTION;
+						SET @returnValue = -1;
+						SET @returnMessage = 'Credenziale non trovata o già eliminata';
+						GOTO BRANCH_END;
+					END
+
+					IF @Reset = 1
+						DELETE dbo.tblIdCancellati
+						WHERE IdSessione = @IdSessione;
+					ELSE
+						DELETE dbo.tblIdCancellati
+						WHERE Id = @Id;
+
+					INSERT INTO dbo.tblIdCancellati (Id, IdSessione, [Data])
+					VALUES (@Id, @IdSessione, GETDATE());
+				COMMIT TRANSACTION;
+
+				EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'D';
+			END
+
+			-- ── CASO 2: credenziale in bozza (Lock = 2) → hard delete ──────────────
+			-- Nessuna riga hub esiste ancora a questo punto (creata solo da _upd).
+			ELSE IF @lock = 2
+			BEGIN
+				BEGIN TRANSACTION;
+					DELETE dbo.tblDiwassCredenziali
+					WHERE Id = @Id;
+					DELETE dbo.tblIdCancellati
+					WHERE Id = @Id;
+					DELETE dbo.tblIdLog
+					WHERE Id = @Id;
+					DELETE dbo.tblId
+					WHERE Id = @Id;
+				COMMIT TRANSACTION;
+			END
+
+			-- ── CASO 3: Lock in stato non gestito ───────────────────────────────────
+			ELSE
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'La credenziale è già in uno stato non modificabile (Lock = ' + CAST(@lock AS VARCHAR(5)) + ')';
+				GOTO BRANCH_END;
+			END
+
+		END
+
+		SELECT @returnValue AS ReturnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+-- ===== 2. uspDiwassCredenziali_del_Undo
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspDiwassCredenziali_del_Undo]
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Una sola credenziale attiva per azienda: se nel frattempo l'azienda ne ha una nuova, non si ripristina
+		IF EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblDiwassCredenziali i
+				INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id
+				INNER JOIN dbo.tblDiwassCredenziali a ON i.IdAziendaInterna = a.IdAziendaInterna
+			WHERE
+				c.IdSessione = @IdSessione
+				AND i.Lock = 4
+				AND a.Lock = 0
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Impossibile ripristinare: l''azienda ha già un''altra credenziale DIWASS';
+			GOTO BRANCH_END;
+		END
+
+		BEGIN TRANSACTION;
+
+			UPDATE i
+			SET Lock = 0
+			FROM dbo.tblDiwassCredenziali i
+			INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id
+			WHERE
+				c.IdSessione = @IdSessione
+				AND i.Lock = 4;
+
+			DELETE i
+			FROM dbo.tblIdLog i
+			INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id
+			WHERE
+				c.IdSessione = @IdSessione
+				AND i.Operazione = 'D';
+
+			DELETE dbo.tblIdCancellati
+			WHERE IdSessione = @IdSessione;
+			DECLARE @ripristinate INT = @@ROWCOUNT;
+
+		COMMIT TRANSACTION;
+
+		SET @returnMessage = CASE @ripristinate
+			WHEN 0 THEN 'Nessuna entità da ripristinare'
+			WHEN 1 THEN 'Entità ripristinata'
+			ELSE FORMAT(@ripristinate, 'N0', 'it-IT') + ' entità ripristinate'
+		END;
+
+		SELECT @returnMessage AS ReturnMessage;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+-- ===== 2. uspDiwassCredenziali_get
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspDiwassCredenziali_get]
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità)
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblDiwassCredenziali c
+				INNER JOIN dbo.tblSessioni e ON c.IdDominio = e.IdDominio
+			WHERE
+				c.Id = @Id
+				AND e.Id = @IdSessione
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		IF NOT EXISTS (SELECT 1
+		FROM dbo.tblDiwassCredenziali
+		WHERE
+			Id = @Id
+			AND Lock <= 2
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Credenziale non trovata';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			c.Id,
+			Nome = ISNULL(c.Nome, ''),
+			c.IdAziendaInterna,
+			AziendaNome = s.NomeCompleto,
+			h.Username,
+			h.AuthKey,
+			h.ClientId,
+			c.Lock
+		FROM
+			dbo.tblDiwassCredenziali c
+			LEFT JOIN dbo.tblSedi s ON c.IdAziendaInterna = s.Id
+			LEFT JOIN [1_0_diwass]..tblCredenziali h ON c.IdDiwass = h.Id
+		WHERE c.Id = @Id;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+-- ===== 2. uspDiwassCredenziali_get_AziendeInterne_SelectList
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Aziende interne proponibili per una credenziale DIWASS: quelle visibili all'utente della sessione che non hanno già
+-- un'altra credenziale attiva (una sola per azienda). @IdSelected è l'azienda della credenziale aperta
+CREATE OR ALTER PROCEDURE [dbo].[uspDiwassCredenziali_get_AziendeInterne_SelectList]
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@IdSelected CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdSelected = ISNULL(NULLIF(LTRIM(RTRIM(@IdSelected)), ''), REPLICATE('0', 16));
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		;WITH cte AS (
+			SELECT
+				Id = CAST(REPLICATE('0', 16) AS CHAR(16)),
+				[Text] = CAST('(Selezionare)' AS VARCHAR(200)),
+				Selected = CAST(IIF(@IdSelected = REPLICATE('0', 16), 1, 0) AS BIT),
+				Pos = 0
+
+			UNION ALL -- rami mutualmente esclusivi per Id e Pos
+
+			SELECT
+				s.Id,
+				[Text] = CAST(s.NomeCompleto + ' ' + s.IndirizzoCompleto AS VARCHAR(200)),
+				Selected = CAST(IIF(s.Id = @IdSelected, 1, 0) AS BIT),
+				Pos = 1
+			FROM
+				dbo.tblSessioni e
+				CROSS APPLY dbo.ufnSedi_get_AziendeInterneByUtente_List(e.IdUtente) i
+				INNER JOIN dbo.tblSedi s ON i.Id = s.Id
+			WHERE
+				e.Id = @IdSessione
+				AND i.IdDominio = e.IdDominio
+				AND NOT EXISTS (
+					SELECT 1
+					FROM dbo.tblDiwassCredenziali c
+					WHERE
+						c.IdAziendaInterna = s.Id
+						AND c.Lock = 0
+						AND (@Id IS NULL OR c.Id <> @Id)
+				)
+		)
+		SELECT
+			Id,
+			[Text],
+			Selected
+		FROM cte
+		ORDER BY Pos, [Text];
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+-- ===== 2. uspDiwassCredenziali_get_Esportazione
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Credenziali DIWASS (solo dati descrittivi, mai la chiave di autenticazione): righe per l'esportazione dell'elenco
+-- in Excel e in CSV (Azioni > Esporta in Excel, Esporta in CSV).
+-- Il nome di ogni colonna è l'intestazione che finisce nel file: l'applicazione (ExcelService, CsvService)
+-- scrive le colonne così come arrivano, nello stesso ordine. Per cambiare che cosa si esporta si modifica solo
+-- questa SP.
+-- Stesse righe e stesso ordine dell'elenco: permesso, scope e criteri di ricerca sono ricopiati da
+-- uspDiwassCredenziali_get_List e vanno tenuti allineati a quella. Tutte le righe, senza paginazione: al massimo
+-- @MaxRighe + 1 (la riga in più dice all'applicazione che la ricerca va ristretta).
+CREATE OR ALTER PROCEDURE dbo.uspDiwassCredenziali_get_Esportazione
+	@IdSessione CHAR(16) = NULL,
+	@Search VARCHAR(50) = NULL,
+	@MaxRighe INT = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+		SET @MaxRighe = IIF(ISNULL(@MaxRighe, 0) < 1, 50000, @MaxRighe);
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Scope: dominio della sessione
+		SELECT TOP (@MaxRighe + 1)
+			[Nome] = c.Nome,
+			[Azienda] = s.NomeCompleto,
+			[Utente EU Login] = h.Username,
+			[Client id] = h.ClientId
+		FROM
+			dbo.tblDiwassCredenziali c
+			INNER JOIN dbo.tblSessioni e ON c.IdDominio = e.IdDominio
+			LEFT JOIN dbo.tblSedi s ON c.IdAziendaInterna = s.Id
+			LEFT JOIN [1_0_diwass]..tblCredenziali h ON c.IdDiwass = h.Id
+		WHERE
+			e.Id = @IdSessione
+			AND c.Lock = 0
+			AND
+				(
+				@Search IS NULL
+				OR c.Nome LIKE '%' + @Search + '%'
+				OR s.NomeCompleto LIKE '%' + @Search + '%'
+				)
+		ORDER BY c.Nome
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+-- ===== 2. uspDiwassCredenziali_get_IdDiwass
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Id della riga dell'hub [1_0_diwass]..tblCredenziali di una credenziale (Verifica connessione)
+CREATE OR ALTER PROCEDURE [dbo].[uspDiwassCredenziali_get_IdDiwass]
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità), stesso pattern di uspDiwassCredenziali_get
+		DECLARE @idDiwass CHAR(16);
+		SELECT @idDiwass = c.IdDiwass
+		FROM
+			dbo.tblDiwassCredenziali c
+			INNER JOIN dbo.tblSessioni e ON c.IdDominio = e.IdDominio
+		WHERE
+			c.Id = @Id
+			AND c.Lock <= 2
+			AND e.Id = @IdSessione;
+
+		IF @@ROWCOUNT = 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Credenziale non trovata';
+			GOTO BRANCH_END;
+		END
+
+		IF @idDiwass IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Salvare la credenziale prima di verificare la connessione';
+			GOTO BRANCH_END;
+		END
+
+		SELECT rtn = @idDiwass;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+-- ===== 2. uspDiwassCredenziali_get_List
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspDiwassCredenziali_get_List]
+	@PageNumber INT = 1,
+	@RowsPerPage INT = 50,
+	@IdSessione CHAR(16) = NULL,
+	@Search VARCHAR(50) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		SET @PageNumber = ISNULL(@PageNumber, 1);
+		SET @RowsPerPage = ISNULL(@RowsPerPage, 50);
+		IF @PageNumber < 1 SET @PageNumber = 1;
+		IF @RowsPerPage < 1 SET @RowsPerPage = 50;
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWC',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Scope: dominio della sessione
+		SELECT
+			c.Id,
+			c.Nome,
+			AziendaNome = s.NomeCompleto,
+			h.Username,
+			h.ClientId,
+			RowsCount = COUNT(*) OVER ()
+		FROM
+			dbo.tblDiwassCredenziali c
+			INNER JOIN dbo.tblSessioni e ON c.IdDominio = e.IdDominio
+			LEFT JOIN dbo.tblSedi s ON c.IdAziendaInterna = s.Id
+			LEFT JOIN [1_0_diwass]..tblCredenziali h ON c.IdDiwass = h.Id
+		WHERE
+			e.Id = @IdSessione
+			AND c.Lock = 0
+			AND
+				(
+				@Search IS NULL
+				OR c.Nome LIKE '%' + @Search + '%'
+				OR s.NomeCompleto LIKE '%' + @Search + '%'
+				)
+		ORDER BY c.Nome
+		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
+		FETCH NEXT @RowsPerPage ROWS ONLY
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+-- ===== 2. uspDiwassCredenziali_ins
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspDiwassCredenziali_ins]
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnId CHAR(16) = NULL;
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWC',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idDominio CHAR(16);
+		SELECT @idDominio = IdDominio
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione;
+
+		IF @idDominio IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare il dominio';
+			GOTO BRANCH_END;
+		END
+
+		-- uspId_get FUORI dalla transazione
+		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
+
+		BEGIN TRANSACTION;
+			INSERT dbo.tblDiwassCredenziali (Id, IdDominio, Lock)
+			VALUES (@returnId, @idDominio, 2);
+		COMMIT TRANSACTION;
+
+		SELECT Id = @returnId;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+
+END;
+GO
+
+-- ===== 2. uspDiwassCredenziali_upd
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Salva la credenziale DIWASS di un'azienda interna (una sola credenziale attiva per azienda). I dati di accesso
+-- (utente EU Login, chiave di autenticazione, client id) vanno nella riga dell'hub [1_0_diwass]..tblCredenziali,
+-- creata al primo salvataggio, come per le credenziali RENTRI (uspRentriCredenziali_upd)
+CREATE OR ALTER PROCEDURE [dbo].[uspDiwassCredenziali_upd]
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@Nome VARCHAR(50) = NULL,
+	@IdAziendaInterna CHAR(16) = NULL,
+	@Username VARCHAR(50) = NULL,
+	@AuthKey VARCHAR(200) = NULL,
+	@ClientId VARCHAR(50) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Nome = dbo.ufnStringhe_get_SenzaSpazi(@Nome, 0, 1);
+		SET @IdAziendaInterna = NULLIF(NULLIF(LTRIM(RTRIM(@IdAziendaInterna)), ''), REPLICATE('0', 16));
+		SET @Username = NULLIF(LTRIM(RTRIM(@Username)), '');
+		SET @AuthKey = NULLIF(LTRIM(RTRIM(@AuthKey)), '');
+		SET @ClientId = NULLIF(LTRIM(RTRIM(@ClientId)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @Nome IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare un nome per la credenziale';
+			GOTO BRANCH_END;
+		END
+		IF @IdAziendaInterna IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare l''azienda';
+			GOTO BRANCH_END;
+		END
+		IF @Username IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare il nome utente EU Login';
+			GOTO BRANCH_END;
+		END
+		IF @AuthKey IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare la chiave di autenticazione';
+			GOTO BRANCH_END;
+		END
+		IF @ClientId IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Indicare il client id';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWC',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità) e recupera IdDominio/IdDiwass correnti
+		DECLARE @idDominio CHAR(16);
+		DECLARE @idDiwass CHAR(16);
+		SELECT
+			@idDominio = c.IdDominio,
+			@idDiwass = c.IdDiwass
+		FROM
+			dbo.tblDiwassCredenziali c
+			INNER JOIN dbo.tblSessioni e ON c.IdDominio = e.IdDominio
+		WHERE
+			c.Id = @Id
+			AND e.Id = @IdSessione;
+
+		IF @idDominio IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- L'azienda deve essere un'azienda interna attiva visibile all'utente della sessione
+		IF NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblSessioni e
+				CROSS APPLY dbo.ufnSedi_get_AziendeInterneByUtente_List(e.IdUtente) i
+			WHERE
+				e.Id = @IdSessione
+				AND i.Id = @IdAziendaInterna
+				AND i.IdDominio = @idDominio
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'L''azienda selezionata non è valida';
+			GOTO BRANCH_END;
+		END
+
+		-- Una sola credenziale DIWASS attiva per azienda
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblDiwassCredenziali
+			WHERE
+				Id <> @Id
+				AND IdAziendaInterna = @IdAziendaInterna
+				AND Lock = 0
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'L''azienda selezionata ha già una credenziale DIWASS';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla che non esista un'altra credenziale con lo stesso nome nel dominio
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblDiwassCredenziali
+			WHERE
+				Id <> @Id
+				AND IdDominio = @idDominio
+				AND Lock = 0
+				AND Nome = @Nome
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Un''altra credenziale con lo stesso nome è già presente';
+			GOTO BRANCH_END;
+		END
+
+		BEGIN TRANSACTION;
+			-- Crea la riga hub al primo salvataggio, altrimenti la aggiorna
+			IF @idDiwass IS NULL
+			BEGIN
+				SET @idDiwass = LOWER(REPLACE(LEFT(CONVERT(VARCHAR(36), NEWID()), 18), '-', ''));
+				INSERT INTO [1_0_diwass]..tblCredenziali (Id, Username, AuthKey, ClientId)
+				VALUES (@idDiwass, @Username, @AuthKey, @ClientId);
+			END
+			ELSE
+			BEGIN
+				UPDATE [1_0_diwass]..tblCredenziali
+				SET
+					Username = @Username,
+					AuthKey = @AuthKey,
+					ClientId = @ClientId
+				WHERE Id = @idDiwass;
+			END
+
+			UPDATE dbo.tblDiwassCredenziali
+			SET
+				Lock = 0,
+				IdDiwass = @idDiwass,
+				Nome = @Nome,
+				IdAziendaInterna = @IdAziendaInterna
+			WHERE
+				Id = @Id
+				AND Lock <= 2;
+
+			IF @@ROWCOUNT = 0
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Credenziale non trovata o già eliminata';
+				GOTO BRANCH_END;
+			END
+		COMMIT TRANSACTION;
+
+		-- Log FUORI dalla transazione
+		EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'U';
+
+		SELECT ReturnValue = @returnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+-- ===== 2. uspDiwassOperatori_del
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Scollega una sede dall'operatore DIWASS (Scollega): solo le sedi dell'azienda del contesto; l'azienda solo dopo
+-- le sue sedi
+CREATE OR ALTER PROCEDURE [dbo].[uspDiwassOperatori_del]
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWO',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità): solo le sedi dell'azienda del contesto, non quelle condivise
+		DECLARE @condivisa BIT;
+		SELECT @condivisa = Condivisa
+		FROM dbo.ufnDiwassOperatori_get_SediBySessione_List(@IdSessione)
+		WHERE Id = @Id;
+
+		IF @condivisa IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+		IF @condivisa = 1
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il soggetto è condiviso da un''altra azienda: il collegamento a DIWASS lo gestisce l''azienda che lo ha creato';
+			GOTO BRANCH_END;
+		END
+
+		IF EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblSedi s
+				INNER JOIN dbo.tblDiwassOperatori o ON s.Id = o.Id
+			WHERE s.IdParent = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Scollegare prima le sedi dell''azienda collegate a DIWASS';
+			GOTO BRANCH_END;
+		END
+
+		BEGIN TRANSACTION;
+			DELETE dbo.tblDiwassOperatori
+			WHERE Id = @Id;
+		COMMIT TRANSACTION;
+
+		-- Log FUORI dalla transazione
+		EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'U';
+
+		SELECT ReturnValue = @returnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+-- ===== 2. uspDiwassOperatori_get
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Scheda di Diwass > Operatori: dati della sede (per la ricerca su DIWASS), dell'azienda a cui appartiene e del
+-- collegamento a DIWASS della sede e dell'azienda
+CREATE OR ALTER PROCEDURE [dbo].[uspDiwassOperatori_get]
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWO',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità): sede del contesto o condivisa
+		IF NOT EXISTS (
+			SELECT 1
+			FROM dbo.ufnDiwassOperatori_get_SediBySessione_List(@IdSessione)
+			WHERE Id = @Id)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		SELECT
+			s.Id,
+			Nome = s.NomeCompleto,
+			s.IndirizzoCompleto,
+			s.PartitaIva,
+			s.CodiceFiscale,
+			Paese = n.Sigla,
+			IsSedePrincipale = CAST(IIF(s.IdParent IS NULL, 1, 0) AS BIT),
+			s.IdParent,
+			AziendaNome = p.NomeCompleto,
+			AziendaOperatorInternalId = po.OperatorInternalId,
+			AziendaOperatoreNome = po.Nome,
+			v.Condivisa,
+			v.Area,
+			o.OperatorInternalId,
+			o.LinkedOperatorInternalId,
+			OperatoreNome = o.Nome,
+			OperatoreIndirizzo = o.Indirizzo,
+			OperatorePaese = o.Paese,
+			OperatoreIdentificativo = o.Identificativo,
+			OperatoreStato = o.Stato,
+			OperatoreDataVerifica = o.DataVerifica
+		FROM
+			dbo.ufnDiwassOperatori_get_SediBySessione_List(@IdSessione) v
+			INNER JOIN dbo.tblSedi s ON v.Id = s.Id
+			LEFT JOIN dbo.tblSedi p ON s.IdParent = p.Id
+			LEFT JOIN dbo.tblDiwassOperatori o ON s.Id = o.Id
+			LEFT JOIN dbo.tblDiwassOperatori po ON s.IdParent = po.Id
+			OUTER APPLY (
+				SELECT TOP 1 z.Sigla
+				FROM
+					dbo.tblSediIndirizzi si
+					INNER JOIN dbo.tblIndirizzi i ON si.IdIndirizzo = i.Id
+					INNER JOIN dbo.tblNazioni z ON i.IdNazione = z.Id
+				WHERE si.Id = s.Id) n
+		WHERE v.Id = @Id;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+-- ===== 2. uspDiwassOperatori_get_Esportazione
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Operatori DIWASS: righe per l'esportazione dell'elenco in Excel e in CSV (Azioni > Esporta in Excel, Esporta in CSV).
+-- Il nome di ogni colonna è l'intestazione che finisce nel file: l'applicazione (ExcelService, CsvService)
+-- scrive le colonne così come arrivano, nello stesso ordine. Per cambiare che cosa si esporta si modifica solo
+-- questa SP.
+-- Stesse righe e stesso ordine dell'elenco: permesso, scope e criteri di ricerca sono ricopiati da
+-- uspDiwassOperatori_get_List e vanno tenuti allineati a quella. Tutte le righe, senza paginazione: al massimo
+-- @MaxRighe + 1 (la riga in più dice all'applicazione che la ricerca va ristretta).
+CREATE OR ALTER PROCEDURE dbo.uspDiwassOperatori_get_Esportazione
+	@IdSessione CHAR(16) = NULL,
+	@Search VARCHAR(50) = NULL,
+	@Collegamento CHAR(1) = NULL,
+	@MaxRighe INT = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+		SET @Collegamento = NULLIF(LTRIM(RTRIM(@Collegamento)), '');
+		SET @MaxRighe = IIF(ISNULL(@MaxRighe, 0) < 1, 50000, @MaxRighe);
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWO',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Scope: sedi dell'azienda del contesto e condivise (ufnDiwassOperatori_get_SediBySessione_List)
+		SELECT TOP (@MaxRighe + 1)
+			[Azienda] = ISNULL(p.NomeCompleto, s.NomeCompleto),
+			[Sede] = IIF(s.IdParent IS NULL, NULL, s.NomeCompleto),
+			[Indirizzo] = s.IndirizzoCompleto,
+			[Partita IVA] = ISNULL(s.PartitaIva, s.CodiceFiscale),
+			[Condivisa] = IIF(v.Condivisa = 1, 'Sì', 'No'),
+			[Operatore DIWASS] = o.Nome,
+			[Id operatore DIWASS] = o.OperatorInternalId,
+			[Id sede principale DIWASS] = o.LinkedOperatorInternalId,
+			[Indirizzo su DIWASS] = o.Indirizzo,
+			[Identificativo su DIWASS] = o.Identificativo,
+			[Stato su DIWASS] = o.Stato,
+			[Ultima verifica] = o.DataVerifica
+		FROM
+			dbo.ufnDiwassOperatori_get_SediBySessione_List(@IdSessione) v
+			INNER JOIN dbo.tblSedi s ON v.Id = s.Id
+			LEFT JOIN dbo.tblSedi p ON s.IdParent = p.Id
+			LEFT JOIN dbo.tblDiwassOperatori o ON s.Id = o.Id
+		WHERE
+			(
+			@Search IS NULL
+			OR s.NomeCompleto LIKE '%' + @Search + '%'
+			OR p.NomeCompleto LIKE '%' + @Search + '%'
+			OR s.IndirizzoCompleto LIKE '%' + @Search + '%'
+			OR s.PartitaIva LIKE '%' + @Search + '%'
+			OR s.CodiceFiscale LIKE '%' + @Search + '%'
+			)
+			AND
+				(
+				@Collegamento IS NULL
+				OR
+					(
+					@Collegamento = 'S'
+					AND o.Id IS NOT NULL
+					)
+				OR
+					(
+					@Collegamento = 'N'
+					AND o.Id IS NULL
+					)
+				)
+		ORDER BY
+			ISNULL(p.NomeCompleto, s.NomeCompleto),
+			ISNULL(s.IdParent, s.Id),
+			IIF(s.IdParent IS NULL, 0, 1),
+			s.NomeCompleto
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+-- ===== 2. uspDiwassOperatori_get_IdDiwassCredenziale
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Id dell'hub della credenziale DIWASS dell'azienda interna del contesto, usata dalle pagine operative per parlare
+-- con DIWASS (ricerca e lettura degli operatori). Basta la funzione DWO: non serve DWC (configurazione)
+CREATE OR ALTER PROCEDURE [dbo].[uspDiwassOperatori_get_IdDiwassCredenziale]
+	@IdSessione CHAR(16) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWO',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idAzienda CHAR(16) = (SELECT IdAzienda
+		FROM dbo.tblSessioni
+		WHERE Id = @IdSessione);
+		IF @idAzienda IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Selezionare l''azienda';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idDiwass CHAR(16) = (
+			SELECT IdDiwass
+			FROM dbo.tblDiwassCredenziali
+			WHERE
+				IdAziendaInterna = @idAzienda
+				AND Lock = 0
+		);
+		IF @idDiwass IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'L''azienda non ha una credenziale DIWASS: chiedere all''amministratore di crearla in Diwass > Credenziali';
+			GOTO BRANCH_END;
+		END
+
+		SELECT rtn = @idDiwass;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+-- ===== 2. uspDiwassOperatori_get_List
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Diwass > Operatori: aziende e sedi del contesto (più quelle condivise) con lo stato del collegamento a DIWASS.
+-- Ogni azienda è seguita dalle sue sedi
+CREATE OR ALTER PROCEDURE [dbo].[uspDiwassOperatori_get_List]
+	@PageNumber INT = 1,
+	@RowsPerPage INT = 50,
+	@IdSessione CHAR(16) = NULL,
+	@Search VARCHAR(50) = NULL,
+	@Collegamento CHAR(1) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
+		SET @Collegamento = NULLIF(LTRIM(RTRIM(@Collegamento)), '');
+
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		SET @PageNumber = ISNULL(@PageNumber, 1);
+		SET @RowsPerPage = ISNULL(@RowsPerPage, 50);
+		IF @PageNumber < 1 SET @PageNumber = 1;
+		IF @RowsPerPage < 1 SET @RowsPerPage = 50;
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWO',
+			@Permesso = @permesso OUTPUT;
+		IF 1 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Scope: sedi dell'azienda del contesto e condivise (ufnDiwassOperatori_get_SediBySessione_List)
+		SELECT
+			s.Id,
+			StatoValore = CASE
+				WHEN o.Id IS NULL THEN 1
+				WHEN o.Stato = 'VALID' THEN 0
+				ELSE 2
+			END,
+			StatoDescrizione = CASE
+				WHEN o.Id IS NULL THEN 'Non collegato a DIWASS'
+				WHEN o.Stato = 'VALID' THEN 'Collegato a DIWASS'
+				ELSE 'Operatore DIWASS non valido (' + ISNULL(o.Stato, 'senza ruolo WSR Operator') + ')'
+			END + IIF(v.Condivisa = 1, ' - anagrafica condivisa da altre aziende nell''area: ' + v.Area, ''),
+			Azienda = ISNULL(p.NomeCompleto, s.NomeCompleto),
+			Sede = IIF(s.IdParent IS NULL, NULL, s.NomeCompleto),
+			s.IndirizzoCompleto,
+			PartitaIva = ISNULL(s.PartitaIva, s.CodiceFiscale),
+			OperatoreNome = o.Nome,
+			o.OperatorInternalId,
+			v.Condivisa,
+			RowsCount = COUNT(*) OVER ()
+		FROM
+			dbo.ufnDiwassOperatori_get_SediBySessione_List(@IdSessione) v
+			INNER JOIN dbo.tblSedi s ON v.Id = s.Id
+			LEFT JOIN dbo.tblSedi p ON s.IdParent = p.Id
+			LEFT JOIN dbo.tblDiwassOperatori o ON s.Id = o.Id
+		WHERE
+			(
+			@Search IS NULL
+			OR s.NomeCompleto LIKE '%' + @Search + '%'
+			OR p.NomeCompleto LIKE '%' + @Search + '%'
+			OR s.IndirizzoCompleto LIKE '%' + @Search + '%'
+			OR s.PartitaIva LIKE '%' + @Search + '%'
+			OR s.CodiceFiscale LIKE '%' + @Search + '%'
+			)
+			AND
+				(
+				@Collegamento IS NULL
+				OR
+					(
+					@Collegamento = 'S'
+					AND o.Id IS NOT NULL
+					)
+				OR
+					(
+					@Collegamento = 'N'
+					AND o.Id IS NULL
+					)
+				)
+		ORDER BY
+			ISNULL(p.NomeCompleto, s.NomeCompleto),
+			ISNULL(s.IdParent, s.Id),
+			IIF(s.IdParent IS NULL, 0, 1),
+			s.NomeCompleto
+		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS
+		FETCH NEXT @RowsPerPage ROWS ONLY
+		OPTION (RECOMPILE);
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+-- ===== 2. uspDiwassOperatori_upd
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Collega una sede all'operatore DIWASS (Collega) o ne aggiorna la copia dei dati (Aggiorna da DIWASS). I dati
+-- arrivano dal dettaglio letto da DIWASS dall'applicazione, non dalla pagina. Regole (docs/regole/diwass.md, D4):
+-- l'azienda si collega a una sede principale DIWASS, una sua sede a un sito registrato sotto l'operatore
+-- dell'azienda; i soggetti condivisi da altre aziende sono in sola lettura
+CREATE OR ALTER PROCEDURE [dbo].[uspDiwassOperatori_upd]
+	@Id CHAR(16) = NULL,
+	@IdSessione CHAR(16) = NULL,
+	@OperatorInternalId BIGINT = NULL,
+	@LinkedOperatorInternalId BIGINT = NULL,
+	@Nome VARCHAR(250) = NULL,
+	@Indirizzo VARCHAR(500) = NULL,
+	@Paese CHAR(2) = NULL,
+	@Identificativo VARCHAR(100) = NULL,
+	@Stato VARCHAR(20) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
+		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @Nome = NULLIF(LTRIM(RTRIM(@Nome)), '');
+		SET @Indirizzo = NULLIF(LTRIM(RTRIM(@Indirizzo)), '');
+		SET @Paese = NULLIF(LTRIM(RTRIM(@Paese)), '');
+		SET @Identificativo = NULLIF(LTRIM(RTRIM(@Identificativo)), '');
+		SET @Stato = NULLIF(LTRIM(RTRIM(@Stato)), '');
+
+		IF @Id IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @Id non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @IdSessione IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+		IF @OperatorInternalId IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @OperatorInternalId non può essere vuoto';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sulla funzione
+		DECLARE @permesso TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'DWO',
+			@Permesso = @permesso OUTPUT;
+		IF 2 > @permesso
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+
+		-- Controlla il permesso sul record (titolarità): solo le sedi dell'azienda del contesto, non quelle condivise
+		DECLARE @condivisa BIT;
+		SELECT @condivisa = Condivisa
+		FROM dbo.ufnDiwassOperatori_get_SediBySessione_List(@IdSessione)
+		WHERE Id = @Id;
+
+		IF @condivisa IS NULL
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari';
+			GOTO BRANCH_END;
+		END
+		IF @condivisa = 1
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il soggetto è condiviso da un''altra azienda: il collegamento a DIWASS lo gestisce l''azienda che lo ha creato';
+			GOTO BRANCH_END;
+		END
+
+		DECLARE @idParent CHAR(16);
+		DECLARE @aziendaNome VARCHAR(200);
+		SELECT
+			@idParent = s.IdParent,
+			@aziendaNome = p.NomeCompleto
+		FROM
+			dbo.tblSedi s
+			LEFT JOIN dbo.tblSedi p ON s.IdParent = p.Id
+		WHERE s.Id = @Id;
+
+		DECLARE @operatoreAttuale BIGINT = (SELECT OperatorInternalId
+		FROM dbo.tblDiwassOperatori
+		WHERE Id = @Id);
+		DECLARE @nuovoCollegamento BIT = IIF(@operatoreAttuale IS NULL OR @operatoreAttuale <> @OperatorInternalId, 1, 0);
+
+		-- Un nuovo collegamento solo verso un operatore con il ruolo WSR Operator nuovo o valido; l'aggiornamento dello
+		-- stesso operatore invece registra anche uno stato non più valido (lo mostra l'elenco)
+		IF @nuovoCollegamento = 1 AND (@Stato IS NULL OR @Stato NOT IN ('NEW', 'VALID'))
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = IIF(@Stato IS NULL,
+				'L''operatore non ha il ruolo WSR Operator su DIWASS: non si può usare nelle spedizioni',
+				'L''operatore ha il ruolo WSR Operator nello stato ' + @Stato + ' su DIWASS: non si può collegare');
+			GOTO BRANCH_END;
+		END
+
+		IF @idParent IS NULL
+		BEGIN
+			-- Azienda: sede principale DIWASS, non un sito
+			IF @LinkedOperatorInternalId IS NOT NULL
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Per l''azienda scegliere la sede principale registrata su DIWASS, non un sito';
+				GOTO BRANCH_END;
+			END
+
+			-- Cambiando l'operatore dell'azienda i siti collegati alle sue sedi non sarebbero più coerenti
+			IF @nuovoCollegamento = 1 AND @operatoreAttuale IS NOT NULL
+				AND EXISTS (
+					SELECT 1
+					FROM
+						dbo.tblSedi s
+						INNER JOIN dbo.tblDiwassOperatori o ON s.Id = o.Id
+					WHERE s.IdParent = @Id)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Scollegare prima le sedi dell''azienda collegate a DIWASS';
+				GOTO BRANCH_END;
+			END
+		END
+		ELSE
+		BEGIN
+			-- Sede di un'azienda: sito registrato su DIWASS sotto l'operatore dell'azienda
+			DECLARE @operatoreAzienda BIGINT = (SELECT OperatorInternalId
+			FROM dbo.tblDiwassOperatori
+			WHERE Id = @idParent);
+
+			IF @operatoreAzienda IS NULL
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Collegare prima l''azienda ' + ISNULL(@aziendaNome, '') + ' a DIWASS';
+				GOTO BRANCH_END;
+			END
+			IF @LinkedOperatorInternalId IS NULL OR @LinkedOperatorInternalId <> @operatoreAzienda
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Scegliere un sito registrato su DIWASS sotto la sede principale dell''azienda';
+				GOTO BRANCH_END;
+			END
+		END
+
+		BEGIN TRANSACTION;
+			UPDATE dbo.tblDiwassOperatori
+			SET
+				OperatorInternalId = @OperatorInternalId,
+				LinkedOperatorInternalId = @LinkedOperatorInternalId,
+				Nome = @Nome,
+				Indirizzo = @Indirizzo,
+				Paese = @Paese,
+				Identificativo = @Identificativo,
+				Stato = @Stato,
+				DataVerifica = GETDATE()
+			WHERE Id = @Id;
+
+			IF @@ROWCOUNT = 0
+				INSERT INTO dbo.tblDiwassOperatori (Id, OperatorInternalId, LinkedOperatorInternalId, Nome, Indirizzo, Paese, Identificativo, Stato, DataVerifica)
+				VALUES (@Id, @OperatorInternalId, @LinkedOperatorInternalId, @Nome, @Indirizzo, @Paese, @Identificativo, @Stato, GETDATE());
+		COMMIT TRANSACTION;
+
+		-- Log FUORI dalla transazione
+		EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'U';
+
+		SELECT ReturnValue = @returnValue;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1;
+	END
+END;
+GO
+
+-- ===== 3. uspRifiutiAttivitaRecuperoSmaltimento_get_SelectList
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- @Tipo: NULL tutte le operazioni, 'R' solo recupero, 'D' solo smaltimento; l'operazione selezionata resta sempre in elenco
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAttivitaRecuperoSmaltimento_get_SelectList]
+	@IdSelected CHAR(2) = NULL,
+	@Tipo CHAR(1) = NULL
+AS
+BEGIN
+	SET NOCOUNT, XACT_ABORT ON;
+	BEGIN TRY
+
+		DECLARE @returnValue INT = 0;
+		DECLARE @returnMessage NVARCHAR(200) = NULL;
+
+		SET @IdSelected = NULLIF(LTRIM(RTRIM(@IdSelected)), '');
+		SET @Tipo = NULLIF(LTRIM(RTRIM(@Tipo)), '');
+
+		SELECT
+			Id = CAST('00' AS CHAR(2)),
+			[Text] = CAST('(Selezionare)' AS VARCHAR(200)),
+			Selected = CAST(IIF(@IdSelected IS NULL, 1, 0) AS BIT)
+
+		UNION ALL
+
+		SELECT
+			Id,
+			[Text] = Codice + ' - ' + Nome,
+			Selected = CAST(IIF(Id = @IdSelected, 1, 0) AS BIT)
+		FROM
+			dbo.tblRifiutiAttivitaRecuperoSmaltimento
+		WHERE
+			@Tipo IS NULL
+			OR Codice LIKE @Tipo + '%'
+			OR Id = @IdSelected
+		ORDER BY
+			Id;
+
+	END TRY
+	BEGIN CATCH
+		THROW;
+	END CATCH
+	BRANCH_END:
+	SET NOCOUNT, XACT_ABORT OFF;
+	IF @returnValue < 0
+	BEGIN
+		SET @returnMessage = ISNULL(@returnMessage, 'Database exception');
+		THROW 50001, @returnMessage, 1
+	END
+
+END;
+GO
+
+-- ===== 3. uspSYS_del_SedeInternaCascade
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -3044,8 +4974,9 @@ BEGIN
         THROW 50001, @returnMessage, 1;
     END
 END;
+GO
 
--- ===== 4. uspSYS_del_SedeEsternaCascade
+-- ===== 3. uspSYS_del_SedeEsternaCascade
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -3460,8 +5391,9 @@ BEGIN
         THROW 50001, @returnMessage, 1;
     END
 END;
+GO
 
--- ===== 4. uspSYS_del_RegistroCascade
+-- ===== 3. uspSYS_del_RegistroCascade
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -3617,8 +5549,9 @@ BEGIN
         THROW 50001, @returnMessage, 1;
     END
 END;
+GO
 
--- ===== 4. uspSYS_del_RifiutiMovimentiCascade
+-- ===== 3. uspSYS_del_RifiutiMovimentiCascade
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -3698,4 +5631,7 @@ BEGIN
         THROW 50001, @returnMessage, 1;
     END
 END;
+GO
 
+SET NOEXEC OFF;
+GO

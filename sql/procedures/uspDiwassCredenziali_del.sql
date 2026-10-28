@@ -75,6 +75,16 @@ BEGIN
 			FROM dbo.tblDiwassCredenziali
 			WHERE Id = @Id);
 
+			-- Una credenziale usata da un'azienda non si cancella: va prima tolta in Diwass > Aziende
+			IF EXISTS (SELECT 1
+			FROM dbo.tblDiwassCredenzialiAziende
+			WHERE IdCredenziale = @Id)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'La credenziale è associata ad aziende: toglierla prima in Diwass > Aziende';
+				GOTO BRANCH_END;
+			END
+
 			-- ── CASO 1: credenziale attiva (Lock = 0) → soft delete ────────────────
 			-- La riga hub NON viene toccata, per non perdere dati in caso di Undo.
 			IF @lock = 0

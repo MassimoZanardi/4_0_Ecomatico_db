@@ -20,24 +20,6 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Una sola credenziale attiva per azienda: se nel frattempo l'azienda ne ha una nuova, non si ripristina
-		IF EXISTS (
-			SELECT 1
-			FROM
-				dbo.tblDiwassCredenziali i
-				INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id
-				INNER JOIN dbo.tblDiwassCredenziali a ON i.IdAziendaInterna = a.IdAziendaInterna
-			WHERE
-				c.IdSessione = @IdSessione
-				AND i.Lock = 4
-				AND a.Lock = 0
-		)
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Impossibile ripristinare: l''azienda ha già un''altra credenziale DIWASS';
-			GOTO BRANCH_END;
-		END
-
 		BEGIN TRANSACTION;
 
 			UPDATE i

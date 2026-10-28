@@ -48,13 +48,17 @@ BEGIN
 		-- Scope: dominio della sessione
 		SELECT TOP (@MaxRighe + 1)
 			[Nome] = c.Nome,
-			[Azienda] = s.NomeCompleto,
 			[Utente EU Login] = h.Username,
-			[Client id] = h.ClientId
+			[Client id] = h.ClientId,
+			[Aziende associate] = (
+				SELECT STRING_AGG(CAST(s.NomeCompleto AS VARCHAR(MAX)), ', ') WITHIN GROUP (ORDER BY s.NomeCompleto)
+				FROM
+					dbo.tblDiwassCredenzialiAziende a
+					INNER JOIN dbo.tblSedi s ON a.IdAziendaInterna = s.Id
+				WHERE a.IdCredenziale = c.Id)
 		FROM
 			dbo.tblDiwassCredenziali c
 			INNER JOIN dbo.tblSessioni e ON c.IdDominio = e.IdDominio
-			LEFT JOIN dbo.tblSedi s ON c.IdAziendaInterna = s.Id
 			LEFT JOIN [1_0_diwass]..tblCredenziali h ON c.IdDiwass = h.Id
 		WHERE
 			e.Id = @IdSessione
@@ -63,7 +67,7 @@ BEGIN
 				(
 				@Search IS NULL
 				OR c.Nome LIKE '%' + @Search + '%'
-				OR s.NomeCompleto LIKE '%' + @Search + '%'
+				OR h.Username LIKE '%' + @Search + '%'
 				)
 		ORDER BY c.Nome
 		OPTION (RECOMPILE);

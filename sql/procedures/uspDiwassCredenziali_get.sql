@@ -72,15 +72,12 @@ BEGIN
 		SELECT
 			c.Id,
 			Nome = ISNULL(c.Nome, ''),
-			c.IdAziendaInterna,
-			AziendaNome = s.NomeCompleto,
 			h.Username,
 			h.AuthKey,
 			h.ClientId,
 			c.Lock
 		FROM
 			dbo.tblDiwassCredenziali c
-			LEFT JOIN dbo.tblSedi s ON c.IdAziendaInterna = s.Id
 			LEFT JOIN [1_0_diwass]..tblCredenziali h ON c.IdDiwass = h.Id
 		WHERE c.Id = @Id;
 

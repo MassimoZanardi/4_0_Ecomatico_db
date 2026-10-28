@@ -45,17 +45,20 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Credenziale associata all'azienda in Diwass > Aziende
 		DECLARE @idDiwass CHAR(16) = (
-			SELECT IdDiwass
-			FROM dbo.tblDiwassCredenziali
+			SELECT c.IdDiwass
+			FROM
+				dbo.tblDiwassCredenzialiAziende a
+				INNER JOIN dbo.tblDiwassCredenziali c ON a.IdCredenziale = c.Id
 			WHERE
-				IdAziendaInterna = @idAzienda
-				AND Lock = 0
+				a.IdAziendaInterna = @idAzienda
+				AND c.Lock = 0
 		);
 		IF @idDiwass IS NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'L''azienda non ha una credenziale DIWASS: chiedere all''amministratore di crearla in Diwass > Credenziali';
+			SET @returnMessage = 'L''azienda non ha una credenziale DIWASS: chiedere all''amministratore di associarla in Diwass > Aziende';
 			GOTO BRANCH_END;
 		END
 

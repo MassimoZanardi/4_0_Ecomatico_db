@@ -6,10 +6,13 @@ GO
 -- spedizione. Con @IdRegistrazione (Trasporto transfrontaliero = Allegato VII) lo compila dalla registrazione e dal
 -- suo movimento: soggetti collegati a DIWASS (la sede o, se non collegata, la sua azienda), quantità in tonnellate o
 -- m³, data, EER, operazione R, codice internazionale (ultimo usato dall'azienda per l'EER o il primo suggerito),
--- paesi e luogo di partenza. Restituisce Id e gli avvisi da mostrare (sedi sostituite o non collegate)
+-- paesi e luogo di partenza. Con @IdCopia (Copia/incolla) copia un Allegato VII salvato della stessa azienda, senza
+-- registrazione, data di spedizione, dati dell'invio, firma e data della conferma del produttore.
+-- Restituisce Id e gli avvisi da mostrare (sedi sostituite o non collegate)
 CREATE OR ALTER PROCEDURE [dbo].[uspDiwassAllegatiVii_ins]
 	@IdSessione CHAR(16) = NULL,
-	@IdRegistrazione CHAR(16) = NULL
+	@IdRegistrazione CHAR(16) = NULL,
+	@IdCopia CHAR(16) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -20,6 +23,7 @@ BEGIN
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdRegistrazione = NULLIF(LTRIM(RTRIM(@IdRegistrazione)), '');
+		SET @IdCopia = NULLIF(LTRIM(RTRIM(@IdCopia)), '');
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -53,6 +57,54 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Selezionare l''azienda che organizza la spedizione';
+			GOTO BRANCH_END;
+		END
+
+		-- Copia/incolla: solo un Allegato VII salvato dell'azienda del contesto, anche inviato o annullato
+		IF @IdCopia IS NOT NULL
+		BEGIN
+			IF NOT EXISTS (SELECT 1
+			FROM dbo.tblDiwassAllegatiVii
+			WHERE
+				Id = @IdCopia
+				AND IdAziendaInterna = @idAzienda
+				AND Lock < 2
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Allegato VII da copiare non trovato nell''azienda del contesto';
+				GOTO BRANCH_END;
+			END
+
+			-- uspId_get FUORI dalla transazione
+			EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @returnId OUTPUT;
+
+			BEGIN TRANSACTION;
+				INSERT INTO dbo.tblDiwassAllegatiVii (
+					Id, IdAziendaInterna, TipoDestinazione, Quantita, UnitaQuantita, Contenitore, LuogoPartenza,
+					ResponsabileNome, ResponsabileTelefono, ResponsabileEmail, IdEer, Descrizione, CodiceDoganale,
+					IdNazioneSpedizione, IdNazioneDestinazione, IdNazioneTransito1, IdNazioneTransito2, IdAttivita,
+					ListaCodice, Codice, FirmaRuolo, ProduttoreFirmaNome, ProduttoreFirmaRuolo, Note, Lock)
+				SELECT
+					@returnId, a.IdAziendaInterna, a.TipoDestinazione, a.Quantita, a.UnitaQuantita, a.Contenitore, a.LuogoPartenza,
+					a.ResponsabileNome, a.ResponsabileTelefono, a.ResponsabileEmail, a.IdEer, a.Descrizione, a.CodiceDoganale,
+					a.IdNazioneSpedizione, a.IdNazioneDestinazione, a.IdNazioneTransito1, a.IdNazioneTransito2, a.IdAttivita,
+					a.ListaCodice, a.Codice, ISNULL(f.Ruolo, a.FirmaRuolo), a.ProduttoreFirmaNome, a.ProduttoreFirmaRuolo, a.Note, 2
+				FROM
+					dbo.tblDiwassAllegatiVii a
+					LEFT JOIN dbo.tblDiwassFirmeRuoli f ON f.IdUtente = @idUtente AND f.IdAziendaInterna = a.IdAziendaInterna
+				WHERE a.Id = @IdCopia;
+
+				-- Soggetti con un PartyUuid nuovo (default della colonna)
+				INSERT INTO dbo.tblDiwassAllegatiViiSoggetti (Id, Ruolo, Pos, IdSede, ContattoNome, ContattoTelefono, ContattoEmail, MezzoTrasporto, ImpiantoIntermedio, NomeRiservato, MotivoRiservatezza)
+				SELECT @returnId, Ruolo, Pos, IdSede, ContattoNome, ContattoTelefono, ContattoEmail, MezzoTrasporto, ImpiantoIntermedio, NomeRiservato, MotivoRiservatezza
+				FROM dbo.tblDiwassAllegatiViiSoggetti
+				WHERE Id = @IdCopia;
+			COMMIT TRANSACTION;
+
+			SELECT
+				Id = @returnId,
+				Avvisi = CAST(NULL AS NVARCHAR(MAX));
 			GOTO BRANCH_END;
 		END
 

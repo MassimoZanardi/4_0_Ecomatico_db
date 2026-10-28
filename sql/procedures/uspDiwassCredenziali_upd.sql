@@ -2,14 +2,14 @@
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Salva la credenziale DIWASS di un'azienda interna (una sola credenziale attiva per azienda). I dati di accesso
--- (utente EU Login, chiave di autenticazione, client id) vanno nella riga dell'hub [1_0_diwass]..tblCredenziali,
--- creata al primo salvataggio, come per le credenziali RENTRI (uspRentriCredenziali_upd)
+-- Salva la credenziale DIWASS del dominio, che si associa poi alle aziende interne in Diwass > Aziende
+-- (uspDiwassAziende_upd). I dati di accesso (utente EU Login, chiave di autenticazione, client id) vanno nella riga
+-- dell'hub [1_0_diwass]..tblCredenziali, creata al primo salvataggio, come per le credenziali RENTRI
+-- (uspRentriCredenziali_upd)
 CREATE OR ALTER PROCEDURE [dbo].[uspDiwassCredenziali_upd]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@Nome VARCHAR(50) = NULL,
-	@IdAziendaInterna CHAR(16) = NULL,
 	@Username VARCHAR(50) = NULL,
 	@AuthKey VARCHAR(200) = NULL,
 	@ClientId VARCHAR(50) = NULL
@@ -23,7 +23,6 @@ BEGIN
 		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @Nome = dbo.ufnStringhe_get_SenzaSpazi(@Nome, 0, 1);
-		SET @IdAziendaInterna = NULLIF(NULLIF(LTRIM(RTRIM(@IdAziendaInterna)), ''), REPLICATE('0', 16));
 		SET @Username = NULLIF(LTRIM(RTRIM(@Username)), '');
 		SET @AuthKey = NULLIF(LTRIM(RTRIM(@AuthKey)), '');
 		SET @ClientId = NULLIF(LTRIM(RTRIM(@ClientId)), '');
@@ -44,12 +43,6 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Indicare un nome per la credenziale';
-			GOTO BRANCH_END;
-		END
-		IF @IdAziendaInterna IS NULL
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'Selezionare l''azienda';
 			GOTO BRANCH_END;
 		END
 		IF @Username IS NULL
@@ -104,38 +97,6 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- L'azienda deve essere un'azienda interna attiva visibile all'utente della sessione
-		IF NOT EXISTS (
-			SELECT 1
-			FROM
-				dbo.tblSessioni e
-				CROSS APPLY dbo.ufnSedi_get_AziendeInterneByUtente_List(e.IdUtente) i
-			WHERE
-				e.Id = @IdSessione
-				AND i.Id = @IdAziendaInterna
-				AND i.IdDominio = @idDominio
-		)
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'L''azienda selezionata non è valida';
-			GOTO BRANCH_END;
-		END
-
-		-- Una sola credenziale DIWASS attiva per azienda
-		IF EXISTS (
-			SELECT 1
-			FROM dbo.tblDiwassCredenziali
-			WHERE
-				Id <> @Id
-				AND IdAziendaInterna = @IdAziendaInterna
-				AND Lock = 0
-		)
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = 'L''azienda selezionata ha già una credenziale DIWASS';
-			GOTO BRANCH_END;
-		END
-
 		-- Controlla che non esista un'altra credenziale con lo stesso nome nel dominio
 		IF EXISTS (
 			SELECT 1
@@ -174,8 +135,7 @@ BEGIN
 			SET
 				Lock = 0,
 				IdDiwass = @idDiwass,
-				Nome = @Nome,
-				IdAziendaInterna = @IdAziendaInterna
+				Nome = @Nome
 			WHERE
 				Id = @Id
 				AND Lock <= 2;

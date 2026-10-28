@@ -2,7 +2,8 @@
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Salva l'Allegato VII (bozza o già annunciato su DIWASS: in quel caso le modifiche restano da inviare, DaInviare = 1).
+-- Salva l'Allegato VII (bozza o già annunciato su DIWASS: in quel caso, se i dati cambiano, le modifiche restano da
+-- inviare, DaInviare = 1; un salvataggio senza modifiche lascia DaInviare com'era).
 -- @Soggetti è l'elenco JSON dei soggetti ([{ruolo, pos, idSede, contattoNome, contattoTelefono, contattoEmail,
 -- mezzoTrasporto, impiantoIntermedio, nomeRiservato, motivoRiservatezza}]): sostituisce quelli salvati. I controlli di
 -- completezza sono all'invio (uspDiwassAllegatiVii_get_Invio): qui solo quelli che rendono il dato incoerente
@@ -268,6 +269,22 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Dati prima del salvataggio: su un documento annunciato le modifiche restano da inviare solo se qualcosa cambia
+		DECLARE @prima NVARCHAR(MAX) = (
+			SELECT
+				a.TipoDestinazione, a.DataSpedizione, a.Quantita, a.UnitaQuantita, a.Contenitore, a.LuogoPartenza,
+				a.ResponsabileNome, a.ResponsabileTelefono, a.ResponsabileEmail, a.IdEer, a.Descrizione, a.CodiceDoganale,
+				a.IdNazioneSpedizione, a.IdNazioneDestinazione, a.IdNazioneTransito1, a.IdNazioneTransito2, a.IdAttivita,
+				a.ListaCodice, a.Codice, a.FirmaRuolo, a.ProduttoreFirmaNome, a.ProduttoreFirmaRuolo, a.ProduttoreFirmaData, a.Note,
+				Soggetti = (
+					SELECT x.Ruolo, x.Pos, x.IdSede, x.ContattoNome, x.ContattoTelefono, x.ContattoEmail, x.MezzoTrasporto, x.ImpiantoIntermedio, x.NomeRiservato, x.MotivoRiservatezza
+					FROM dbo.tblDiwassAllegatiViiSoggetti x
+					WHERE x.Id = a.Id
+					ORDER BY x.Ruolo, x.Pos
+					FOR JSON PATH)
+			FROM dbo.tblDiwassAllegatiVii a
+			WHERE a.Id = @Id FOR JSON PATH, INCLUDE_NULL_VALUES);
+
 		BEGIN TRANSACTION;
 			UPDATE dbo.tblDiwassAllegatiVii
 			SET
@@ -295,7 +312,7 @@ BEGIN
 				ProduttoreFirmaRuolo = @ProduttoreFirmaRuolo,
 				ProduttoreFirmaData = @ProduttoreFirmaData,
 				Note = @Note,
-				DaInviare = IIF(@stato = 'ANNOUNCED', 1, NULL),
+				DaInviare = IIF(@stato = 'ANNOUNCED', DaInviare, NULL),
 				Lock = 0
 			WHERE
 				Id = @Id
@@ -334,6 +351,30 @@ BEGIN
 			SELECT @Id, n.Ruolo, n.Pos, n.IdSede, n.ContattoNome, n.ContattoTelefono, n.ContattoEmail, n.MezzoTrasporto, n.ImpiantoIntermedio, n.NomeRiservato, n.MotivoRiservatezza
 			FROM @elenco n
 			WHERE NOT EXISTS ( SELECT 1 FROM dbo.tblDiwassAllegatiViiSoggetti x WHERE x.Id = @Id AND x.Ruolo = n.Ruolo AND x.Pos = n.Pos );
+
+			IF @stato = 'ANNOUNCED'
+			BEGIN
+				DECLARE @dopo NVARCHAR(MAX) = (
+					SELECT
+						a.TipoDestinazione, a.DataSpedizione, a.Quantita, a.UnitaQuantita, a.Contenitore, a.LuogoPartenza,
+						a.ResponsabileNome, a.ResponsabileTelefono, a.ResponsabileEmail, a.IdEer, a.Descrizione, a.CodiceDoganale,
+						a.IdNazioneSpedizione, a.IdNazioneDestinazione, a.IdNazioneTransito1, a.IdNazioneTransito2, a.IdAttivita,
+						a.ListaCodice, a.Codice, a.FirmaRuolo, a.ProduttoreFirmaNome, a.ProduttoreFirmaRuolo, a.ProduttoreFirmaData, a.Note,
+						Soggetti = (
+							SELECT x.Ruolo, x.Pos, x.IdSede, x.ContattoNome, x.ContattoTelefono, x.ContattoEmail, x.MezzoTrasporto, x.ImpiantoIntermedio, x.NomeRiservato, x.MotivoRiservatezza
+							FROM dbo.tblDiwassAllegatiViiSoggetti x
+							WHERE x.Id = a.Id
+							ORDER BY x.Ruolo, x.Pos
+							FOR JSON PATH)
+					FROM dbo.tblDiwassAllegatiVii a
+					WHERE a.Id = @Id FOR JSON PATH, INCLUDE_NULL_VALUES);
+
+				-- Confronto esatto (anche maiuscole e minuscole)
+				IF @dopo COLLATE Latin1_General_BIN2 <> @prima COLLATE Latin1_General_BIN2
+					UPDATE dbo.tblDiwassAllegatiVii
+					SET DaInviare = 1
+					WHERE Id = @Id;
+			END
 		COMMIT TRANSACTION;
 
 		-- Log FUORI dalla transazione

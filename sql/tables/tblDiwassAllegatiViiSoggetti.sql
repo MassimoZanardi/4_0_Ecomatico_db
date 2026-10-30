@@ -8,7 +8,7 @@ CREATE TABLE [dbo].[tblDiwassAllegatiViiSoggetti](
 	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Ruolo] [char](1) COLLATE Latin1_General_CI_AS NOT NULL,
 	[Pos] [tinyint] NOT NULL,
-	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdSede] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[PartyUuid] [uniqueidentifier] NOT NULL,
 	[ContattoNome] [varchar](100) COLLATE Latin1_General_CI_AS NULL,
 	[ContattoTelefono] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
@@ -17,6 +17,10 @@ CREATE TABLE [dbo].[tblDiwassAllegatiViiSoggetti](
 	[ImpiantoIntermedio] [bit] NULL,
 	[NomeRiservato] [bit] NULL,
 	[MotivoRiservatezza] [varchar](500) COLLATE Latin1_General_CI_AS NULL,
+	[OperatorInternalId] [bigint] NULL,
+	[Nome] [nvarchar](250) COLLATE Latin1_General_CI_AS NULL,
+	[Indirizzo] [nvarchar](500) COLLATE Latin1_General_CI_AS NULL,
+	[Paese] [char](2) COLLATE Latin1_General_CI_AS NULL,
  CONSTRAINT [PK_tblDiwassAllegatiViiSoggetti] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC,

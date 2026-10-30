@@ -228,7 +228,9 @@ BEGIN
                OR IdParent IN (SELECT Id FROM #RifiutiRegistrazioni);
             -- tblDiwassAllegatiVii.IdRegistrazione: l'Allegato VII resta, perde solo la registrazione di partenza
             UPDATE dbo.tblDiwassAllegatiVii SET IdRegistrazione = NULL WHERE IdRegistrazione IN (SELECT Id FROM #RifiutiRegistrazioni);
-            -- tblDiwassAllegatiViiSoggetti.IdSede: le sedi cancellate escono dagli Allegati VII DIWASS
+            -- tblDiwassAllegatiViiSoggetti.IdSede: le sedi cancellate escono dagli Allegati VII DIWASS preparati in Ecomatico;
+            -- in quelli ricevuti da DIWASS il soggetto resta con nome e indirizzo letti da DIWASS
+            UPDATE x SET IdSede = NULL FROM dbo.tblDiwassAllegatiViiSoggetti x INNER JOIN dbo.tblDiwassAllegatiVii a ON x.Id = a.Id WHERE x.IdSede IN (SELECT Id FROM #Sedi) AND a.Ricevuto = 1;
             DELETE FROM dbo.tblDiwassAllegatiViiSoggetti WHERE IdSede IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblRifiutiRegistrazioni WHERE Id IN (SELECT Id FROM #RifiutiRegistrazioni);
 

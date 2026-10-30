@@ -49,12 +49,16 @@ BEGIN
 		DECLARE @stato VARCHAR(20);
 		DECLARE @numero VARCHAR(50);
 		DECLARE @lock TINYINT;
+		DECLARE @ricevuto BIT;
+		DECLARE @dataSpedizione DATE;
 		SELECT
 			@idAzienda = a.IdAziendaInterna,
 			@idUtente = e.IdUtente,
 			@stato = a.Stato,
 			@numero = a.Numero,
-			@lock = a.Lock
+			@lock = a.Lock,
+			@ricevuto = ISNULL(a.Ricevuto, 0),
+			@dataSpedizione = a.DataSpedizione
 		FROM
 			dbo.tblDiwassAllegatiVii a
 			INNER JOIN dbo.tblSessioni e ON a.IdAziendaInterna = e.IdAzienda
@@ -69,8 +73,10 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Stato ammesso per l'operazione
-		IF @Operazione = 'I' AND @stato IS NOT NULL
+		-- Stato ammesso per l'operazione. Un documento ricevuto da DIWASS lo gestisce chi organizza: si legge solo lo stato
+		IF @ricevuto = 1 AND @Operazione <> 'S'
+			SET @returnMessage = 'L''Allegato VII è stato ricevuto da DIWASS: lo invia, aggiorna o annulla solo chi organizza la spedizione';
+		ELSE IF @Operazione = 'I' AND @stato IS NOT NULL
 			SET @returnMessage = 'L''Allegato VII è già stato inviato a DIWASS';
 		ELSE IF @Operazione IN ('A', 'N') AND ISNULL(@stato, '') <> 'ANNOUNCED'
 			SET @returnMessage = IIF(@stato IS NULL,
@@ -235,6 +241,16 @@ BEGIN
 					FROM @mancanti ORDER BY Pos FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, N''), 2000);
 				GOTO BRANCH_END;
 			END
+		END
+
+		-- Invio almeno due giorni lavorativi prima della spedizione (Reg. UE 2024/1157 art. 18.5; DIWASS lo controlla
+		-- nella sua interfaccia web): la data della spedizione non può essere precedente alla prima ammessa
+		DECLARE @dataMinima DATE = dbo.ufnDiwassAllegatiVii_get_DataSpedizioneMinima(CAST(GETDATE() AS DATE));
+		IF @Operazione = 'I' AND @dataSpedizione < @dataMinima
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La data della spedizione deve essere il ' + CONVERT(VARCHAR(10), @dataMinima, 103) + ' o successiva: l''Allegato VII va inviato almeno due giorni lavorativi prima della spedizione';
+			GOTO BRANCH_END;
 		END
 
 		DECLARE @json NVARCHAR(MAX) = (

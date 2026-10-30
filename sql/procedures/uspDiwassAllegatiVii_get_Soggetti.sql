@@ -57,9 +57,12 @@ BEGIN
 			x.Ruolo,
 			x.Pos,
 			x.IdSede,
-			SedeNome = s.NomeCompleto,
-			o.OperatorInternalId,
-			OperatoreNome = o.Nome,
+			-- Soggetti dei documenti ricevuti: nome e indirizzo letti da DIWASS se non sono in anagrafica
+			SedeNome = ISNULL(s.NomeCompleto, x.Nome),
+			OperatorInternalId = ISNULL(o.OperatorInternalId, x.OperatorInternalId),
+			OperatoreNome = ISNULL(o.Nome, x.Nome),
+			OperatoreIndirizzo = ISNULL(o.Indirizzo, x.Indirizzo),
+			OperatorePaese = ISNULL(o.Paese, x.Paese),
 			x.ContattoNome,
 			x.ContattoTelefono,
 			x.ContattoEmail,
@@ -69,7 +72,7 @@ BEGIN
 			x.MotivoRiservatezza
 		FROM
 			dbo.tblDiwassAllegatiViiSoggetti x
-			INNER JOIN dbo.tblSedi s ON x.IdSede = s.Id
+			LEFT JOIN dbo.tblSedi s ON x.IdSede = s.Id
 			LEFT JOIN dbo.tblDiwassOperatori o ON x.IdSede = o.Id
 		WHERE x.Id = @Id
 		ORDER BY x.Ruolo, x.Pos;

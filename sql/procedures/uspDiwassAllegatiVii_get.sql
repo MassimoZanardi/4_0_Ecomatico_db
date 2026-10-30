@@ -70,7 +70,12 @@ BEGIN
 			a.Numero,
 			a.Stato,
 			StatoDescrizione = dbo.ufnDiwassAllegatiVii_get_StatoDescrizione(a.Stato),
-			Modificabile = CAST(IIF(a.Stato IS NULL OR a.Stato = 'ANNOUNCED', 1, 0) AS BIT),
+			-- Un documento ricevuto da DIWASS (organizzato da altri o fuori da Ecomatico) è in sola lettura
+			Modificabile = CAST(IIF(ISNULL(a.Ricevuto, 0) = 0 AND (a.Stato IS NULL OR a.Stato = 'ANNOUNCED'), 1, 0) AS BIT),
+			Ricevuto = CAST(ISNULL(a.Ricevuto, 0) AS BIT),
+			a.Ruoli,
+			RuoliNome = dbo.ufnDiwassAllegatiVii_get_RuoliDescrizione(a.Ruoli),
+			a.DataLettura,
 			a.DaInviare,
 			a.DataInvio,
 			a.DataStato,

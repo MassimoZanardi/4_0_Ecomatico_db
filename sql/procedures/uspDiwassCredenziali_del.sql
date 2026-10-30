@@ -86,7 +86,7 @@ BEGIN
 			END
 
 			-- ── CASO 1: credenziale attiva (Lock = 0) → soft delete ────────────────
-			-- La riga hub NON viene toccata, per non perdere dati in caso di Undo.
+			-- La riga hub resta (per l'Undo), esclusa solo dalla sincronizzazione automatica degli Allegati VII (Sincronizza = 0).
 			IF @lock = 0
 			BEGIN
 				BEGIN TRANSACTION;
@@ -113,6 +113,13 @@ BEGIN
 
 					INSERT INTO dbo.tblIdCancellati (Id, IdSessione, [Data])
 					VALUES (@Id, @IdSessione, GETDATE());
+
+					UPDATE h
+					SET Sincronizza = 0
+					FROM
+						[1_0_diwass]..tblCredenziali h
+						INNER JOIN dbo.tblDiwassCredenziali c ON h.Id = c.IdDiwass
+					WHERE c.Id = @Id;
 				COMMIT TRANSACTION;
 
 				EXEC dbo.uspId_upd @Id = @Id, @IdSessione = @IdSessione, @Operazione = 'D';

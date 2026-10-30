@@ -41,6 +41,9 @@ CREATE TABLE [dbo].[tblDiwassAllegatiVii](
 	[Note] [varchar](500) COLLATE Latin1_General_CI_AS NULL,
 	[Lock] [tinyint] NULL,
 	[DaInviare] [bit] NULL,
+	[Ricevuto] [bit] NULL,
+	[Ruoli] [varchar](10) COLLATE Latin1_General_CI_AS NULL,
+	[DataLettura] [datetime2](0) NULL,
  CONSTRAINT [PK_tblDiwassAllegatiVii] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
@@ -68,6 +71,18 @@ GO
 CREATE NONCLUSTERED INDEX [IX_DiwassAllegatiVii_IdRegistrazione] ON [dbo].[tblDiwassAllegatiVii]
 (
 	[IdRegistrazione] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
+GO
+
+SET ANSI_PADDING ON
+
+GO
+
+CREATE NONCLUSTERED INDEX [IX_DiwassAllegatiVii_Numero] ON [dbo].[tblDiwassAllegatiVii]
+(
+	[Numero] ASC,
+	[IdAziendaInterna] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 
 GO

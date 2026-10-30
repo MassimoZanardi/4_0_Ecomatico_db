@@ -99,11 +99,13 @@ BEGIN
 		-- Controlla il permesso sul record (titolarità): azienda del contesto
 		DECLARE @idAzienda CHAR(16);
 		DECLARE @stato VARCHAR(20);
+		DECLARE @ricevuto BIT;
 		DECLARE @nazioneSpedizioneAttuale CHAR(3);
 		DECLARE @nazioneDestinazioneAttuale CHAR(3);
 		SELECT
 			@idAzienda = a.IdAziendaInterna,
 			@stato = a.Stato,
+			@ricevuto = ISNULL(a.Ricevuto, 0),
 			@nazioneSpedizioneAttuale = a.IdNazioneSpedizione,
 			@nazioneDestinazioneAttuale = a.IdNazioneDestinazione
 		FROM
@@ -118,6 +120,12 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Allegato VII non trovato nell''azienda del contesto';
+			GOTO BRANCH_END;
+		END
+		IF @ricevuto = 1
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'L''Allegato VII è stato ricevuto da DIWASS: lo modifica solo chi organizza la spedizione';
 			GOTO BRANCH_END;
 		END
 		IF @stato IS NOT NULL AND @stato <> 'ANNOUNCED'

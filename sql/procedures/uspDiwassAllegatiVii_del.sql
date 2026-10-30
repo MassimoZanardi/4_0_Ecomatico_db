@@ -2,7 +2,8 @@
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Cancella un Allegato VII: solo le bozze, mai uno già inviato a DIWASS (si annulla su DIWASS)
+-- Cancella un Allegato VII: le bozze e quelli annullati su DIWASS (anche ricevuti: la sincronizzazione non li reimporta);
+-- mai uno inviato e non annullato (si annulla su DIWASS) né uno ricevuto e non annullato. Regole in docs/regole/diwass.md D5.10
 CREATE OR ALTER PROCEDURE [dbo].[uspDiwassAllegatiVii_del]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
@@ -50,9 +51,11 @@ BEGIN
 			-- Controlla il permesso sul record (titolarità): azienda del contesto
 			DECLARE @lock INT;
 			DECLARE @stato VARCHAR(20);
+			DECLARE @ricevuto BIT;
 			SELECT
 				@lock = a.Lock,
-				@stato = a.Stato
+				@stato = a.Stato,
+				@ricevuto = ISNULL(a.Ricevuto, 0)
 			FROM
 				dbo.tblDiwassAllegatiVii a
 				INNER JOIN dbo.tblSessioni e ON a.IdAziendaInterna = e.IdAzienda
@@ -66,7 +69,15 @@ BEGIN
 				SET @returnMessage = 'Non si dispone dei diritti necessari';
 				GOTO BRANCH_END;
 			END
+			IF @ricevuto = 1
+				AND ISNULL(@stato, '') <> 'CANCELLED'
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un Allegato VII ricevuto da DIWASS non si cancella: lo gestisce chi organizza la spedizione';
+				GOTO BRANCH_END;
+			END
 			IF @stato IS NOT NULL
+				AND @stato <> 'CANCELLED'
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Un Allegato VII inviato a DIWASS non si cancella: annullarlo su DIWASS';

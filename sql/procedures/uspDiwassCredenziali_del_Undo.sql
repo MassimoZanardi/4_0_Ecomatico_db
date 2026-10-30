@@ -30,6 +30,17 @@ BEGIN
 				c.IdSessione = @IdSessione
 				AND i.Lock = 4;
 
+			-- Di nuovo nella sincronizzazione automatica degli Allegati VII
+			UPDATE h
+			SET Sincronizza = 1
+			FROM
+				[1_0_diwass]..tblCredenziali h
+				INNER JOIN dbo.tblDiwassCredenziali i ON h.Id = i.IdDiwass
+				INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id
+			WHERE
+				c.IdSessione = @IdSessione
+				AND i.Lock = 0;
+
 			DELETE i
 			FROM dbo.tblIdLog i
 			INNER JOIN dbo.tblIdCancellati c ON i.Id = c.Id

@@ -13,6 +13,8 @@ CREATE OR ALTER PROCEDURE dbo.uspDiwassAllegatiVii_get_Esportazione
 	@IdSessione CHAR(16) = NULL,
 	@Search VARCHAR(50) = NULL,
 	@Stato VARCHAR(20) = NULL,
+	@Ruolo CHAR(1) = NULL,
+	@DaFare BIT = NULL,
 	@MaxRighe INT = NULL
 AS
 BEGIN
@@ -24,6 +26,7 @@ BEGIN
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
 		SET @Stato = NULLIF(LTRIM(RTRIM(@Stato)), '');
+		SET @Ruolo = NULLIF(LTRIM(RTRIM(@Ruolo)), '');
 		SET @MaxRighe = IIF(ISNULL(@MaxRighe, 0) < 1, 50000, @MaxRighe);
 
 		IF @IdSessione IS NULL
@@ -55,18 +58,30 @@ BEGIN
 			[Descrizione] = a.Descrizione,
 			[Quantità] = a.Quantita,
 			[Unità] = IIF(a.UnitaQuantita = 'M', 'm³', 't'),
-			[Destinatario] = d.NomeCompleto,
+			[Ruolo dell'azienda] = dbo.ufnDiwassAllegatiVii_get_RuoliDescrizione(a.Ruoli),
+			[Ricevuto da DIWASS] = IIF(a.Ricevuto = 1, 'Sì', 'No'),
+			[Organizzatore] = ISNULL(so.NomeCompleto, xo.Nome),
+			[Destinatario] = ISNULL(d.NomeCompleto, x.Nome),
 			[Paese di spedizione] = ns.Nome,
 			[Paese di destinazione] = n.Nome,
-			[Inviato il] = a.DataInvio
+			[Inviato il] = a.DataInvio,
+			[Presa in carico] = v.PresaInCaricoData,
+			[Ricezione del destinatario] = IIF(v.RicezioneDestinatarioPrevista = 0, NULL, v.RicezioneDestinatarioData),
+			[Ricezione all'impianto] = v.RicezioneImpiantoData,
+			[Recupero completato] = v.CompletamentoData,
+			[Da fare] = v.DaFare,
+			[Scadenza] = v.Scadenza
 		FROM
 			dbo.tblDiwassAllegatiVii a
 			INNER JOIN dbo.tblSessioni s ON a.IdAziendaInterna = s.IdAzienda
 			LEFT JOIN dbo.tblRifiutiEer e ON a.IdEer = e.Id
 			LEFT JOIN dbo.tblDiwassAllegatiViiSoggetti x ON a.Id = x.Id AND x.Ruolo = 'D' AND x.Pos = 1
 			LEFT JOIN dbo.tblSedi d ON x.IdSede = d.Id
+			LEFT JOIN dbo.tblDiwassAllegatiViiSoggetti xo ON a.Id = xo.Id AND xo.Ruolo = 'O' AND xo.Pos = 1
+			LEFT JOIN dbo.tblSedi so ON xo.IdSede = so.Id
 			LEFT JOIN dbo.tblNazioni n ON a.IdNazioneDestinazione = n.Id
 			LEFT JOIN dbo.tblNazioni ns ON a.IdNazioneSpedizione = ns.Id
+			OUTER APPLY dbo.ufnDiwassAllegatiVii_get_Avanzamento(a.Id) v
 		WHERE
 			s.Id = @IdSessione
 			AND a.Lock = 0
@@ -86,7 +101,18 @@ BEGIN
 				OR a.Numero LIKE '%' + @Search + '%'
 				OR a.Descrizione LIKE '%' + @Search + '%'
 				OR e.Nome LIKE '%' + @Search + '%'
-				OR d.NomeCompleto LIKE '%' + @Search + '%'
+				OR ISNULL(d.NomeCompleto, x.Nome) LIKE '%' + @Search + '%'
+				OR ISNULL(so.NomeCompleto, xo.Nome) LIKE '%' + @Search + '%'
+				)
+			AND
+				(
+				@Ruolo IS NULL
+				OR ISNULL(a.Ruoli, 'O') LIKE '%' + @Ruolo + '%'
+				)
+			AND
+				(
+				ISNULL(@DaFare, 0) = 0
+				OR v.DaFare IS NOT NULL
 				)
 		ORDER BY a.DataSpedizione DESC, a.Id DESC
 		OPTION (RECOMPILE);

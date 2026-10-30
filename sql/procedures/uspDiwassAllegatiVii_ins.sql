@@ -60,7 +60,7 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Copia/incolla: solo un Allegato VII salvato dell'azienda del contesto, anche inviato o annullato
+		-- Copia/incolla: solo un Allegato VII salvato dell'azienda del contesto, anche inviato o annullato, non ricevuto da DIWASS
 		IF @IdCopia IS NOT NULL
 		BEGIN
 			IF NOT EXISTS (SELECT 1
@@ -73,6 +73,17 @@ BEGIN
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Allegato VII da copiare non trovato nell''azienda del contesto';
+				GOTO BRANCH_END;
+			END
+			IF EXISTS (SELECT 1
+			FROM dbo.tblDiwassAllegatiVii
+			WHERE
+				Id = @IdCopia
+				AND Ricevuto = 1
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un Allegato VII ricevuto da DIWASS non si copia: si copiano solo quelli preparati in Ecomatico';
 				GOTO BRANCH_END;
 			END
 

@@ -83,6 +83,16 @@ BEGIN
 		INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
 		WHERE s.Id = @Id;
 
+		-- Un servizio salvato si cancella solo con il permesso Modifica sui Servizi (SRV): chi ha soltanto i Servizi
+		-- assegnati (SRA) lo esegue ma non lo cancella. La bozza (Lock = 2) resta cancellabile anche con SRA: è il
+		-- servizio appena inserito con Nuovo, che la scheda cancella con Annulla
+		IF @lock = 0 AND 2 > @permessoSrv
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Non si dispone dei diritti necessari per cancellare il servizio';
+			GOTO BRANCH_END;
+		END
+
 		-- ── CASO 1: servizio attivo (Lock = 0) → soft delete ─────────────
 		IF @lock = 0
 		BEGIN

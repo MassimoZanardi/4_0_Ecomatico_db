@@ -9,7 +9,8 @@
 	@IdEvento CHAR(16) = NULL,
 	@IdStato CHAR(1) = NULL,
 	@Data SMALLDATETIME = NULL,
-	@InGiornata BIT = 0
+	@InGiornata BIT = 0,
+	@Proprieta NVARCHAR(MAX) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -23,6 +24,7 @@ BEGIN
 		DECLARE @permessoSra TINYINT;
 		DECLARE @idFirmaRichiedente UNIQUEIDENTIFIER;
 		DECLARE @idFirmaEsecutore UNIQUEIDENTIFIER;
+		DECLARE @idTipo CHAR(16);
 
 		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
@@ -86,6 +88,33 @@ BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
 			GOTO BRANCH_END;
+		END
+
+		-- Proprietà del tipo (JSON, ufnEventi_get_ProprietaValori_List): NULL le lascia invariate. L'operatore le
+		-- compila solo sui servizi assegnati a lui (controllo sopra)
+		IF @Proprieta IS NOT NULL
+		BEGIN
+			IF ISJSON(@Proprieta) = 0
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Il parametro @Proprieta non è valido';
+				GOTO BRANCH_END;
+			END
+
+			SELECT @idTipo = IdTipo
+			FROM dbo.tblServizi
+			WHERE Id = @Id;
+
+			SELECT TOP 1 @returnMessage = Errore
+			FROM dbo.ufnEventi_get_ProprietaValori_List(@idTipo, @Proprieta)
+			WHERE Errore IS NOT NULL
+			ORDER BY Pos;
+
+			IF @returnMessage IS NOT NULL
+			BEGIN
+				SET @returnValue = -1;
+				GOTO BRANCH_END;
+			END
 		END
 
 		IF @FirmaRichiedente IS NOT NULL
@@ -159,6 +188,20 @@ BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Servizio non trovato o già eliminato';
 				GOTO BRANCH_END;
+			END
+
+			IF @Proprieta IS NOT NULL
+			BEGIN
+				DELETE p
+				FROM
+					dbo.tblEventiProprieta p
+					INNER JOIN dbo.ufnEventi_get_ProprietaValori_List(@idTipo, @Proprieta) v ON p.IdProprieta = v.IdProprieta
+				WHERE p.Id = @IdEvento;
+
+				INSERT dbo.tblEventiProprieta (Id, IdProprieta, Valore)
+				SELECT @IdEvento, IdProprieta, Valore
+				FROM dbo.ufnEventi_get_ProprietaValori_List(@idTipo, @Proprieta)
+				WHERE Valore IS NOT NULL;
 			END
 
 			UPDATE e

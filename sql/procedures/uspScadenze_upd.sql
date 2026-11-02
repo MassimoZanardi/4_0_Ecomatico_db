@@ -22,7 +22,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspScadenze_upd]
 	@DataFine SMALLDATETIME = NULL,
 	@Ripetizioni INT = NULL,
 	@Relativo INT = 0,
-	@OccorrenzaESuccessive BIT = 0
+	@OccorrenzaESuccessive BIT = 0,
+	@Proprieta NVARCHAR(MAX) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -35,6 +36,7 @@ BEGIN
 	DECLARE @minuti INT = 0;
 	DECLARE @idEventoParent CHAR(16);
 	DECLARE @dataFineParent SMALLDATETIME;
+	DECLARE @idTipo CHAR(16);
 
 	BEGIN TRY
 
@@ -95,6 +97,32 @@ BEGIN
 		-- Normalizzazione parametri VARCHAR opzionali
 		SET @Descrizione = dbo.ufnStringhe_get_SenzaSpazi(@Descrizione, 0, 1);
 		SET @Email = dbo.ufnStringhe_get_SenzaSpazi(@Email, 0, 1);
+
+		-- Proprietà del tipo (JSON, ufnEventi_get_ProprietaValori_List): NULL le lascia invariate
+		IF @Proprieta IS NOT NULL
+		BEGIN
+			IF ISJSON(@Proprieta) = 0
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Il parametro @Proprieta non è valido';
+				GOTO BRANCH_END;
+			END
+
+			SELECT @idTipo = IdTipo
+			FROM dbo.tblScadenze
+			WHERE Id = @Id;
+
+			SELECT TOP 1 @returnMessage = Errore
+			FROM dbo.ufnEventi_get_ProprietaValori_List(@idTipo, @Proprieta)
+			WHERE Errore IS NOT NULL
+			ORDER BY Pos;
+
+			IF @returnMessage IS NOT NULL
+			BEGIN
+				SET @returnValue = -1;
+				GOTO BRANCH_END;
+			END
+		END
 
 		-- Limiti della serie: le date ammesse dall'applicazione (ufnDate_get_Min / _Max = Constants.SQL.MinDate / MaxDate)
 		IF @Ricorre = 1 AND @Data < dbo.ufnDate_get_Min()
@@ -257,6 +285,20 @@ BEGIN
 				dbo.tblEtichette e
 				INNER JOIN STRING_SPLIT(@IdEtichette, ';') v ON e.Id = v.value
 			WHERE v.value <> '';
+
+			IF @Proprieta IS NOT NULL
+			BEGIN
+				DELETE p
+				FROM
+					dbo.tblEventiProprieta p
+					INNER JOIN dbo.ufnEventi_get_ProprietaValori_List(@idTipo, @Proprieta) v ON p.IdProprieta = v.IdProprieta
+				WHERE p.Id = @IdEvento;
+
+				INSERT dbo.tblEventiProprieta (Id, IdProprieta, Valore)
+				SELECT @IdEvento, IdProprieta, Valore
+				FROM dbo.ufnEventi_get_ProprietaValori_List(@idTipo, @Proprieta)
+				WHERE Valore IS NOT NULL;
+			END
 
 			UPDATE e
 			SET

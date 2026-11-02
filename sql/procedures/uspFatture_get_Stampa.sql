@@ -5,7 +5,10 @@ GO
 -- Stampa di una fattura cliente: dati del documento, totali (ufnFatture_get_Totali) e layout di stampa
 -- dell'azienda della fattura (ufnSediReport_get_Layout). Si stampano solo le fatture clienti salvate, anche la
 -- pre-fattura (senza numero); non la bozza né una fattura fornitore. Righe, riepilogo IVA e rate sono in
--- uspFatture_get_Stampa_Righe, _Iva e _Rate
+-- uspFatture_get_Stampa_Righe, _Iva e _Rate.
+-- Il cliente è sempre la sua sede legale; l'indirizzo di spedizione (Spedizione*) è, in ordine: l'amministratore
+-- del cliente nell'azienda della fattura con l'incarico in corso alla data di emissione (sua sede amministrativa,
+-- altrimenti sua sede legale), la sede amministrativa del cliente; se non c'è nessuno dei due resta NULL
 CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Stampa
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
@@ -86,6 +89,8 @@ BEGIN
 			ClienteIndirizzo = s.IndirizzoCompleto,
 			ClienteCodiceFiscale = s.CodiceFiscale,
 			ClientePartitaIva = s.PartitaIva,
+			SpedizioneNome = sp.Nome,
+			SpedizioneIndirizzo = sp.Indirizzo,
 			c.CodiceDestinatario,
 			c.PecDestinatario,
 			ModalitaNome = mo.Nome,
@@ -135,6 +140,57 @@ BEGIN
 			LEFT JOIN dbo.tblBancheCasse b ON f.IdBancaCassa = b.Id
 			LEFT JOIN dbo.tblFatture rf ON f.IdFatturaRiferimento = rf.Id
 			LEFT JOIN dbo.tblFattureTipi rtp ON rf.IdTipo = rtp.Id
+			OUTER APPLY (
+				SELECT TOP (1)
+					x.Nome,
+					x.Indirizzo
+				FROM
+					(
+						-- 1. Amministratore del cliente (scheda attiva dell'azienda della fattura, incarico in corso)
+						SELECT
+							Ordine = 1,
+							Nome = ams.NomeCompleto,
+							Indirizzo = ISNULL(ama.IndirizzoCompleto, ams.IndirizzoCompleto)
+						FROM
+							dbo.tblAmministratoriSedi ax
+							INNER JOIN dbo.tblAmministratori am ON ax.Id = am.Id
+							INNER JOIN dbo.tblSedi ams ON am.IdSede = ams.Id
+							OUTER APPLY (
+								SELECT TOP (1)
+									sa.IndirizzoCompleto
+								FROM
+									dbo.tblSedi sa
+								WHERE
+									sa.IdParent = ams.Id
+									AND sa.IdTipo = 'A'
+									AND sa.Lock < 2
+									AND ISNULL(sa.Disabilitata, 0) = 0
+									AND sa.IndirizzoCompleto IS NOT NULL
+							) ama
+						WHERE
+							ax.IdSede = s.Id
+							AND am.IdAziendaInterna = f.IdSede
+							AND am.Lock = 0
+							AND (ax.DataInizio IS NULL OR ax.DataInizio <= ISNULL(f.DataEmissione, CAST(GETDATE() AS DATE)))
+							AND (ax.DataFine IS NULL OR ax.DataFine >= ISNULL(f.DataEmissione, CAST(GETDATE() AS DATE)))
+						UNION ALL
+						-- 2. Sede amministrativa del cliente
+						SELECT
+							Ordine = 2,
+							Nome = s.NomeCompleto,
+							Indirizzo = sa.IndirizzoCompleto
+						FROM
+							dbo.tblSedi sa
+						WHERE
+							sa.IdParent = s.Id
+							AND sa.IdTipo = 'A'
+							AND sa.Lock < 2
+							AND ISNULL(sa.Disabilitata, 0) = 0
+							AND sa.IndirizzoCompleto IS NOT NULL
+					) x
+				ORDER BY
+					x.Ordine
+			) sp
 		WHERE f.Id = @Id;
 
 	END TRY

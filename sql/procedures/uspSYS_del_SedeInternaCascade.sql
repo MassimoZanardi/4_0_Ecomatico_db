@@ -487,6 +487,8 @@ BEGIN
             -- Associazione alla credenziale DIWASS prima di tblSediInterne (FK su IdAziendaInterna): la credenziale
             -- è del dominio e resta
             DELETE FROM dbo.tblDiwassCredenzialiAziende WHERE IdAziendaInterna IN (SELECT Id FROM #Sedi);
+            -- Lo stesso per la credenziale Vi.Vi.FIR (formulario unico degli spurghisti)
+            DELETE FROM dbo.tblViviFirCredenzialiAziende WHERE IdAziendaInterna IN (SELECT Id FROM #Sedi);
             DELETE FROM dbo.tblSediInterne   WHERE Id IN (SELECT Id FROM #Sedi);
 
             -- Radice e sotto-sedi cancellate in un'unica istruzione set-based: i vincoli

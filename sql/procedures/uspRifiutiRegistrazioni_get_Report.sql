@@ -139,7 +139,7 @@ BEGIN
 				AND r.Lock = 0
 				AND v.IsRettifica = 0
 				AND v.Quantita > 0
-				AND m.IdOperazione IN ('C', 'M', 'F')
+				AND m.IdOperazione IN ('C', 'M', 'F', 'P')
 				AND r.[Data] <= @fineUltima
 				AND
 					(
@@ -173,7 +173,7 @@ BEGIN
 			WITH Movimenti AS (
 				SELECT
 					Mese = DATEFROMPARTS(YEAR(r.[Data]), MONTH(r.[Data]), 1),
-					Ordine = CASE m.IdOperazione WHEN 'Z' THEN 1 WHEN 'F' THEN 2 WHEN 'R' THEN 3 ELSE 4 END,
+					Ordine = CASE m.IdOperazione WHEN 'Z' THEN 1 WHEN 'F' THEN 2 WHEN 'P' THEN 2 WHEN 'R' THEN 3 ELSE 4 END,
 					Operazione = CAST(o.Codice + ' - ' + o.Nome AS VARCHAR(110)),
 					Eer = e.Nome,
 					Descrizione = e.Descrizione,
@@ -209,7 +209,7 @@ BEGIN
 					AND r.Lock = 0
 					AND v.IsRettifica = 0
 					AND v.IsAnnullata = 0
-					AND m.IdOperazione IN ('Z', 'F', 'R', 'S')
+					AND m.IdOperazione IN ('Z', 'F', 'P', 'R', 'S')
 					AND
 						(
 						@IdRegistro IS NULL
@@ -316,7 +316,7 @@ BEGIN
 		SELECT x.Id
 		FROM
 			(VALUES
-				('PR', 'C'), ('PR', 'F'),
+				('PR', 'C'), ('PR', 'F'), ('PR', 'P'),
 				('PL', 'M'),
 				('RT', 'Z'),
 				('TR', 'T'),
@@ -325,7 +325,7 @@ BEGIN
 				('IN', 'S'), ('IN', 'Z'), ('IN', 'T'), ('IN', 'I'),
 				('DG', 'Z'), ('DG', 'R'),
 				('DC', 'S'),
-				('MV', 'C'), ('MV', 'F'), ('MV', 'M'), ('MV', 'Z'), ('MV', 'T'), ('MV', 'S'), ('MV', 'R'), ('MV', 'I')
+				('MV', 'C'), ('MV', 'F'), ('MV', 'P'), ('MV', 'M'), ('MV', 'Z'), ('MV', 'T'), ('MV', 'S'), ('MV', 'R'), ('MV', 'I')
 			) x (Report, Id)
 		WHERE x.Report = @Report;
 

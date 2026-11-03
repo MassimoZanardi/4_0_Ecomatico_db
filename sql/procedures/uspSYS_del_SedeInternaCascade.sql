@@ -250,6 +250,9 @@ BEGIN
             DELETE FROM dbo.tblRifiutiMovimentiLog            WHERE Id IN (SELECT Id FROM #RifiutiMovimenti);
             DELETE FROM dbo.tblRifiutiMovimentiProduttori     WHERE Id IN (SELECT Id FROM #RifiutiMovimenti);
             DELETE FROM dbo.tblRifiutiMovimentiTrasportatori  WHERE Id IN (SELECT Id FROM #RifiutiMovimenti);
+            -- Indirizzi di intervento dei formulari unici: dei movimenti cancellati e, negli altri movimenti, quelli
+            -- che sono una delle sedi cancellate
+            DELETE FROM dbo.tblRifiutiMovimentiSediProduzione WHERE Id IN (SELECT Id FROM #RifiutiMovimenti) OR IdSede IN (SELECT Id FROM #Sedi);
 
             DELETE FROM dbo.tblRifiutiFormulariEtichette             WHERE Id IN (SELECT Id FROM #RifiutiFormulari);
             DELETE FROM dbo.tblRifiutiFormulariTrasportiFerroviari   WHERE Id IN (SELECT Id FROM #RifiutiFormulari);

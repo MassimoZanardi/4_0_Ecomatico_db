@@ -53,12 +53,15 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiFormulari_upd]
 	@Percorso VARCHAR(100) = NULL,
 	@FormularioNote VARCHAR(500) = NULL,
 	@UtenteNote VARCHAR(500) = NULL,
-	@IdEtichette VARCHAR(50) = NULL
+	@IdEtichette VARCHAR(50) = NULL,
+	-- Indirizzi di intervento del formulario unico (art. 230, comma 5), JSON [{pos, idSede, quantita}]: si salvano
+	-- solo per l'operazione con IsFormularioUnico, per le altre si cancellano
+	@SediProduzione NVARCHAR(MAX) = NULL
 AS
 
 /*
 REGOLE ASSOCIAZIONE REGISTRAZIONE <-> FORMULARI
-1. Da Registrazioni: se @IdDocumentoTrasportoTipo non è un Formulario lo rimuove da Formulari
+1. Da Registrazioni: con un formulario attivo @IdDocumentoTrasportoTipo deve restare il Formulario; per un altro documento si cancella prima il formulario
 2. Da Registrazioni: sarà possibile eliminare una registrazione associata a un formulario. In questo caso, il formulario resterà presente e risulterà non associato ad alcuna registrazione.
 3. Da Formulari: sarà possibile creare un nuovo formulario anche senza associarlo a una registrazione.
 4. Da Formulari: sarà possibile generare una nuova registrazione a partire dal formulario. La registrazione verrà automaticamente associata al formulario stesso. Non sarà consentita l'associazione del
@@ -353,6 +356,129 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Indirizzi di intervento del formulario unico (art. 230, comma 5): al massimo 10, come le righe del modello
+		-- Albo-2022-A; le righe senza sede ("(Selezionare)") non si salvano. Sedi proponibili come nella select
+		-- (uspSedi_get_Sedi_SelectList con il contesto del registro): quelle condivise nel dominio e quelle dell'azienda
+		-- del registro, non disabilitate; una sede già salvata sul formulario resta valida
+		DECLARE @isFormularioUnico BIT;
+		SELECT @isFormularioUnico = ISNULL(IsFormularioUnico, 0)
+		FROM dbo.tblRifiutiOperazioni
+		WHERE Id = @idOperazione;
+
+		DECLARE @elencoSediProduzione TABLE (
+			Pos INT NULL,
+			IdSede CHAR(16) COLLATE DATABASE_DEFAULT NULL,
+			Quantita DECIMAL(18, 2) NULL
+		);
+
+		IF @isFormularioUnico = 1
+		BEGIN
+			IF ISJSON(ISNULL(@SediProduzione, N'[]')) = 0
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Elenco degli indirizzi di intervento non valido';
+				GOTO BRANCH_END;
+			END
+
+			INSERT INTO @elencoSediProduzione (Pos, IdSede, Quantita)
+			SELECT
+				j.pos,
+				NULLIF(NULLIF(LTRIM(RTRIM(j.idSede)), ''), @idSediciZeri),
+				j.quantita
+			FROM OPENJSON(ISNULL(@SediProduzione, N'[]'))
+			WITH (
+				pos INT,
+				idSede CHAR(16),
+				quantita DECIMAL(18, 2)
+			) j;
+
+			DELETE @elencoSediProduzione
+			WHERE IdSede IS NULL;
+
+			IF NOT EXISTS (SELECT 1
+			FROM @elencoSediProduzione)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Indicare almeno un indirizzo di intervento';
+				GOTO BRANCH_END;
+			END
+			IF (SELECT COUNT(*)
+			FROM @elencoSediProduzione) > 10
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Si possono indicare al massimo 10 indirizzi di intervento';
+				GOTO BRANCH_END;
+			END
+			IF EXISTS (
+				SELECT IdSede
+				FROM @elencoSediProduzione
+				GROUP BY IdSede
+				HAVING COUNT(*) > 1
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Lo stesso indirizzo di intervento è indicato più volte';
+				GOTO BRANCH_END;
+			END
+			IF EXISTS (SELECT 1
+			FROM @elencoSediProduzione
+			WHERE Quantita <= 0)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'La quantità stimata di un indirizzo di intervento deve essere maggiore di zero';
+				GOTO BRANCH_END;
+			END
+
+			DECLARE @idAziendaInterna CHAR(16);
+			SELECT @idAziendaInterna = s.IdAziendaInterna
+			FROM
+				dbo.tblRifiutiRegistri g
+				INNER JOIN dbo.tblSedi s ON g.IdSede = s.Id
+			WHERE g.Id = @idRegistro;
+
+			DECLARE @sediAmmesse TABLE (
+				Id CHAR(16) COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY
+			);
+
+			INSERT INTO @sediAmmesse (Id)
+			SELECT DISTINCT u.Id
+			FROM
+				dbo.tblSessioni e
+				CROSS APPLY dbo.ufnSedi_get_SediByUtente_List(e.IdUtente) u
+			WHERE
+				e.Id = @IdSessione
+				AND u.Disabilitata = 0
+				AND
+					(
+						(
+						u.IdDominio = e.IdDominio
+						AND u.Condivisa = 1
+						)
+					OR u.IdAziendaInterna = @idAziendaInterna
+					);
+
+			INSERT INTO @sediAmmesse (Id)
+			SELECT p.IdSede
+			FROM
+				dbo.tblRifiutiMovimentiSediProduzione p
+				LEFT JOIN @sediAmmesse a ON p.IdSede = a.Id
+			WHERE
+				p.Id = @idMovimento
+				AND a.Id IS NULL;
+
+			IF EXISTS (
+				SELECT 1
+				FROM
+					@elencoSediProduzione x
+					LEFT JOIN @sediAmmesse a ON x.IdSede = a.Id
+				WHERE a.Id IS NULL)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un indirizzo di intervento selezionato non è valido';
+				GOTO BRANCH_END;
+			END
+		END
+
 		-- Controllo EER/stato fisico/unità di misura nelle relazioni della registrazione associata
 		IF @isRegistrazioneAssociata = 1 AND @nessunaRegistrazioneAssociata = 0 AND @idOperazione <> 'K'
 		BEGIN
@@ -617,6 +743,19 @@ BEGIN
 			FROM
 				dbo.tblRifiutiClassiPericolo c
 				INNER JOIN STRING_SPLIT(@ClassiPericolo, ';') v ON c.Id = v.value;
+
+			-- Indirizzi di intervento del formulario unico (nessuno per le altre operazioni), numerati da 1 nell'ordine
+			-- ricevuto
+			DELETE dbo.tblRifiutiMovimentiSediProduzione
+			WHERE Id = @idMovimento;
+
+			INSERT dbo.tblRifiutiMovimentiSediProduzione (Id, IdSede, Quantita, Pos)
+			SELECT
+				@idMovimento,
+				IdSede,
+				Quantita,
+				ROW_NUMBER() OVER (ORDER BY ISNULL(Pos, 255))
+			FROM @elencoSediProduzione;
 
 			-- Etichette formulario
 			DELETE dbo.tblRifiutiFormulariEtichette

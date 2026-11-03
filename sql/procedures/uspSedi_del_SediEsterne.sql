@@ -150,6 +150,10 @@ BEGIN
 					OR IdSedeTrasportatore1 = @Id
 					OR IdSedeIntermediario1 = @Id
 			)
+				-- Indirizzo di intervento di un formulario unico (art. 230, comma 5)
+				OR EXISTS (SELECT 1
+				FROM dbo.tblRifiutiMovimentiSediProduzione
+				WHERE IdSede = @Id)
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Una sede associata a movimenti rifiuti non può essere cancellata';
@@ -287,6 +291,10 @@ BEGIN
 					OR IdSedeTrasportatore1 = @Id
 					OR IdSedeIntermediario1 = @Id
 			)
+				-- Indirizzo di intervento di un formulario unico (art. 230, comma 5)
+				OR EXISTS (SELECT 1
+				FROM dbo.tblRifiutiMovimentiSediProduzione
+				WHERE IdSede = @Id)
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Una sede associata a movimenti rifiuti non può essere cancellata';

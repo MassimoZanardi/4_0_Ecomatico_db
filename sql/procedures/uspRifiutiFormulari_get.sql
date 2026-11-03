@@ -10,7 +10,7 @@ AS
 
 /*
 REGOLE ASSOCIAZIONE REGISTRAZIONE <-> FORMULARI
-1. Da Registrazioni: se @IdDocumentoTrasportoTipo non è un Formulario lo rimuove da Formulari
+1. Da Registrazioni: con un formulario attivo @IdDocumentoTrasportoTipo deve restare il Formulario; per un altro documento si cancella prima il formulario
 2. Da Registrazioni: sarà possibile eliminare una registrazione associata a un formulario. In questo caso, il formulario resterà presente e risulterà non associato ad alcuna registrazione.
 3. Da Formulari: sarà possibile creare un nuovo formulario anche senza associarlo a una registrazione.
 4. Da Formulari: sarà possibile generare una nuova registrazione a partire dal formulario. La registrazione verrà automaticamente associata al formulario stesso. Non sarà consentita l'associazione del
@@ -86,6 +86,8 @@ BEGIN
 			m.IdRegistro,
 			IdOperazione = ISNULL(m.IdOperazione, '0'),
 			OperazioneNome = ISNULL(o.Nome, ''),
+			-- Formulario unico (art. 230, comma 5): indirizzi di intervento, vidimazione su Vi.Vi.FIR e non sul RENTRI
+			IsFormularioUnico = CAST(ISNULL(o.IsFormularioUnico, 0) AS BIT),
 			IdEer = ISNULL(m.IdEer, '000000'),
 			IdProvenienza = ISNULL(m.IdProvenienza, 'S'),
 			IdStatoFisico = ISNULL(m.IdStatoFisico, '0'),

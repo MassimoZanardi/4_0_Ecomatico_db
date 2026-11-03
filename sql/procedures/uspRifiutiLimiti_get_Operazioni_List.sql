@@ -55,6 +55,10 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- L'operazione del formulario unico (art. 230, comma 5) solo con il modulo Vi.Vi.FIR (VVF) attivo, o se il
+		-- limite la comprende già
+		DECLARE @isViviFir BIT = IIF(dbo.ufnModuli_get_IsAttivoBySessione('VVF', @IdSessione) = 1, 1, 0);
+
 		SELECT
 			o.Id,
 			[Text] = o.Nome,
@@ -65,6 +69,10 @@ BEGIN
 				SELECT IdOperazione
 				FROM dbo.tblRifiutiLimitiOperazioni
 				WHERE IdLimite = @Id) sel ON o.Id = sel.IdOperazione
+		WHERE
+			ISNULL(o.IsFormularioUnico, 0) = 0
+			OR @isViviFir = 1
+			OR sel.IdOperazione IS NOT NULL
 		ORDER BY
 			o.Pos, o.Nome;
 

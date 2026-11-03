@@ -29,6 +29,10 @@ BEGIN
 		--                     di IsFormulario: include anche Z/I che non emettono un proprio FIR)
 		-- @Operazione        = NULL → nessun filtro; altrimenti solo le operazioni del raggruppamento
 		--                     (C carico, S scarico, X carico e scarico - ricerca di Rifiuti/Registrazioni)
+		-- L'operazione del formulario unico (IsFormularioUnico, art. 230, comma 5) si propone solo con il modulo
+		-- Vi.Vi.FIR (VVF) attivo sul dominio: senza, i formulari e le registrazioni già fatti restano, ma non se ne
+		-- creano di nuovi
+		DECLARE @isViviFir BIT = IIF(dbo.ufnModuli_get_IsAttivoBySessione('VVF', @IdSessione) = 1, 1, 0);
 
 		IF @IsFormulario = 1 SET @IsRentri = NULL;
 		IF @IsIntegrazioneFir = 1 SET @IsRentri = NULL;
@@ -70,6 +74,11 @@ BEGIN
 				(
 				@Operazione IS NULL
 				OR o.Operazione = @Operazione
+				)
+			AND
+				(
+				ISNULL(o.IsFormularioUnico, 0) = 0
+				OR @isViviFir = 1
 				)
 		ORDER BY Pos
 		OPTION (RECOMPILE);

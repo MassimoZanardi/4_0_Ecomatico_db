@@ -134,6 +134,9 @@ BEGIN
 
 				DELETE dbo.tblRifiutiMovimentiClassiPericolo
 				WHERE Id = @idMovimento;
+				-- Indirizzi di intervento del formulario unico (art. 230, comma 5)
+				DELETE dbo.tblRifiutiMovimentiSediProduzione
+				WHERE Id = @idMovimento;
 				DELETE dbo.tblRifiutiMovimentiProduttori
 				WHERE Id = @idMovimento;
 				DELETE dbo.tblRifiutiMovimentiDestinatari

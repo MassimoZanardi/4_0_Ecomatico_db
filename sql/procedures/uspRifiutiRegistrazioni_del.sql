@@ -272,6 +272,11 @@ BEGIN
 					WHERE
 						Id = @idMovimento
 						AND @idFormulario IS NULL;
+					-- Indirizzi di intervento del formulario unico (art. 230, comma 5): restano con il formulario
+					DELETE dbo.tblRifiutiMovimentiSediProduzione
+					WHERE
+						Id = @idMovimento
+						AND @idFormulario IS NULL;
 					DELETE dbo.tblRifiutiMovimentiProduttori
 					WHERE
 						Id = @idMovimento
@@ -395,6 +400,11 @@ BEGIN
 					Id = @Id
 					OR IdParent = @Id;
 				DELETE dbo.tblRifiutiMovimentiClassiPericolo
+				WHERE
+					Id = @idMovimento
+					AND @idFormulario IS NULL;
+				-- Indirizzi di intervento del formulario unico (art. 230, comma 5): restano con il formulario
+				DELETE dbo.tblRifiutiMovimentiSediProduzione
 				WHERE
 					Id = @idMovimento
 					AND @idFormulario IS NULL;

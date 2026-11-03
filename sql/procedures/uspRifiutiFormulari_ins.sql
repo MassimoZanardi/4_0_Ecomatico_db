@@ -406,6 +406,12 @@ BEGIN
 					FROM dbo.tblRifiutiMovimentiClassiPericolo
 					WHERE Id = @cIdMovimentoOrigine;
 
+				-- Indirizzi di intervento del formulario unico (art. 230, comma 5), con le quantità stimate
+				INSERT dbo.tblRifiutiMovimentiSediProduzione (Id, IdSede, Quantita, Pos)
+				SELECT @idMovimento, IdSede, Quantita, Pos
+				FROM dbo.tblRifiutiMovimentiSediProduzione
+				WHERE Id = @cIdMovimentoOrigine;
+
 				INSERT dbo.tblRifiutiFormulari
 					(Id, IdMovimento, IdImballo, AllaRinfusa, IdAdr, TrasportoAdr, NumeroOnu, AdrNote, IdAnalisiTipo, AnalisiNumero, AnalisiData, LuogoDiProduzione, Detentore, Note, Lock)
 				VALUES

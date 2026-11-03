@@ -60,7 +60,7 @@ AS
 
 /*
 REGOLE ASSOCIAZIONE REGISTRAZIONE <-> FORMULARI
-1. Da Registrazioni: se @IdDocumentoTrasportoTipo non è un Formulario lo rimuove da Formulari
+1. Da Registrazioni: con un formulario attivo @IdDocumentoTrasportoTipo deve restare il Formulario; per un altro documento si cancella prima il formulario
 2. Da Registrazioni: sarà possibile eliminare una registrazione associata a un formulario. In questo caso, il formulario resterà presente e risulterà non associato ad alcuna registrazione.
 3. Da Formulari: sarà possibile creare un nuovo formulario anche senza associarlo a una registrazione.
 4. Da Formulari: sarà possibile generare una nuova registrazione a partire dal formulario. La registrazione verrà automaticamente associata al formulario stesso. Non sarà consentita l'associazione del formulario a registrazioni già esistenti.
@@ -113,7 +113,6 @@ BEGIN
 
 		DECLARE @idMovimento CHAR(16);
 		DECLARE @idRegistro CHAR(16);
-		DECLARE @idFormulario CHAR(16);
 		DECLARE @lock TINYINT;
 		DECLARE @operazione CHAR(1);
 		DECLARE @idOperazione CHAR(1);
@@ -155,7 +154,6 @@ BEGIN
 		SELECT
 			@idMovimento = r.IdMovimento,
 			@idRegistro = m.IdRegistro,
-			@idFormulario = f.Id,
 			@lock = r.Lock,
 			@operazione = r.Operazione,
 			@idOperazione = m.IdOperazione,
@@ -399,6 +397,16 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Questa registrazione è associata ad un formulario. Il numero deve essere valorizzato';
+			GOTO BRANCH_END;
+		END
+
+		-- Con un formulario attivo il documento di trasporto resta il formulario: per indicare un Allegato VII o un
+		-- Allegato I-B l'utente cancella prima il formulario, con una scelta consapevole e mai in automatico. Il
+		-- formulario cancellato (Lock 4) resta sul movimento e non si tocca
+		IF @isFormularioAssociato = 1 AND ISNULL(@IdDocumentoTrasportoTipo, 'F') <> 'F'
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La registrazione è associata a un formulario: per indicare un altro documento di trasporto cancellare prima il formulario';
 			GOTO BRANCH_END;
 		END
 
@@ -1059,16 +1067,9 @@ BEGIN
 			IF ISNULL(@IdDocumentoTrasportoTipo, 'F') <> 'F'
 				SET @FormularioNumero = NULL;
 
-			-- Se il documento non è un formulario (tipo <> 'F') elimina il formulario associato
-			IF ISNULL(@IdDocumentoTrasportoTipo, 'F') <> 'F' AND @idFormulario IS NOT NULL
-			BEGIN
-				DELETE dbo.tblRifiutiFormulari
-				WHERE Id = @idFormulario;
-				DELETE dbo.tblIdLog
-				WHERE Id = @idMovimento;
-				DELETE dbo.tblId
-				WHERE Id = @idMovimento;
-			END
+			-- Nessuna cancellazione del formulario: con un formulario attivo il tipo di documento non cambia (controllo
+			-- sopra), uno cancellato resta com'è (prima la SP lo eliminava, ma i trasporti e le etichette del formulario ne
+			-- bloccavano la cancellazione con un errore di chiave esterna)
 
 			-- Aggiornamento registrazione
 			UPDATE dbo.tblRifiutiRegistrazioni

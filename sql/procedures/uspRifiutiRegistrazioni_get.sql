@@ -10,7 +10,7 @@ AS
 
 /*
 REGOLE ASSOCIAZIONE REGISTRAZIONE <-> FORMULARI
-1. Da Registrazioni: se @IdDocumentoTrasportoTipo non è un Formulario lo rimuove da Formulari
+1. Da Registrazioni: con un formulario attivo @IdDocumentoTrasportoTipo deve restare il Formulario; per un altro documento si cancella prima il formulario
 2. Da Registrazioni: sarà possibile eliminare una registrazione associata a un formulario. In questo caso, il formulario resterà presente e risulterà non associato ad alcuna registrazione.
 3. Da Formulari: sarà possibile creare un nuovo formulario anche senza associarlo a una registrazione.
 4. Da Formulari: sarà possibile generare una nuova registrazione a partire dal formulario. La registrazione verrà automaticamente associata al formulario stesso. Non sarà consentita l'associazione del formulario a registrazioni già esistenti.
@@ -123,6 +123,8 @@ BEGIN
 			UtenteNote = ISNULL(m.Note, ''),
 
 			IdDocumentoTrasportoTipo = ISNULL(r.IdTrasportoTransfrontalieroTipo, 'F'),
+			-- Formulario attivo sullo stesso movimento: il documento di trasporto resta il formulario (uspRifiutiRegistrazioni_upd)
+			IsFormularioAssociato = CAST(IIF(f.Id IS NULL, 0, 1) AS BIT),
 			IsFormularioNumero = CAST(CASE
 				WHEN o.IsIntegrazioneFir = 1 AND r.Lock = 2 THEN 1
 				ELSE IIF(m.FormularioNumero IS NULL, 0, 1)

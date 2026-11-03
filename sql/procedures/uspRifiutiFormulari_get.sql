@@ -88,6 +88,9 @@ BEGIN
 			OperazioneNome = ISNULL(o.Nome, ''),
 			-- Formulario unico (art. 230, comma 5): indirizzi di intervento, vidimazione su Vi.Vi.FIR e non sul RENTRI
 			IsFormularioUnico = CAST(ISNULL(o.IsFormularioUnico, 0) AS BIT),
+			-- Formulario unico verso il deposito temporaneo dello spurghista (riquadro 5.1 del modello): l'operazione di carico (P);
+			-- quella di carico e scarico (Q) porta il rifiuto direttamente all'impianto (riquadro 5.2)
+			IsFormularioUnicoDeposito = CAST(IIF(ISNULL(o.IsFormularioUnico, 0) = 1 AND o.Operazione = 'C', 1, 0) AS BIT),
 			IdEer = ISNULL(m.IdEer, '000000'),
 			IdProvenienza = ISNULL(m.IdProvenienza, 'S'),
 			IdStatoFisico = ISNULL(m.IdStatoFisico, '0'),

@@ -319,13 +319,13 @@ BEGIN
 				('PR', 'C'), ('PR', 'F'), ('PR', 'P'),
 				('PL', 'M'),
 				('RT', 'Z'),
-				('TR', 'T'),
+				('TR', 'T'), ('TR', 'Q'),
 				('TT', 'S'), ('TT', 'Z'),
 				('CT', 'S'),
-				('IN', 'S'), ('IN', 'Z'), ('IN', 'T'), ('IN', 'I'),
+				('IN', 'S'), ('IN', 'Z'), ('IN', 'T'), ('IN', 'Q'), ('IN', 'I'),
 				('DG', 'Z'), ('DG', 'R'),
 				('DC', 'S'),
-				('MV', 'C'), ('MV', 'F'), ('MV', 'P'), ('MV', 'M'), ('MV', 'Z'), ('MV', 'T'), ('MV', 'S'), ('MV', 'R'), ('MV', 'I')
+				('MV', 'C'), ('MV', 'F'), ('MV', 'P'), ('MV', 'M'), ('MV', 'Z'), ('MV', 'T'), ('MV', 'Q'), ('MV', 'S'), ('MV', 'R'), ('MV', 'I')
 			) x (Report, Id)
 		WHERE x.Report = @Report;
 

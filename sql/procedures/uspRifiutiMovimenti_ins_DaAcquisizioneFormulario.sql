@@ -149,11 +149,13 @@ BEGIN
 
 		DECLARE
 			@operazione CHAR(1), @isProduttore BIT, @isTrasportatore BIT, @isDestinatario BIT,
-			@isIntermediario BIT, @isEsito BIT, @isAttivitaRs BIT, @isIntegrazioneFir BIT, @isFormulario BIT;
+			@isIntermediario BIT, @isEsito BIT, @isAttivitaRs BIT, @isIntegrazioneFir BIT, @isFormulario BIT,
+			@isFormularioUnico BIT;
 		SELECT
 			@operazione = Operazione, @isProduttore = IsProduttore, @isTrasportatore = IsTrasportatore,
 			@isDestinatario = IsDestinatario, @isIntermediario = IsIntermediario, @isEsito = IsEsito,
-			@isAttivitaRs = IsAttivitaRs, @isIntegrazioneFir = IsIntegrazioneFir, @isFormulario = IsFormulario
+			@isAttivitaRs = IsAttivitaRs, @isIntegrazioneFir = IsIntegrazioneFir, @isFormulario = IsFormulario,
+			@isFormularioUnico = ISNULL(IsFormularioUnico, 0)
 		FROM dbo.tblRifiutiOperazioni
 		WHERE Id = @IdOperazione;
 
@@ -163,7 +165,9 @@ BEGIN
 			SET @returnMessage = 'Causale non valida';
 			GOTO BRANCH_END;
 		END
+		-- Il formulario unico degli spurghisti (art. 230, comma 5) si vidima su Vi.Vi.FIR: un FIR del RENTRI non lo diventa
 		IF (@ModalitaRitorno = 'R' AND ISNULL(@isIntegrazioneFir, 0) = 0) OR (@ModalitaRitorno = 'F' AND ISNULL(@isFormulario, 0) = 0)
+			OR @isFormularioUnico = 1
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'La causale indicata non è valida per l''acquisizione da formulario digitale';

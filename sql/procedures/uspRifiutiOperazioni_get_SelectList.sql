@@ -7,7 +7,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiOperazioni_get_SelectList]
 	@IsRentri BIT = NULL,
 	@IsFormulario BIT = NULL,
 	@IsIntegrazioneFir BIT = NULL,
-	@Operazione CHAR(1) = NULL
+	@Operazione CHAR(1) = NULL,
+	@IsFormularioUnico BIT = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -32,6 +33,8 @@ BEGIN
 		-- L'operazione del formulario unico (IsFormularioUnico, art. 230, comma 5) si propone solo con il modulo
 		-- Vi.Vi.FIR (VVF) attivo sul dominio: senza, i formulari e le registrazioni già fatti restano, ma non se ne
 		-- creano di nuovi
+		-- @IsFormularioUnico = NULL → nessun filtro; = 0 → senza l'operazione del formulario unico (acquisizione da
+		--                     formulario digitale RENTRI: un FIR del RENTRI non diventa un formulario unico)
 		DECLARE @isViviFir BIT = IIF(dbo.ufnModuli_get_IsAttivoBySessione('VVF', @IdSessione) = 1, 1, 0);
 
 		IF @IsFormulario = 1 SET @IsRentri = NULL;
@@ -79,6 +82,11 @@ BEGIN
 				(
 				ISNULL(o.IsFormularioUnico, 0) = 0
 				OR @isViviFir = 1
+				)
+			AND
+				(
+				@IsFormularioUnico IS NULL
+				OR ISNULL(o.IsFormularioUnico, 0) = @IsFormularioUnico
 				)
 		ORDER BY Pos
 		OPTION (RECOMPILE);

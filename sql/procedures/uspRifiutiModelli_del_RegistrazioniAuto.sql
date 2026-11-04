@@ -96,3 +96,4 @@ BEGIN
 	END
 
 END;
+GO

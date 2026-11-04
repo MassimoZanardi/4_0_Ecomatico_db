@@ -1,4 +1,8 @@
-﻿CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistri_get_SelectList]
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistri_get_SelectList]
 	@IdSessione CHAR(16) = NULL,
 	@IdSelected CHAR(16) = NULL,
 	@Search VARCHAR(50) = NULL
@@ -124,3 +128,4 @@ BEGIN
 	END
 
 END;
+GO

@@ -43,8 +43,19 @@ BEGIN
 		END
 
 		-- Scope: dominio della sessione
+		-- Stato (_StatoPartial): scadenza della credenziale, valida fino al giorno indicato compreso
 		SELECT
 			c.Id,
+			StatoValore = CASE
+				WHEN c.Scadenza < CAST(GETDATE() AS DATE) THEN 2
+				WHEN DATEDIFF(DAY, GETDATE(), c.Scadenza) < 30 THEN 1
+				ELSE 0
+			END,
+			StatoDescrizione = CASE
+				WHEN c.Scadenza < CAST(GETDATE() AS DATE) THEN 'Credenziale scaduta'
+				WHEN DATEDIFF(DAY, GETDATE(), c.Scadenza) < 30 THEN 'Credenziale in scadenza'
+				ELSE 'OK'
+			END,
 			c.Nome,
 			h.ClientId,
 			c.Scadenza,

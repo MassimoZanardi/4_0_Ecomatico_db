@@ -44,8 +44,27 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Stato (_StatoPartial): credenziale associata e sua scadenza, esito dell'ultima verifica
 		SELECT
 			s.Id,
+			StatoValore = CASE
+				WHEN c.Id IS NULL THEN 1
+				WHEN c.Scadenza < CAST(GETDATE() AS DATE) THEN 2
+				WHEN a.DataVerifica IS NULL THEN 1
+				WHEN a.Soggetto IS NULL THEN 2
+				WHEN a.Blocco IS NULL THEN 1
+				WHEN DATEDIFF(DAY, GETDATE(), c.Scadenza) < 30 THEN 1
+				ELSE 0
+			END,
+			StatoDescrizione = CASE
+				WHEN c.Id IS NULL THEN 'Nessuna credenziale Vi.Vi.FIR'
+				WHEN c.Scadenza < CAST(GETDATE() AS DATE) THEN 'Credenziale scaduta'
+				WHEN a.DataVerifica IS NULL THEN 'Collegamento non verificato'
+				WHEN a.Soggetto IS NULL THEN 'Soggetto non trovato su Vi.Vi.FIR'
+				WHEN a.Blocco IS NULL THEN 'Nessun blocco del formulario unico'
+				WHEN DATEDIFF(DAY, GETDATE(), c.Scadenza) < 30 THEN 'Credenziale in scadenza'
+				ELSE 'Collegata a Vi.Vi.FIR'
+			END,
 			Nome = s.NomeCompleto,
 			s.IndirizzoCompleto,
 			CredenzialeNome = c.Nome,

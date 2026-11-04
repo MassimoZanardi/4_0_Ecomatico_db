@@ -30,6 +30,7 @@ CREATE TABLE [dbo].[tblRifiutiMovimenti](
 	[RentriFormularioInviiConservazione] [int] NULL,
 	[RentriFormularioCartaceo] [bit] NULL,
 	[IdModello] [char](16) COLLATE Latin1_General_CI_AS NULL,
+	[ViviFirVidimato] [bit] NULL,
  CONSTRAINT [PK_tblRifiutiMovimenti] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC

@@ -1118,7 +1118,14 @@ BEGIN
 				IdSedeDestinatario = ad.IdSede,
 				IdSedeTrasportatore1 = ar.IdSede,
 				IdSedeIntermediario1 = ai.IdSede,
-				FormularioNumero = @FormularioNumero,
+				-- Con il formulario associato, il numero assegnato dal RENTRI (formulario digitale o cartaceo vidimato) o da
+				-- Vi.Vi.FIR (formulario unico) resta quello salvato, come in uspRifiutiFormulari_upd
+				FormularioNumero = CASE
+					WHEN @isFormularioAssociato = 1
+						AND (m.RentriFormularioStato IS NOT NULL OR ISNULL(m.RentriFormularioCartaceo, 0) = 1 OR ISNULL(m.ViviFirVidimato, 0) = 1)
+					THEN m.FormularioNumero
+					ELSE @FormularioNumero
+				END,
 				DataInizioTrasporto = @DataInizioTrasporto,
 				Note = @UtenteNote
 			FROM

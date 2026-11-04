@@ -112,7 +112,8 @@ BEGIN
                 RettificaRegistrazioneData   = ro.Data,
                 RentriFormularioStato    = m.RentriFormularioStato,
                 RentriFormularioCartaceo = ISNULL(m.RentriFormularioCartaceo, 0),
-                IsFormularioUnico        = CAST(ISNULL(o.IsFormularioUnico, 0) AS BIT)
+                IsFormularioUnico        = CAST(ISNULL(o.IsFormularioUnico, 0) AS BIT),
+                ViviFirVidimato          = CAST(ISNULL(m.ViviFirVidimato, 0) AS BIT)
             FROM
                 dbo.tblRifiutiRegistrazioni                  r
                 INNER JOIN dbo.tblRifiutiMovimenti           m  ON r.IdMovimento               = m.Id
@@ -236,7 +237,7 @@ BEGIN
             tbl.Etichette,
             tbl.IsRentriCollegato, tbl.RentriIdentificativo, tbl.RentriData,
             tbl.IsRettifica, tbl.IsAnnullamento, tbl.RettificaRegistrazioneNumero, tbl.RettificaRegistrazioneData,
-            tbl.RentriFormularioStato, tbl.RentriFormularioCartaceo, tbl.IsFormularioUnico,
+            tbl.RentriFormularioStato, tbl.RentriFormularioCartaceo, tbl.IsFormularioUnico, tbl.ViviFirVidimato,
             RowsCount = COUNT(*) OVER ()
         FROM tbl
         ORDER BY tbl.RegistrazioneData DESC, tbl.RegistrazioneNumero DESC

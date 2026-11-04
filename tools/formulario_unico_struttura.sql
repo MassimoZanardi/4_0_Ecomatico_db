@@ -12,7 +12,8 @@
 -- 4) P configurata come F (l'altro carico RE) e Q come T (l'altro T*aT): stessi tipi di registro
 --    (tblRifiutiOperazioniRegistriTipi) e stesse operazioni di scarico che ne prelevano la quantità (tblRifiutiOperazioniRelazioni:
 --    R e S per la P, nessuna per la Q);
--- 5) modulo VVF (Vi.Vi.FIR), che richiede il modulo Rifiuti: senza VVF sul dominio P e Q non si propongono.
+-- 5) modulo VVF (Vi.Vi.FIR), che richiede il modulo Rifiuti: senza VVF sul dominio P e Q non si propongono;
+-- 6) colonna tblRifiutiMovimenti.ViviFirVidimato (numero vidimato su Vi.Vi.FIR).
 -- Script idempotente: rieseguibile senza effetti su un DB già aggiornato.
 SET NOCOUNT ON;
 GO
@@ -122,4 +123,9 @@ WHERE
 )
 	INSERT dbo.tblModuliRelazioni (Id, IdParent)
 	VALUES ('RIF', 'VVF');
+GO
+-- 6) colonna tblRifiutiMovimenti.ViviFirVidimato: il numero del formulario unico è stato vidimato su Vi.Vi.FIR
+--    (Rifiuti > Formulari, "Vi.Vi.FIR - Vidima formulario unico"): blocca il numero e colora di verde l'icona degli elenchi
+IF COL_LENGTH('dbo.tblRifiutiMovimenti', 'ViviFirVidimato') IS NULL
+	ALTER TABLE dbo.tblRifiutiMovimenti ADD ViviFirVidimato BIT NULL;
 GO

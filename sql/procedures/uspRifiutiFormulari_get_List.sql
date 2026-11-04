@@ -97,6 +97,7 @@ BEGIN
                 RentriFormularioStato   = m.RentriFormularioStato,
                 RentriFormularioCartaceo = ISNULL(m.RentriFormularioCartaceo, 0),
                 IsFormularioUnico       = CAST(ISNULL(op.IsFormularioUnico, 0) AS BIT),
+                ViviFirVidimato         = CAST(ISNULL(m.ViviFirVidimato, 0) AS BIT),
                 RowsCount               = COUNT(*) OVER ()
             FROM
                 dbo.tblRifiutiFormulari                      f
@@ -192,7 +193,7 @@ BEGIN
             tbl.DestinatarioSede, tbl.Intermediario1Sede,
             tbl.Etichette,
             tbl.IsRentriCollegato, tbl.RentriIdentificativo, tbl.RentriData, tbl.RentriFormularioStato, tbl.RentriFormularioCartaceo,
-            tbl.IsFormularioUnico,
+            tbl.IsFormularioUnico, tbl.ViviFirVidimato,
             tbl.RowsCount
         FROM tbl
         ORDER BY tbl.FormularioDataEmissione DESC, tbl.FormularioNumero DESC

@@ -923,8 +923,9 @@ BEGIN
 				-- non puo' piu' essere modificato dall'utente - mantiene il valore gia' a DB
 				-- indipendentemente da @FormularioNumero (non blocca l'intero update, solo questo campo:
 				-- gli altri dati restano modificabili e sincronizzabili su RENTRI via "Modifica").
-				-- Lo stesso vale per il numero vidimato con "RENTRI - Crea formulario cartaceo".
-				FormularioNumero = CASE WHEN @formularioRentriStato IS NOT NULL OR @rentriFormularioCartaceo = 1 THEN m.FormularioNumero ELSE @FormularioNumero END,
+				-- Lo stesso vale per il numero vidimato con "RENTRI - Crea formulario cartaceo" e per quello
+				-- del formulario unico vidimato su Vi.Vi.FIR.
+				FormularioNumero = CASE WHEN @formularioRentriStato IS NOT NULL OR @rentriFormularioCartaceo = 1 OR ISNULL(m.ViviFirVidimato, 0) = 1 THEN m.FormularioNumero ELSE @FormularioNumero END,
 				DataInizioTrasporto = @DataInizioTrasporto,
 				Note = @UtenteNote
 			FROM

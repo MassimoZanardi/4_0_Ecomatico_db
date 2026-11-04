@@ -108,6 +108,8 @@ BEGIN
 			-- Numero vidimato su RENTRI con "RENTRI - Crea formulario cartaceo": blocca il numero e non
 			-- fa più proporre la creazione del formulario (cartaceo o digitale)
 			RentriFormularioCartaceo = ISNULL(m.RentriFormularioCartaceo, 0),
+			-- Numero del formulario unico vidimato su Vi.Vi.FIR: blocca il numero e non fa più proporre la vidimazione
+			ViviFirVidimato = CAST(ISNULL(m.ViviFirVidimato, 0) AS BIT),
 			IdAdr = ISNULL(f.IdAdr, '00'),
 			NumeroOnu = ISNULL(f.NumeroOnu, ''),
 			TrasportoAdr = ISNULL(f.TrasportoAdr, 0),

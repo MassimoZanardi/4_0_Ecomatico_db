@@ -1,0 +1,49 @@
+﻿SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[tblMigrazioniId](
+	[Versione] [char](2) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdDominioA] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Tabella] [varchar](50) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdOrigine] [varchar](50) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdDestinazione] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Creato] [bit] NOT NULL,
+	[IdMigrazione] [int] NOT NULL,
+ CONSTRAINT [PK_tblMigrazioniId] PRIMARY KEY CLUSTERED 
+(
+	[Versione] ASC,
+	[IdDominioA] ASC,
+	[Tabella] ASC,
+	[IdOrigine] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+
+GO
+
+SET ANSI_PADDING ON
+
+GO
+
+CREATE NONCLUSTERED INDEX [IX_MigrazioniId_IdDestinazione] ON [dbo].[tblMigrazioniId]
+(
+	[IdDestinazione] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
+GO
+
+CREATE NONCLUSTERED INDEX [IX_MigrazioniId_IdMigrazione] ON [dbo].[tblMigrazioniId]
+(
+	[IdMigrazione] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
+GO
+
+ALTER TABLE [dbo].[tblMigrazioniId]  WITH CHECK ADD  CONSTRAINT [FK_tblMigrazioniId_tblMigrazioni] FOREIGN KEY([IdMigrazione])
+REFERENCES [dbo].[tblMigrazioni] ([Id])
+GO
+
+ALTER TABLE [dbo].[tblMigrazioniId] CHECK CONSTRAINT [FK_tblMigrazioniId_tblMigrazioni]
+GO

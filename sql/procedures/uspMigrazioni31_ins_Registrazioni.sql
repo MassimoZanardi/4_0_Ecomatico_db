@@ -10,7 +10,7 @@ GO
 -- Valori: quelli della registrazione cosi' come inviata al RENTRI (Quantita', EER, stato fisico originali; i valori
 -- corretti di una rettifica si migrano con le rettifiche). Quantita' e unita' di misura passano sul movimento. Numero e
 -- data di inizio trasporto del formulario dalla scheda 3.1 (i formulari non si migrano). Codici con tblMigrazioniCodici,
--- causale -> operazione con tblRifiutiCausaliOperazioni31.
+-- causale -> operazione con tblMigrazioniCausali.
 -- Ruoli, solo se previsti dall'operazione 4.0 (Is* di tblRifiutiOperazioni, come uspRifiutiRegistrazioni_upd):
 -- - produttore: con il luogo di produzione 3.1 (IDPosizione) l'autorizzazione "Nessuna" di quella sede (e' il produttore
 --   che la 3.1 inviava al RENTRI); altrimenti l'autorizzazione del produttore; se manca e l'operazione ha il produttore
@@ -176,7 +176,7 @@ BEGIN
 			LEFT JOIN dbo.syn31ID id31 ON r.IDRegistrazione = id31.ID
 			LEFT JOIN dbo.syn31RifiutiSchede s ON m.IDMovimento = s.IDMovimento
 			LEFT JOIN dbo.syn31RifiutiRegistrazioniQuantitaDestino d ON r.IDRegistrazione = d.IDRegistrazione
-			LEFT JOIN dbo.tblRifiutiCausaliOperazioni31 co ON x.IdCausale = co.IdCausale
+			LEFT JOIN dbo.tblMigrazioniCausali co ON co.Versione = '31' AND x.IdCausale = co.CausaleOrigine
 			LEFT JOIN dbo.tblRifiutiOperazioni o ON co.IdOperazione = o.Id
 			LEFT JOIN dbo.tblMigrazioniId mg ON mg.Versione = '31'
 				AND mg.IdDominioA = @IdDominioA

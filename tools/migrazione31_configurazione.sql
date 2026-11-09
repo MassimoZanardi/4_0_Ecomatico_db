@@ -4,28 +4,16 @@
 --    (i sinonimi esistenti vengono ricreati). Nomi senza accenti: syn31UnitaMisura -> [tblUnitàMisura];
 -- 2) codici delle tabelle di lookup 3.1 -> 4.0 (tblMigrazioniCodici, Versione = '31'). Un codice assente o con
 --    CodiceDestinazione NULL non e' migrabile: il record che lo usa viene scartato e segnalato nel log;
--- 3) causali dei movimenti 3.1 -> operazioni 4.0 (tblRifiutiCausaliOperazioni31, creata se manca: in dev esisteva
---    gia', in produzione no). Scelte concordate: CCM -> F, SRG -> R.
+-- 3) causali dei movimenti 3.1 -> operazioni 4.0 (tblMigrazioniCausali, Versione = '31'). Scelte concordate: CCM -> F,
+--    SRG -> R.
 -- Script idempotente: rieseguibile senza effetti su un DB gia' aggiornato.
 SET NOCOUNT ON;
 GO
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
-IF OBJECT_ID('dbo.tblRifiutiCausaliOperazioni31', 'U') IS NULL
-BEGIN
-	CREATE TABLE dbo.tblRifiutiCausaliOperazioni31 (
-		IdCausale CHAR(3) COLLATE Latin1_General_CI_AS NOT NULL,
-		IdOperazione CHAR(1) COLLATE Latin1_General_CI_AS NOT NULL,
-		CONSTRAINT PK_tblRifiutiCausaliOperazioni31 PRIMARY KEY CLUSTERED (IdCausale ASC, IdOperazione ASC)
-	);
-
-	ALTER TABLE dbo.tblRifiutiCausaliOperazioni31 WITH CHECK ADD CONSTRAINT FK_tblRifiutiCausaliOperazioni31_tblRifiutiOperazioni
-		FOREIGN KEY (IdOperazione) REFERENCES dbo.tblRifiutiOperazioni (Id);
-END
-GO
-DECLARE @causali TABLE (IdCausale CHAR(3) NOT NULL PRIMARY KEY, IdOperazione CHAR(1) NOT NULL);
-INSERT INTO @causali (IdCausale, IdOperazione)
+DECLARE @causali TABLE (CausaleOrigine VARCHAR(20) NOT NULL PRIMARY KEY, IdOperazione CHAR(1) NOT NULL);
+INSERT INTO @causali (CausaleOrigine, IdOperazione)
 VALUES
 	('CCM', 'F'),
 	('CFL', 'F'),
@@ -48,21 +36,30 @@ VALUES
 	('STT', 'S'),
 	('TRD', 'I');
 
--- Una sola operazione per causale: si tolgono le corrispondenze diverse da quelle concordate
+-- Si tolgono le causali non piu' previste e si allinea l'operazione di quelle esistenti
 DELETE c
-FROM
-	dbo.tblRifiutiCausaliOperazioni31 c
-	INNER JOIN @causali s ON c.IdCausale = s.IdCausale
-WHERE c.IdOperazione <> s.IdOperazione;
+FROM dbo.tblMigrazioniCausali c
+WHERE
+	c.Versione = '31'
+	AND NOT EXISTS (SELECT 1 FROM @causali s WHERE s.CausaleOrigine = c.CausaleOrigine);
 
-INSERT INTO dbo.tblRifiutiCausaliOperazioni31 (IdCausale, IdOperazione)
-SELECT s.IdCausale, s.IdOperazione
+UPDATE c
+SET c.IdOperazione = s.IdOperazione
+FROM
+	dbo.tblMigrazioniCausali c
+	INNER JOIN @causali s ON c.CausaleOrigine = s.CausaleOrigine
+WHERE
+	c.Versione = '31'
+	AND c.IdOperazione <> s.IdOperazione;
+
+INSERT INTO dbo.tblMigrazioniCausali (Versione, CausaleOrigine, IdOperazione)
+SELECT '31', s.CausaleOrigine, s.IdOperazione
 FROM @causali s
 WHERE NOT EXISTS (SELECT 1
-	FROM dbo.tblRifiutiCausaliOperazioni31 c
+	FROM dbo.tblMigrazioniCausali c
 	WHERE
-		c.IdCausale = s.IdCausale
-		AND c.IdOperazione = s.IdOperazione);
+		c.Versione = '31'
+		AND c.CausaleOrigine = s.CausaleOrigine);
 GO
 DECLARE @Database SYSNAME = N'3_1_ecomatico';
 

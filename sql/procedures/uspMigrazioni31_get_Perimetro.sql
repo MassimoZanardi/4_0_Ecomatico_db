@@ -487,7 +487,7 @@ BEGIN
 				#registrazioni x
 				INNER JOIN dbo.syn31RifiutiRegistrazioni r ON x.Id = r.IDRegistrazione COLLATE DATABASE_DEFAULT
 				INNER JOIN dbo.syn31RifiutiMovimenti m ON r.IDMovimento = m.IDMovimento
-				INNER JOIN dbo.tblRifiutiCausaliOperazioni31 co ON x.IdCausale = co.IdCausale
+				INNER JOIN dbo.tblMigrazioniCausali co ON co.Versione = '31' AND x.IdCausale = co.CausaleOrigine
 				INNER JOIN dbo.tblRifiutiOperazioni o ON co.IdOperazione = o.Id
 				CROSS APPLY (VALUES
 					('produttore', ISNULL(o.IsProduttore, 0), COALESCE(m.IDPosizione, m.IDAutorizzazioneProduttore, IIF(ISNULL(o.ProduttoreSede, 0) = 1, 'sede del registro', NULL))),
@@ -639,7 +639,7 @@ BEGIN
 		SELECT 'E', 'Causale senza operazione 4.0', 'tblRifiutiRegistrazioni', r.Id, CONCAT('Causale ', ISNULL(r.IdCausale, '(vuota)'), ', numero ', r.Numero, '/', YEAR(r.[Data]))
 		FROM
 			#registrazioni r
-			LEFT JOIN dbo.tblRifiutiCausaliOperazioni31 o ON r.IdCausale = o.IdCausale
+			LEFT JOIN dbo.tblMigrazioniCausali o ON o.Versione = '31' AND r.IdCausale = o.CausaleOrigine
 		WHERE
 			r.Importabile = 1
 			AND o.IdOperazione IS NULL;
@@ -850,8 +850,8 @@ BEGIN
 			dbo.syn31RifiutiRegistrazioniRelazioni l
 			INNER JOIN #registrazioni c ON l.IDCarico = c.Id COLLATE DATABASE_DEFAULT
 			INNER JOIN #registrazioni s ON l.IDScarico = s.Id COLLATE DATABASE_DEFAULT
-			INNER JOIN dbo.tblRifiutiCausaliOperazioni31 oc ON c.IdCausale = oc.IdCausale
-			INNER JOIN dbo.tblRifiutiCausaliOperazioni31 os ON s.IdCausale = os.IdCausale
+			INNER JOIN dbo.tblMigrazioniCausali oc ON oc.Versione = '31' AND c.IdCausale = oc.CausaleOrigine
+			INNER JOIN dbo.tblMigrazioniCausali os ON os.Versione = '31' AND s.IdCausale = os.CausaleOrigine
 		WHERE
 			c.Importabile = 1
 			AND s.Importabile = 1

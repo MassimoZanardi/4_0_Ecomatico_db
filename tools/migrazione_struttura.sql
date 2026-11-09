@@ -6,8 +6,11 @@
 --    primi si possono eliminare annullando una migrazione;
 -- 3) tblMigrazioniLog: log dettagliato di ogni esecuzione (fase, livello I/W/E, tabella, Id di origine, righe);
 -- 4) tblMigrazioniCodici: conversione dei codici delle tabelle di lookup per versione (NULL = codice non migrabile).
---    Le causali della 3.1 restano in tblRifiutiCausaliOperazioni31.
--- Le configurazioni per versione (sinonimi verso il DB di origine e codici) sono in tools/migrazioneNN_configurazione.sql.
+-- 5) tblMigrazioniCausali: causale dei movimenti di origine -> operazione 4.0, per versione (una sola operazione per
+--    causale; una causale assente non e' migrabile). Sostituisce tblRifiutiCausaliOperazioni31 (solo 3.1, esisteva solo
+--    in dev), che qui viene eliminata: i dati li reinserisce tools/migrazione31_configurazione.sql.
+-- Le configurazioni per versione (sinonimi verso il DB di origine, codici e causali) sono in
+-- tools/migrazioneNN_configurazione.sql.
 -- Script idempotente: rieseguibile senza effetti su un DB gia' aggiornato.
 SET NOCOUNT ON;
 GO
@@ -85,4 +88,20 @@ BEGIN
 		CONSTRAINT PK_tblMigrazioniCodici PRIMARY KEY CLUSTERED (Versione ASC, Tabella ASC, CodiceOrigine ASC)
 	);
 END
+GO
+IF OBJECT_ID('dbo.tblMigrazioniCausali', 'U') IS NULL
+BEGIN
+	CREATE TABLE dbo.tblMigrazioniCausali (
+		Versione CHAR(2) COLLATE Latin1_General_CI_AS NOT NULL,
+		CausaleOrigine VARCHAR(20) COLLATE Latin1_General_CI_AS NOT NULL,
+		IdOperazione CHAR(1) COLLATE Latin1_General_CI_AS NOT NULL,
+		CONSTRAINT PK_tblMigrazioniCausali PRIMARY KEY CLUSTERED (Versione ASC, CausaleOrigine ASC)
+	);
+
+	ALTER TABLE dbo.tblMigrazioniCausali WITH CHECK ADD CONSTRAINT FK_tblMigrazioniCausali_tblRifiutiOperazioni
+		FOREIGN KEY (IdOperazione) REFERENCES dbo.tblRifiutiOperazioni (Id);
+END
+GO
+IF OBJECT_ID('dbo.tblRifiutiCausaliOperazioni31', 'U') IS NOT NULL
+	DROP TABLE dbo.tblRifiutiCausaliOperazioni31;
 GO

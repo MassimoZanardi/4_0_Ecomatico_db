@@ -4,7 +4,8 @@ SET QUOTED_IDENTIFIER ON
 GO
 -- Rinumera le registrazioni del registro del contesto (tblSessioni.IdRegistro) con data nell'anno @Anno e
 -- numero tra @DalNumero e @AlNumero: ricevono numeri consecutivi a partire da @PrimoNumero, nell'ordine di
--- data e numero attuali. Un intervallo che contiene registrazioni già inviate al RENTRI non si rinumera.
+-- data e numero attuali. Un intervallo che contiene registrazioni già inviate al RENTRI non si rinumera, e i
+-- nuovi numeri non possono sovrapporsi né essere incoerenti con le date delle registrazioni fuori dall'intervallo.
 -- Restituisce il numero di registrazioni rinumerate.
 CREATE OR ALTER PROCEDURE dbo.uspRifiutiRegistrazioni_upd_Numerazione
 	@IdSessione CHAR(16) = NULL,
@@ -114,8 +115,11 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Ultimo numero assegnato dalla rinumerazione
+			DECLARE @ultimoNumero INT = @PrimoNumero + @totaleDaRinumerare - 1;
+
 			-- Se la numerazione finale supera 999.999
-			IF @PrimoNumero + @totaleDaRinumerare > 999999
+			IF @ultimoNumero > 999999
 			BEGIN
 				ROLLBACK TRANSACTION;
 				SET @returnValue = -1;
@@ -135,7 +139,7 @@ BEGIN
 					AND r.[Data] >= @annoInizio
 					AND r.[Data] < @annoFine
 					AND r.Numero NOT BETWEEN @DalNumero AND @AlNumero
-					AND r.Numero BETWEEN @PrimoNumero AND @PrimoNumero + @totaleDaRinumerare
+					AND r.Numero BETWEEN @PrimoNumero AND @ultimoNumero
 			)
 			BEGIN
 				ROLLBACK TRANSACTION;
@@ -144,25 +148,63 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
-			UPDATE r
-			SET Numero = t.NumeroBase + @PrimoNumero - 1
+			-- Nuovi numeri, nell'ordine di data e numero attuali
+			DECLARE @nuovi TABLE (
+				Id CHAR(16) PRIMARY KEY,
+				[Data] DATE,
+				NumeroNuovo INT);
+
+			INSERT @nuovi (Id, [Data], NumeroNuovo)
+			SELECT
+				r.Id,
+				r.[Data],
+				ROW_NUMBER() OVER (ORDER BY r.[Data], r.Numero) + @PrimoNumero - 1
 			FROM
 				dbo.tblRifiutiRegistrazioni r
-				INNER JOIN
-					(
-						SELECT
-							r.Id,
-							NumeroBase = ROW_NUMBER() OVER (ORDER BY r.[Data], r.Numero)
-						FROM
-							dbo.tblRifiutiRegistrazioni r
-							INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-						WHERE
-							m.IdRegistro = @idRegistro
-							AND r.Lock < 2
-							AND r.[Data] >= @annoInizio
-							AND r.[Data] < @annoFine
-							AND r.Numero BETWEEN @DalNumero AND @AlNumero
-					) t ON r.Id = t.Id;
+				INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+			WHERE
+				m.IdRegistro = @idRegistro
+				AND r.Lock < 2
+				AND r.[Data] >= @annoInizio
+				AND r.[Data] < @annoFine
+				AND r.Numero BETWEEN @DalNumero AND @AlNumero;
+
+			-- I nuovi numeri devono restare coerenti con le date delle registrazioni fuori dall'intervallo (come in
+			-- uspRifiutiRegistrazioni_upd): nessuna con numero minore e data successiva, o numero maggiore e data precedente
+			IF EXISTS (
+				SELECT 1
+				FROM
+					@nuovi n
+					INNER JOIN dbo.tblRifiutiRegistrazioni r ON
+						(
+						r.Numero < n.NumeroNuovo
+						AND r.[Data] > n.[Data]
+						)
+						OR
+						(
+						r.Numero > n.NumeroNuovo
+						AND r.[Data] < n.[Data]
+						)
+					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+				WHERE
+					m.IdRegistro = @idRegistro
+					AND r.Lock < 2
+					AND r.[Data] >= @annoInizio
+					AND r.[Data] < @annoFine
+					AND r.Numero NOT BETWEEN @DalNumero AND @AlNumero
+			)
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'La nuova numerazione non è coerente con le date di altre registrazioni del registro';
+				GOTO BRANCH_END;
+			END
+
+			UPDATE r
+			SET Numero = n.NumeroNuovo
+			FROM
+				dbo.tblRifiutiRegistrazioni r
+				INNER JOIN @nuovi n ON r.Id = n.Id;
 
 			SET @returnValue = @@ROWCOUNT;
 

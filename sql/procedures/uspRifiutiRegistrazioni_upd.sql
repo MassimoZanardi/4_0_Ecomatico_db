@@ -707,12 +707,12 @@ BEGIN
 				END
 			END
 
-			-- Rinumerazione registro (sargable)
+			-- Rinumerazione registro (sargable): la registrazione in bozza prende il numero successivo all'ultima
+			-- registrazione con data non successiva; le registrazioni che la seguono scalano solo quanto basta per farle
+			-- posto e lo spostamento si ferma al primo numero libero. Una registrazione inviata al RENTRI non cambia mai
+			-- numero: se andrebbe spostata, il salvataggio è rifiutato
 			IF @RinumeraRegistro = 1
 			BEGIN
-				DECLARE @isLibero1 BIT = 0;
-				DECLARE @isLibero2 BIT = 0;
-
 				IF @lock = 2
 					SET @RegistrazioneNumero = 1 +
 						(SELECT ISNULL(MAX(r.Numero), 0)
@@ -727,77 +727,93 @@ BEGIN
 							 AND r.[Data] < @annoFine
 						);
 
-				SET @isLibero1 = IIF(EXISTS (
-					SELECT 1
-					FROM
-						dbo.tblRifiutiRegistrazioni r
-						INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-					WHERE
-						r.Lock < 2
-						AND m.IdRegistro = @idRegistro
-						AND r.Numero = @RegistrazioneNumero
-						AND r.[Data] >= @annoInizio
-						AND r.[Data] < @annoFine
-				), 0, 1);
+				-- Ultimo numero occupato dalla registrazione: con il carico automatico di compensazione ne servono due
+				-- (il carico prende @RegistrazioneNumero, la registrazione il successivo)
+				DECLARE @numeroOccupato INT = @RegistrazioneNumero + @RegistrazioneAuto;
 
-				SET @isLibero2 = IIF(EXISTS (
-					SELECT 1
-					FROM
-						dbo.tblRifiutiRegistrazioni r
-						INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-					WHERE
-						r.Lock < 2
-						AND m.IdRegistro = @idRegistro
-						AND r.Numero = @RegistrazioneNumero + 1
-						AND r.[Data] >= @annoInizio
-						AND r.[Data] < @annoFine
-				), 0, 1);
-			END
+				-- Nuovo numero delle registrazioni successive, in ordine di numero: ognuna prende il maggiore tra il
+				-- proprio numero e quello della precedente + 1 (la prima dopo @numeroOccupato). Con Pos = posizione
+				-- nell'ordine, NumeroNuovo = Pos + MAX(@numeroOccupato, MAX(Numero - Pos) fino a quella riga): appena
+				-- una registrazione trova il proprio numero libero, lei e le successive restano come sono
+				DECLARE @spostamenti TABLE (
+					Id CHAR(16) PRIMARY KEY,
+					Numero INT,
+					NumeroNuovo INT,
+					IsInviata BIT);
 
-			IF @RinumeraRegistro = 1
-			BEGIN
-				UPDATE r
-				SET Numero = Numero + 1 + IIF(@lock = 2 AND @RegistrazioneAuto = 1 AND @isLibero1 = 0, 1, 0)
-				FROM
-					dbo.tblRifiutiRegistrazioni r
-					INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
-				WHERE
-					r.Lock < 2
-					AND m.IdRegistro = @idRegistro
-					AND
-						(
-						r.[Data] > @RegistrazioneData
-						OR
-							(
-							r.[Data] = @RegistrazioneData
-							AND r.Numero > @RegistrazioneNumero
-							)
-						)
-					AND r.[Data] >= @annoInizio
-					AND r.[Data] < @annoFine
-					AND
-						(
-							(
-							@lock < 2
-							AND @isLibero2 = 0
-							)
-						OR
-							(
-							@lock = 2
-							AND @RegistrazioneAuto = 1
+				INSERT @spostamenti (Id, Numero, NumeroNuovo, IsInviata)
+				SELECT
+					t.Id,
+					t.Numero,
+					t.Pos + IIF(t.Spinta > @numeroOccupato, t.Spinta, @numeroOccupato),
+					t.IsInviata
+				FROM (
+					SELECT
+						s.Id,
+						s.Numero,
+						s.Pos,
+						s.IsInviata,
+						Spinta = MAX(s.Numero - s.Pos) OVER (ORDER BY s.Pos ROWS UNBOUNDED PRECEDING)
+					FROM (
+						SELECT
+							r.Id,
+							r.Numero,
+							IsInviata = CAST(IIF(r.RentriIdentificativo IS NOT NULL OR r.RentriData IS NOT NULL, 1, 0) AS BIT),
+							Pos = ROW_NUMBER() OVER (ORDER BY r.Numero, r.[Data], r.Id)
+						FROM
+							dbo.tblRifiutiRegistrazioni r
+							INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
+						WHERE
+							r.Lock < 2
+							AND m.IdRegistro = @idRegistro
+							AND r.Id <> @Id
 							AND
 								(
-								@isLibero1 = 0
-								OR @isLibero2 = 0
+								r.[Data] > @RegistrazioneData
+								OR
+									(
+									r.[Data] = @RegistrazioneData
+									AND r.Numero > @RegistrazioneNumero
+									)
 								)
-							)
-						OR
-							(
-							@lock = 2
-							AND @RegistrazioneAuto = 0
-							AND @isLibero1 = 0
-							)
-						);
+							AND r.[Data] >= @annoInizio
+							AND r.[Data] < @annoFine
+					) s
+				) t;
+
+				-- Una registrazione inviata al RENTRI non cambia mai numero (R1.3): niente spazio prima di lei
+				DECLARE @numeroInviata INT = (
+					SELECT MIN(Numero)
+					FROM @spostamenti
+					WHERE
+						IsInviata = 1
+						AND NumeroNuovo <> Numero);
+
+				IF @numeroInviata IS NOT NULL
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'La registrazione n. ' + CAST(@numeroInviata AS VARCHAR(10)) + ' è già stata inviata al RENTRI e non può essere rinumerata: prima di essa non ci sono numeri liberi';
+					GOTO BRANCH_END;
+				END
+
+				IF EXISTS (
+					SELECT 1
+					FROM @spostamenti
+					WHERE NumeroNuovo > 999999)
+				BEGIN
+					ROLLBACK TRANSACTION;
+					SET @returnValue = -1;
+					SET @returnMessage = 'La rinumerazione non può assegnare numeri maggiori di 999.999';
+					GOTO BRANCH_END;
+				END
+
+				UPDATE r
+				SET Numero = s.NumeroNuovo
+				FROM
+					dbo.tblRifiutiRegistrazioni r
+					INNER JOIN @spostamenti s ON r.Id = s.Id
+				WHERE s.NumeroNuovo <> s.Numero;
 			END
 
 			-- Produttori

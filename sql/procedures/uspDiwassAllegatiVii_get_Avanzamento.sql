@@ -4,9 +4,11 @@ SET QUOTED_IDENTIFIER ON
 GO
 -- Scheda dell'Allegato VII, riquadro "Avanzamento della spedizione": una riga per passaggio previsto, nell'ordine del
 -- documento (presa in carico di ogni trasportatore, ricezione del destinatario, ricezione e recupero completato di ogni
--- impianto), con la conferma letta da DIWASS se c'è (stesso operatore del soggetto). La ricezione del destinatario non è
--- prevista se il destinatario è anche l'impianto (Reg. di esecuzione UE 2025/1290 art. 17.2). DellAzienda = il
--- soggetto è un'azienda del contesto (sede interna collegata allo stesso operatore). Regole in docs/regole/diwass.md D6
+-- impianto), con la conferma letta da DIWASS se c'è (stesso operatore del soggetto). Passaggi, ricezione del
+-- destinatario non prevista, soggetti dell'azienda e passaggi che l'azienda può confermare da
+-- ufnDiwassAllegatiVii_get_Passaggi; per la finestra di conferma, contatto e mezzo proposti, nome di chi firma (utente
+-- della sessione) e ruolo proposto (l'ultimo dell'utente per l'azienda, altrimenti quello del documento). Regole in
+-- docs/regole/diwass.md D6, D7
 CREATE OR ALTER PROCEDURE [dbo].[uspDiwassAllegatiVii_get_Avanzamento]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
@@ -27,7 +29,7 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Controlla il permesso sulla funzione
+		-- Controlla il permesso sulla funzione (lettura; per confermare serve la scrittura)
 		DECLARE @permesso TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
@@ -41,15 +43,19 @@ BEGIN
 		END
 
 		-- Controlla il permesso sul record (titolarità): azienda del contesto
-		DECLARE @idAzienda CHAR(16) = (
-			SELECT a.IdAziendaInterna
-			FROM
-				dbo.tblDiwassAllegatiVii a
-				INNER JOIN dbo.tblSessioni e ON a.IdAziendaInterna = e.IdAzienda
-			WHERE
-				a.Id = @Id
-				AND e.Id = @IdSessione
-		);
+		DECLARE @idAzienda CHAR(16);
+		DECLARE @idUtente CHAR(16);
+		DECLARE @firmaRuolo VARCHAR(100);
+		SELECT
+			@idAzienda = a.IdAziendaInterna,
+			@idUtente = e.IdUtente,
+			@firmaRuolo = a.FirmaRuolo
+		FROM
+			dbo.tblDiwassAllegatiVii a
+			INNER JOIN dbo.tblSessioni e ON a.IdAziendaInterna = e.IdAzienda
+		WHERE
+			a.Id = @Id
+			AND e.Id = @IdSessione;
 		IF @idAzienda IS NULL
 		BEGIN
 			SET @returnValue = -1;
@@ -57,47 +63,17 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Soggetti con l'operatore DIWASS (della sede in anagrafica o letto da DIWASS)
-		DECLARE @soggetti TABLE (
-			Ruolo CHAR(1),
-			Pos TINYINT,
-			OperatorInternalId BIGINT,
-			Nome NVARCHAR(250),
-			DellAzienda BIT
-		);
-		INSERT INTO @soggetti (Ruolo, Pos, OperatorInternalId, Nome, DellAzienda)
-		SELECT
-			x.Ruolo,
-			x.Pos,
-			ISNULL(o.OperatorInternalId, x.OperatorInternalId),
-			ISNULL(s.NomeCompleto, x.Nome),
-			IIF(EXISTS (
-				SELECT 1
-				FROM
-					dbo.tblDiwassOperatori oa
-					INNER JOIN dbo.tblSedi sa ON oa.Id = sa.Id
-				WHERE
-					oa.OperatorInternalId = ISNULL(o.OperatorInternalId, x.OperatorInternalId)
-					AND sa.InternaEsterna = 'I'
-					AND sa.IdAziendaInterna = @idAzienda
-			), 1, 0)
-		FROM
-			dbo.tblDiwassAllegatiViiSoggetti x
-			LEFT JOIN dbo.tblSedi s ON x.IdSede = s.Id
-			LEFT JOIN dbo.tblDiwassOperatori o ON x.IdSede = o.Id
-		WHERE
-			x.Id = @Id
-			AND x.Ruolo IN ('T', 'D', 'I');
-
-		DECLARE @destinatarioImpianto BIT = IIF(EXISTS (
-			SELECT 1
-			FROM
-				@soggetti d
-				INNER JOIN @soggetti i ON d.OperatorInternalId = i.OperatorInternalId
+		DECLARE @firmaNome VARCHAR(100) = (
+			SELECT NULLIF(LTRIM(RTRIM(ISNULL(Nome, '') + ' ' + ISNULL(Cognome, ''))), '')
+			FROM dbo.tblUtenti
+			WHERE Id = @idUtente);
+		SET @firmaRuolo = ISNULL((
+			SELECT Ruolo
+			FROM dbo.tblDiwassFirmeRuoli
 			WHERE
-				d.Ruolo = 'D'
-				AND i.Ruolo = 'I'
-		), 1, 0);
+				IdUtente = @idUtente
+				AND IdAziendaInterna = @idAzienda
+		), @firmaRuolo);
 
 		SELECT
 			p.Ordine,
@@ -109,9 +85,18 @@ BEGIN
 				WHEN 'I' THEN N'Ricezione all''impianto'
 				ELSE N'Recupero completato'
 			END,
-			SoggettoNome = p.Nome,
+			p.SoggettoNome,
+			p.OperatorInternalId,
 			p.DellAzienda,
-			Prevista = CAST(IIF(p.Tipo = 'D' AND @destinatarioImpianto = 1, 0, 1) AS BIT),
+			p.Prevista,
+			Confermabile = CAST(IIF(p.Confermabile = 1 AND @permesso >= 2, 1, 0) AS BIT),
+			p.PerConto,
+			PropostaMezzoTrasporto = p.MezzoTrasporto,
+			PropostaContattoNome = p.ContattoNome,
+			PropostaContattoTelefono = p.ContattoTelefono,
+			PropostaContattoEmail = p.ContattoEmail,
+			PropostaFirmaNome = @firmaNome,
+			PropostaFirmaRuolo = @firmaRuolo,
 			NumeroConferma = c.Numero,
 			c.Data,
 			c.MezzoTrasporto,
@@ -126,33 +111,17 @@ BEGIN
 			c.FirmaNome,
 			c.FirmaRuolo,
 			c.FirmaData
-		FROM (
-			SELECT
-				Ordine = CASE s.Ruolo WHEN 'T' THEN 0 WHEN 'D' THEN 1 ELSE 2 END,
-				Tipo = t.Tipo,
-				s.Pos,
-				s.OperatorInternalId,
-				s.Nome,
-				s.DellAzienda
-			FROM
-				@soggetti s
-				CROSS APPLY (
-					SELECT Tipo = s.Ruolo
-					WHERE s.Ruolo IN ('T', 'D', 'I')
-					UNION ALL
-					SELECT Tipo = 'C'
-					WHERE s.Ruolo = 'I'
-				) t
-		) p
-		OUTER APPLY (
-			SELECT TOP 1 *
-			FROM dbo.tblDiwassAllegatiViiConferme k
-			WHERE
-				k.Id = @Id
-				AND k.Tipo = p.Tipo
-				AND k.OperatorInternalId = p.OperatorInternalId
-			ORDER BY k.Pos
-		) c
+		FROM
+			dbo.ufnDiwassAllegatiVii_get_Passaggi(@Id, @idAzienda) p
+			OUTER APPLY (
+				SELECT TOP 1 *
+				FROM dbo.tblDiwassAllegatiViiConferme k
+				WHERE
+					k.Id = @Id
+					AND k.Tipo = p.Tipo
+					AND k.OperatorInternalId = p.OperatorInternalId
+				ORDER BY k.Pos
+			) c
 		ORDER BY p.Ordine, p.Pos, IIF(p.Tipo = 'C', 1, 0);
 
 	END TRY

@@ -91,7 +91,14 @@ VALUES
 	(N'syn31RifiutiAutorizzazioniConducenti', N'tblRifiutiAutorizzazioniConducenti'),
 	(N'syn31RifiutiAutorizzazioniDestinazioni', N'tblRifiutiAutorizzazioniDestinazioni'),
 	(N'syn31RifiutiAutorizzazioniTarghe', N'tblRifiutiAutorizzazioniTarghe'),
-	(N'syn31RifiutiAutorizzazioniTargheCEREsclusi', N'tblRifiutiAutorizzazioniTargheCEREsclusi');
+	(N'syn31RifiutiAutorizzazioniTargheCEREsclusi', N'tblRifiutiAutorizzazioniTargheCEREsclusi'),
+	(N'syn31Utenti', N'tblUtenti'),
+	(N'syn31UtentiSedi', N'tblUtentiSedi'),
+	(N'syn31UtentiPasswordChange', N'tblUtentiPasswordChange'),
+	(N'syn31RentriCertificati', N'tblRentriCertificati'),
+	(N'syn31RentriCredenziali', N'tblRentriCredenziali'),
+	(N'syn31RentriSedi', N'tblRentriSedi'),
+	(N'syn31RentriRegistri', N'tblRentriRegistri');
 
 DECLARE @nome SYSNAME;
 DECLARE @tabella SYSNAME;

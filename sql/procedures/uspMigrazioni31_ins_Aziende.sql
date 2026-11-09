@@ -12,7 +12,7 @@ GO
 -- 3) Registri: sempre nuovi, mai abbinati a registri esistenti. Nome obbligatorio e unico nella sede come in
 --    uspRifiutiRegistri_upd: senza nome "Registro", con un nome gia' presente nella sede si aggiunge " (2)", " (3)"...
 --    Controlli: ControlloAutorizzazioni 3.1 -> ControlloScadenzeAutorizzazioni, targhe e conducenti invariati,
---    patenti e attivita' R/D spenti (non esistono nella 3.1). Il collegamento al RENTRI non si migra.
+--    patenti e attivita' R/D spenti (non esistono nella 3.1). Il collegamento al RENTRI lo migra la fase 8 (uspMigrazioni31_ins_Rentri).
 CREATE OR ALTER PROCEDURE dbo.uspMigrazioni31_ins_Aziende
 	@IdMigrazione INT = NULL,
 	@IdDominioA CHAR(16) = NULL

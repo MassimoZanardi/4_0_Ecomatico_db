@@ -11,7 +11,9 @@ GO
 --    - fase 3: aziende interne, sedi dei registri, registri (uspMigrazioni31_ins_Aziende);
 --    - fase 4: sedi interne usate, soggetti e loro sedi, autorizzazioni (uspMigrazioni31_ins_Soggetti);
 --    - fase 5: movimenti e registrazioni (uspMigrazioni31_ins_Registrazioni);
---    - fase 6: relazioni carico/scarico (uspMigrazioni31_ins_Relazioni) e rettifiche (uspMigrazioni31_ins_Rettifiche).
+--    - fase 6: relazioni carico/scarico (uspMigrazioni31_ins_Relazioni) e rettifiche (uspMigrazioni31_ins_Rettifiche);
+--    - fase 7: utenti del dominio e loro sedi (uspMigrazioni31_ins_Utenti);
+--    - fase 8: configurazione RENTRI: certificati, credenziali, sedi, registri e loro storico (uspMigrazioni31_ins_Rentri).
 -- 3) @Simulazione = 1 (predefinito): tutto viene eseguito e poi annullato; esito A. @Simulazione = 0: conferma; esito S.
 -- Idempotenza: ogni record scritto o abbinato e' registrato in tblMigrazioniId e non viene mai reinserito; una
 -- seconda esecuzione importa solo cio' che manca.
@@ -192,6 +194,16 @@ BEGIN
 
 				EXEC dbo.uspMigrazioni31_ins_Rettifiche
 					@IdMigrazione = @idMigrazione,
+					@IdDominioA = @IdDominioA;
+
+				EXEC dbo.uspMigrazioni31_ins_Utenti
+					@IdMigrazione = @idMigrazione,
+					@IdDominioDa = @IdDominioDa,
+					@IdDominioA = @IdDominioA;
+
+				EXEC dbo.uspMigrazioni31_ins_Rentri
+					@IdMigrazione = @idMigrazione,
+					@IdDominioDa = @IdDominioDa,
 					@IdDominioA = @IdDominioA;
 
 				INSERT INTO @log ([Data], Fase, Livello, Tabella, IdOrigine, Righe, Messaggio)

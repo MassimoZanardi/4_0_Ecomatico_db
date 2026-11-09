@@ -8,7 +8,8 @@ GO
 -- uspMigrazioni31_get_Verifica).
 -- Perimetro: registri delle aziende interne del dominio 3.1 (@IdSedeInternaDa NULL) oppure della sola sede interna
 -- indicata (la sede del registro o la sua azienda interna); tutte le registrazioni dei registri con Lock = 0, di ogni
--- anno, esclusi i formulari (tblRifiutiSchede: se ne legge solo numero e data di inizio trasporto).
+-- anno, esclusi i formulari (tblRifiutiSchede: se ne legge solo numero e data di inizio trasporto). Utenti, certificati
+-- e credenziali RENTRI riguardano sempre tutto il dominio; sedi e registri RENTRI quelli dei registri del perimetro.
 -- Anomalie: Livello E = blocca la migrazione, W = record scartato o dato perso, I = informazione.
 -- Le relazioni con quantita' -1 sono, nella 3.1, le derivazioni (carico CMC/CRC nato da un trattamento SFC): in 4.0
 -- diventano padre = carico K/M, figlio = scarico R, Operazione 'C', quantita' = quella del carico K/M. Le altre sono
@@ -986,6 +987,173 @@ BEGIN
 			i.IDComune IS NOT NULL
 			AND x.Id IS NULL;
 
+		-- Utenti (fase 7): tutti quelli attivi del dominio 3.1, esclusi i Master, anche con una sola sede interna; quelli gia'
+		-- migrati non si controllano piu'
+		DECLARE @utenti TABLE (
+			Id CHAR(16) NOT NULL PRIMARY KEY,
+			Email VARCHAR(50) NULL,
+			InternoEsterno CHAR(1) NULL,
+			IdRuolo CHAR(2) NULL,
+			PasswordValida BIT NOT NULL
+		);
+
+		INSERT INTO @utenti (Id, Email, InternoEsterno, IdRuolo, PasswordValida)
+		SELECT
+			u.IDUtente,
+			NULLIF(LTRIM(RTRIM(u.Email)), ''),
+			u.InternoEsterno,
+			u.IDTipo,
+			IIF(LEN(LTRIM(RTRIM(u.[Password]))) = 40 AND UPPER(LTRIM(RTRIM(u.[Password]))) NOT LIKE '%[^0-9A-F]%', 1, 0)
+		FROM dbo.syn31Utenti u
+		WHERE
+			u.IDDominio = @IdDominioDa
+			AND ISNULL(u.Lock, 0) = 0
+			AND ISNULL(u.[Master], 0) = 0
+			AND NOT EXISTS (SELECT 1 FROM dbo.tblMigrazioniId mu WHERE mu.Versione = '31' AND mu.IdDominioA = @IdDominioA AND mu.Tabella = 'tblUtenti' AND mu.IdOrigine = u.IDUtente COLLATE DATABASE_DEFAULT);
+
+		INSERT INTO #anomalie (Livello, Controllo, Tabella, IdOrigine, Dettaglio)
+		SELECT 'E', 'Utente esterno: la 4.0 non prevede utenti esterni', 'tblUtenti', u.Id, u.Email
+		FROM @utenti u
+		WHERE u.InternoEsterno = 'E'
+		UNION ALL
+		SELECT 'E', 'Utente senza email', 'tblUtenti', u.Id, NULL
+		FROM @utenti u
+		WHERE u.Email IS NULL
+		UNION ALL
+		SELECT 'E', 'Email usata da piu'' utenti della 3.1', 'tblUtenti', MIN(u.Id), CONCAT(u.Email, ': ', COUNT(*), ' utenti')
+		FROM @utenti u
+		WHERE u.Email IS NOT NULL
+		GROUP BY u.Email
+		HAVING COUNT(*) > 1
+		UNION ALL
+		SELECT 'E', 'Email gia'' usata da un utente di un altro dominio 4.0', 'tblUtenti', u.Id, u.Email
+		FROM @utenti u
+		WHERE EXISTS (SELECT 1 FROM dbo.tblUtenti x WHERE x.Email = u.Email COLLATE DATABASE_DEFAULT AND x.Lock = 0 AND x.IdDominio <> @IdDominioA)
+		UNION ALL
+		SELECT 'I', 'Utente abbinato a un utente 4.0 con la stessa email: restano ruolo, password e funzioni 4.0', 'tblUtenti', u.Id, u.Email
+		FROM @utenti u
+		WHERE EXISTS (SELECT 1 FROM dbo.tblUtenti x WHERE x.Email = u.Email COLLATE DATABASE_DEFAULT AND x.Lock = 0 AND x.IdDominio = @IdDominioA)
+		UNION ALL
+		SELECT 'W', 'Password della 3.1 non valida: l''utente nasce senza password', 'tblUtenti', u.Id, u.Email
+		FROM @utenti u
+		WHERE
+			u.PasswordValida = 0
+			AND NOT EXISTS (SELECT 1 FROM dbo.tblUtenti x WHERE x.Email = u.Email COLLATE DATABASE_DEFAULT AND x.Lock = 0 AND x.IdDominio = @IdDominioA)
+		UNION ALL
+		SELECT 'I', 'Utenti standard: nessuna funzione, da assegnare dall''amministratore', 'tblUtenti', NULL, CONCAT(COUNT(*), ' utenti')
+		FROM @utenti u
+		WHERE
+			u.IdRuolo = 'US'
+			AND NOT EXISTS (SELECT 1 FROM dbo.tblUtenti x WHERE x.Email = u.Email COLLATE DATABASE_DEFAULT AND x.Lock = 0 AND x.IdDominio = @IdDominioA)
+		HAVING COUNT(*) > 0;
+
+		-- Limite utenti del dominio: non applicato, solo segnalato
+		INSERT INTO #anomalie (Livello, Controllo, Tabella, IdOrigine, Dettaglio)
+		SELECT 'W', 'Limite di utenti superato (non applicato dalla migrazione)', 'tblDomini', @IdDominioA, CONCAT(n.Totale, ' utenti, limite ', ISNULL(d.UtentiMax, 0))
+		FROM
+			dbo.tblDomini d
+			CROSS APPLY (
+				SELECT Totale = (SELECT COUNT(*)
+				FROM dbo.tblUtenti x
+				WHERE
+					x.IdDominio = @IdDominioA
+					AND x.Lock = 0
+					AND ISNULL(x.[Master], 0) = 0
+				)
+					+ (SELECT COUNT(*)
+					FROM @utenti u
+					WHERE NOT EXISTS (SELECT 1 FROM dbo.tblUtenti x WHERE x.Email = u.Email COLLATE DATABASE_DEFAULT AND x.Lock = 0 AND x.IdDominio = @IdDominioA))
+			) n
+		WHERE
+			d.Id = @IdDominioA
+			AND n.Totale > ISNULL(d.UtentiMax, 0);
+
+		-- RENTRI (fase 8): certificati e credenziali attivi del dominio, collegamenti delle sedi e dei registri del perimetro
+		INSERT INTO #anomalie (Livello, Controllo, Tabella, IdOrigine, Dettaglio)
+		SELECT 'E', 'Certificato RENTRI gia'' collegato a un certificato di un altro dominio 4.0', 'tblRentriCertificati', c.IDCertificato COLLATE DATABASE_DEFAULT, c.Nome COLLATE DATABASE_DEFAULT
+		FROM dbo.syn31RentriCertificati c
+		WHERE
+			c.IDDominio = @IdDominioDa
+			AND ISNULL(c.Lock, 0) = 0
+			AND EXISTS (SELECT 1 FROM dbo.tblRentriCertificati x WHERE x.IdRentri = c.IDRentri COLLATE DATABASE_DEFAULT AND x.Lock < 2 AND x.IdDominio <> @IdDominioA)
+		UNION ALL
+		SELECT 'W', 'Certificato RENTRI senza file sull''hub: non migrato', 'tblRentriCertificati', c.IDCertificato COLLATE DATABASE_DEFAULT, c.Nome COLLATE DATABASE_DEFAULT
+		FROM dbo.syn31RentriCertificati c
+		WHERE
+			c.IDDominio = @IdDominioDa
+			AND ISNULL(c.Lock, 0) = 0
+			AND NOT EXISTS (SELECT 1 FROM [1_0_rentri]..tblCertificati h WHERE h.Id COLLATE DATABASE_DEFAULT = c.IDRentri COLLATE DATABASE_DEFAULT)
+		UNION ALL
+		SELECT 'E', 'Identificativo del registro RENTRI gia'' usato da un registro 4.0', 'tblRentriRegistri', g.Id, h.Identificativo COLLATE DATABASE_DEFAULT
+		FROM
+			#registri g
+			INNER JOIN dbo.syn31RentriRegistri rr ON g.Id = rr.IDRegistro COLLATE DATABASE_DEFAULT
+			INNER JOIN [1_0_rentri]..tblRegistri h ON rr.IDRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
+		WHERE
+			h.Identificativo IS NOT NULL
+			AND EXISTS (SELECT 1 FROM dbo.tblRentriRegistri x INNER JOIN [1_0_rentri]..tblRegistri hx ON x.IdRentri COLLATE DATABASE_DEFAULT = hx.Id COLLATE DATABASE_DEFAULT WHERE hx.Identificativo COLLATE DATABASE_DEFAULT = h.Identificativo COLLATE DATABASE_DEFAULT AND NOT EXISTS (SELECT 1 FROM dbo.tblMigrazioniId mr WHERE mr.Versione = '31' AND mr.IdDominioA = @IdDominioA AND mr.Tabella = 'tblRifiutiRegistri' AND mr.IdOrigine = g.Id AND mr.IdDestinazione = x.Id))
+		UNION ALL
+		SELECT 'W', 'Registro collegato a RENTRI ma la sua sede no: collegamento del registro non migrato', 'tblRentriRegistri', g.Id, h.Identificativo COLLATE DATABASE_DEFAULT
+		FROM
+			#registri g
+			INNER JOIN dbo.syn31RentriRegistri rr ON g.Id = rr.IDRegistro COLLATE DATABASE_DEFAULT
+			INNER JOIN [1_0_rentri]..tblRegistri h ON rr.IDRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
+		WHERE NOT EXISTS (SELECT 1 FROM dbo.syn31RentriSedi rs WHERE rs.IDSede = g.IdSede COLLATE DATABASE_DEFAULT);
+
+		-- Limiti RENTRI del dominio: non applicati, solo segnalati
+		INSERT INTO #anomalie (Livello, Controllo, Tabella, IdOrigine, Dettaglio)
+		SELECT 'W', 'Limite di certificati RENTRI superato (non applicato dalla migrazione)', 'tblDomini', @IdDominioA, CONCAT(n.Totale, ' certificati, limite ', ISNULL(d.RentriMax, 0))
+		FROM
+			dbo.tblDomini d
+			CROSS APPLY (
+				SELECT Totale = (SELECT COUNT(*)
+				FROM dbo.tblRentriCertificati x
+				WHERE
+					x.IdDominio = @IdDominioA
+					AND x.Lock = 0
+				)
+					+ (SELECT COUNT(*)
+					FROM dbo.syn31RentriCertificati c
+					WHERE
+						c.IDDominio = @IdDominioDa
+						AND ISNULL(c.Lock, 0) = 0
+						AND NOT EXISTS (SELECT 1 FROM dbo.tblMigrazioniId mc WHERE mc.Versione = '31' AND mc.IdDominioA = @IdDominioA AND mc.Tabella = 'tblRentriCertificati' AND mc.IdOrigine = c.IDCertificato COLLATE DATABASE_DEFAULT)
+						AND NOT EXISTS (SELECT 1 FROM dbo.tblRentriCertificati x WHERE x.IdRentri = c.IDRentri COLLATE DATABASE_DEFAULT AND x.Lock = 0 AND x.IdDominio = @IdDominioA)
+					)
+			) n
+		WHERE
+			d.Id = @IdDominioA
+			AND n.Totale > ISNULL(d.RentriMax, 0)
+		UNION ALL
+		SELECT 'W', 'Limite di registri con conservazione sostitutiva superato (non applicato dalla migrazione)', 'tblDomini', @IdDominioA, CONCAT(n.Totale, ' registri, limite ', ISNULL(d.ConservazioniMax, 0))
+		FROM
+			dbo.tblDomini d
+			CROSS APPLY (
+				SELECT Totale = (SELECT COUNT(*)
+					FROM
+						dbo.tblRifiutiRegistri r
+						INNER JOIN dbo.tblSediInterne i ON r.IdSede = i.Id
+						INNER JOIN dbo.tblRentriRegistri x ON r.Id = x.Id
+						INNER JOIN [1_0_rentri]..tblRegistri hx ON x.IdRentri COLLATE DATABASE_DEFAULT = hx.Id COLLATE DATABASE_DEFAULT
+					WHERE
+						i.IdDominio = @IdDominioA
+						AND hx.Conservazione = 1
+						AND r.Lock = 0
+				)
+					+ (SELECT COUNT(*)
+					FROM
+						#registri g
+						INNER JOIN dbo.syn31RentriRegistri rr ON g.Id = rr.IDRegistro COLLATE DATABASE_DEFAULT
+						INNER JOIN [1_0_rentri]..tblRegistri h ON rr.IDRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT
+					WHERE
+						h.Conservazione = 1
+						AND NOT EXISTS (SELECT 1 FROM dbo.tblMigrazioniId mr WHERE mr.Versione = '31' AND mr.IdDominioA = @IdDominioA AND mr.Tabella = 'tblRifiutiRegistri' AND mr.IdOrigine = g.Id)
+					)
+			) n
+		WHERE
+			d.Id = @IdDominioA
+			AND n.Totale > ISNULL(d.ConservazioniMax, 0);
+
 		-- Conteggi del perimetro
 		INSERT INTO #anomalie (Livello, Controllo, Tabella, IdOrigine, Dettaglio)
 		SELECT 'I', 'Perimetro', 'tblSedi', NULL, CONCAT(COUNT(*), ' sedi (aziende interne, sedi esterne e aziende padre)')
@@ -1013,7 +1181,16 @@ BEGIN
 			INNER JOIN #registrazioni x ON t.IDRegistrazione = x.Id COLLATE DATABASE_DEFAULT
 		WHERE
 			o.Importabile = 1
-			AND x.Importabile = 1;
+			AND x.Importabile = 1
+		UNION ALL
+		SELECT 'I', 'Perimetro', 'tblUtenti', NULL, CONCAT(COUNT(*), ' utenti da migrare (', ISNULL(SUM(IIF(IdRuolo = 'AD', 1, 0)), 0), ' amministratori)')
+		FROM @utenti
+		UNION ALL
+		SELECT 'I', 'Perimetro', 'tblRentriRegistri', NULL, CONCAT(COUNT(*), ' registri collegati a RENTRI (', ISNULL(SUM(IIF(h.Conservazione = 1, 1, 0)), 0), ' con conservazione sostitutiva)')
+		FROM
+			#registri g
+			INNER JOIN dbo.syn31RentriRegistri rr ON g.Id = rr.IDRegistro COLLATE DATABASE_DEFAULT
+			INNER JOIN [1_0_rentri]..tblRegistri h ON rr.IDRentri COLLATE DATABASE_DEFAULT = h.Id COLLATE DATABASE_DEFAULT;
 	END TRY
 	BEGIN CATCH
 		THROW;

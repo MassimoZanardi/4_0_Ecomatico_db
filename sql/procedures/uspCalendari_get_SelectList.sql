@@ -28,12 +28,43 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Controllo permesso sulla funzione (CLD = Gestione Calendari)
+		-- Controllo permesso: la select serve al contesto delle pagine degli eventi, quindi basta la lettura
+		-- sui Calendari (CLD) oppure su una funzione degli eventi del modulo: SCD per le Scadenze, SRV o SRA
+		-- per i Servizi (Servizi > Assegnati con la sola SRA, docs/regole/scadenze-servizi.md S1.3).
+		-- @permessoEventi va riportato a NULL prima di ogni chiamata: la SP lo usa come segnale di cache miss
 		DECLARE @permesso TINYINT;
+		DECLARE @permessoEventi TINYINT;
 		EXEC dbo.uspSessione_get_FunzionePermesso
 			@Id = @IdSessione,
 			@IdFunzione = 'CLD',
 			@Permesso = @permesso OUTPUT;
+		SET @permesso = ISNULL(@permesso, 0);
+
+		IF @IdModulo = 'SCD'
+		BEGIN
+			SET @permessoEventi = NULL;
+			EXEC dbo.uspSessione_get_FunzionePermesso
+				@Id = @IdSessione,
+				@IdFunzione = 'SCD',
+				@Permesso = @permessoEventi OUTPUT;
+			SET @permesso = IIF(ISNULL(@permessoEventi, 0) > @permesso, @permessoEventi, @permesso);
+		END
+		ELSE IF @IdModulo = 'SRV'
+		BEGIN
+			SET @permessoEventi = NULL;
+			EXEC dbo.uspSessione_get_FunzionePermesso
+				@Id = @IdSessione,
+				@IdFunzione = 'SRV',
+				@Permesso = @permessoEventi OUTPUT;
+			SET @permesso = IIF(ISNULL(@permessoEventi, 0) > @permesso, @permessoEventi, @permesso);
+
+			SET @permessoEventi = NULL;
+			EXEC dbo.uspSessione_get_FunzionePermesso
+				@Id = @IdSessione,
+				@IdFunzione = 'SRA',
+				@Permesso = @permessoEventi OUTPUT;
+			SET @permesso = IIF(ISNULL(@permessoEventi, 0) > @permesso, @permessoEventi, @permesso);
+		END
 
 		IF 1 > @permesso
 		BEGIN

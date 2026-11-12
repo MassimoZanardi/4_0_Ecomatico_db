@@ -19,6 +19,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspDomini_upd]
 	@RentriMax INT = 0,
 	@ConservazioniMax INT = 0,
 	@ConservazioniXfirMax INT = 0,
+	-- Spazio per i file allegati in MB (tblDomini.FileQuotaMax in byte); NULL lascia il valore attuale
+	@FileQuotaMaxMb INT = NULL,
 	@Demo BIT = 0,
 	@Codice CHAR(5) = NULL,
 	@NoLogo BIT = 0,
@@ -80,6 +82,14 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Stato dominio non valido';
+			GOTO BRANCH_END;
+		END
+
+		-- Ridurlo sotto lo spazio già consumato è ammesso: i file restano, i nuovi caricamenti vengono rifiutati
+		IF @FileQuotaMaxMb < 0 OR @FileQuotaMaxMb > 1048576
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Lo spazio per i file allegati deve essere compreso tra 0 e 1.048.576 MB';
 			GOTO BRANCH_END;
 		END
 
@@ -215,6 +225,7 @@ BEGIN
 				RentriMax = @RentriMax,
 				ConservazioniMax = @ConservazioniMax,
 				ConservazioniXfirMax = @ConservazioniXfirMax,
+				FileQuotaMax = IIF(@FileQuotaMaxMb IS NULL, FileQuotaMax, CAST(@FileQuotaMaxMb AS BIGINT) * 1048576),
 				Demo = @Demo,
 				Codice = ISNULL(@Codice, Codice),
 				Logo = IIF(@NoLogo = 1, NULL, Logo),

@@ -73,6 +73,9 @@ BEGIN
 			RentriMax,
 			ConservazioniMax = ISNULL(ConservazioniMax, 0),
 			ConservazioniXfirMax = ISNULL(ConservazioniXfirMax, 0),
+			-- Spazio per i file allegati: massimo in MB (in tabella in byte), consumato in byte
+			FileQuotaMaxMb = CAST(ISNULL(FileQuotaMax, 0) / 1048576 AS INT),
+			FileQuotaConsumata = ISNULL(FileQuotaConsumata, 0),
 			Demo,
 			Logo,
 			Codice = LOWER(ISNULL(Codice, RIGHT(CONVERT(VARCHAR(36), NEWID()), 5))),

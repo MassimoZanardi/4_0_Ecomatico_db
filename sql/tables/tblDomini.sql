@@ -26,6 +26,8 @@ CREATE TABLE [dbo].[tblDomini](
 	[Codice] [char](5) COLLATE Latin1_General_CI_AS NULL,
 	[Logo] [varbinary](max) NULL,
 	[Url] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
+	[FileQuotaMax] [bigint] NULL,
+	[FileQuotaConsumata] [bigint] NULL,
 	[Lock] [tinyint] NULL,
  CONSTRAINT [PK_tblDomini] PRIMARY KEY CLUSTERED 
 (

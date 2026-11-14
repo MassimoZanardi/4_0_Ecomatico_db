@@ -16,6 +16,10 @@ GO
 --   5. relazioni carico/scarico con le quantità dell'anteprima;
 --   6. rettifiche e annullamenti (tblRentriRegistrazioniRettifiche) in ordine cronologico, con i valori operativi
 --      calcolati come alla conferma nell'app (ufnRifiutiRegistrazioni_get_RettificaOperativa, come la migrazione 3.1).
+-- Importazioni contemporanee: registri diversi non si aspettano, tranne per l'anagrafica. Due importazioni della stessa
+-- azienda interna (registri diversi) si mettono in fila con un blocco applicativo sull'azienda, preso dopo il registro
+-- e prima dell'analisi; un soggetto da creare che nel frattempo esiste già (stesso codice fiscale o partita IVA, unico
+-- tra le sedi visibili) si riusa invece di crearne un doppione.
 -- I JSON dell'area temporanea restano come storico, con l'Id della registrazione creata.
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriImportazioni_esegui]
 	@IdSessione CHAR(16) = NULL,
@@ -103,6 +107,17 @@ BEGIN
 				GOTO BRANCH_END;
 			END
 
+			-- Anagrafica: una importazione alla volta per azienda interna (stesso ordine per tutti: registro, poi azienda)
+			DECLARE @risorsa NVARCHAR(255) = CONCAT(N'RentriImportazione_', @idAziendaInterna), @blocco2 INT;
+			EXEC @blocco2 = sp_getapplock @Resource = @risorsa, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000; -- entro il limite di 30 s dei comandi dell'app: oltre, il messaggio qui sotto
+			IF @blocco2 < 0
+			BEGIN
+				ROLLBACK TRANSACTION;
+				SET @returnValue = -1;
+				SET @returnMessage = 'Un''altra importazione della stessa azienda è in corso: riprovare tra qualche minuto';
+				GOTO BRANCH_END;
+			END
+
 			EXEC dbo.uspRentriImportazioni_upd_Analisi @IdSessione = @IdSessione, @Id = @Id;
 
 			-- ── 2. Registrazioni da importare ─────────────────────────────────────────────────────
@@ -181,6 +196,34 @@ BEGIN
 			FROM #sogg
 			WHERE Stato = 'C'
 			GROUP BY CodiceFiscale;
+
+			-- Soggetto creato nel frattempo (da un'altra importazione o a mano): si riusa la sede se è l'unica con quel codice
+			SELECT n.CodiceFiscale, IdSede = MIN(s.Id)
+			INTO #esistenti
+			FROM
+				#nuoviSoggetti n
+				INNER JOIN dbo.tblSedi s ON UPPER(s.CodiceFiscale) = n.CodiceFiscale OR UPPER(s.PartitaIva) = n.CodiceFiscale
+				INNER JOIN dbo.ufnSedi_get_SediByUtente_List(@idUtente) u ON u.Id = s.Id
+			WHERE
+				s.Disabilitata = 0
+				AND s.Lock < 2
+				AND u.Disabilitata = 0
+				AND (u.IdAziendaInterna = @idAziendaInterna OR u.Condivisa = 1)
+			GROUP BY n.CodiceFiscale
+			HAVING COUNT(DISTINCT s.Id) = 1;
+
+			UPDATE x
+			SET IdSedeFinale = e.IdSede
+			FROM
+				#sogg x
+				INNER JOIN #esistenti e ON e.CodiceFiscale = x.CodiceFiscale
+			WHERE
+				x.Stato = 'C'
+				AND x.IdAutorizzazioneFinale IS NULL;
+
+			DELETE n
+			FROM #nuoviSoggetti n
+			WHERE EXISTS (SELECT 1 FROM #esistenti e WHERE e.CodiceFiscale = n.CodiceFiscale);
 
 			INSERT #id (Chiave)
 			SELECT 'S:' + CodiceFiscale FROM #nuoviSoggetti

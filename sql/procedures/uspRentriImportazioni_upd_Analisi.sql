@@ -526,6 +526,13 @@ BEGIN
 			GROUP BY JSON_VALUE(f.JsonFormulario, '$.dati_partenza.numero_fir');
 			CREATE UNIQUE CLUSTERED INDEX IX_fir ON #fir (Numero);
 
+			-- Formulari non letti: N non digitale (cartaceo), X non leggibili con la credenziale del registro
+			SELECT Numero = CAST(JSON_VALUE(f.Json, '$.integrazione_fir.numero_fir') AS VARCHAR(50)), Stato = MAX(f.FormularioStato)
+			INTO #firNonLetti
+			FROM dbo.tblRentriImportazioniMovimenti f
+			WHERE f.IdImportazione = @Id AND f.FormularioStato IN ('N', 'X') AND JSON_VALUE(f.Json, '$.integrazione_fir.numero_fir') IS NOT NULL
+			GROUP BY JSON_VALUE(f.Json, '$.integrazione_fir.numero_fir');
+
 			SELECT
 				m.Anno, m.Progressivo,
 				s.Ruolo, s.Pos,
@@ -700,13 +707,17 @@ BEGIN
 				'SOGGETTI_FORMULARIO',
 				IIF(fir.Numero IS NOT NULL,
 					CONCAT('Trasportatore e destinatario non sono nella registrazione su RENTRI: letti dal formulario digitale n. ', x.NumeroFir),
-					CONCAT('Trasportatore e destinatario non sono nella registrazione su RENTRI e il formulario n. ', x.NumeroFir,
-						' non è digitale: verrà importata senza, da completare a mano se servono (per esempio per il MUD)'))
+					IIF(fnl.Stato = 'X',
+						CONCAT('Trasportatore e destinatario non sono nella registrazione su RENTRI e il formulario n. ', x.NumeroFir,
+							' non si può leggere: la sede è collegata al RENTRI come delegato senza la credenziale da operatore (Rentri > Sedi, credenziale secondaria)'),
+						CONCAT('Trasportatore e destinatario non sono nella registrazione su RENTRI e il formulario n. ', x.NumeroFir,
+							' non è digitale: verrà importata senza, da completare a mano se servono (per esempio per il MUD)')))
 			FROM
 				dbo.tblRentriImportazioniMovimenti m
 				INNER JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 				CROSS APPLY (SELECT NumeroFir = CAST(JSON_VALUE(m.JsonValori, '$.integrazione_fir.numero_fir') AS VARCHAR(50))) x
 				LEFT JOIN #fir fir ON fir.Numero = x.NumeroFir
+				LEFT JOIN #firNonLetti fnl ON fnl.Numero = x.NumeroFir
 			WHERE
 				m.IdImportazione = @Id
 				AND m.IdRegistrazione IS NULL

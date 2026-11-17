@@ -16,7 +16,8 @@ GO
 --
 -- @Modalita: F tutte le registrazioni fino ad @AlNumero/@AlAnno (letti tutti gli anni dal 2020: @DalAnno 2020,
 -- @DalNumero 1), I solo l'intervallo indicato.
--- Un'importazione in preparazione per registro: quella precedente non eseguita viene sostituita.
+-- Un'importazione in preparazione per registro: quella precedente non eseguita viene sostituita. Le anteprime di
+-- qualunque registro senza attività da 30 giorni si cancellano.
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriImportazioni_ins]
 	@IdSessione CHAR(16) = NULL,
 	@IdRegistro CHAR(16) = NULL,
@@ -153,6 +154,13 @@ BEGIN
 		EXEC dbo.uspId_get @IdSessione = @IdSessione, @Id = @id OUTPUT;
 
 		BEGIN TRANSACTION;
+
+			-- Anteprime abbandonate: non eseguite e senza attività da 30 giorni, di qualunque registro (l'analisi
+			-- aggiorna DataAnalisi a ogni rianalisi, anche abbinando o completando un soggetto)
+			DELETE dbo.tblRentriImportazioni
+			WHERE
+				Stato = 'P'
+				AND ISNULL(DataAnalisi, DataCreazione) < DATEADD(DAY, -30, SYSDATETIME());
 
 			-- Una sola importazione in preparazione per registro
 			DELETE dbo.tblRentriImportazioni

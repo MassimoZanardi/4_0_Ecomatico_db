@@ -20,7 +20,8 @@ GO
 -- azienda interna (registri diversi) si mettono in fila con un blocco applicativo sull'azienda, preso dopo il registro
 -- e prima dell'analisi; un soggetto da creare che nel frattempo esiste già (stesso codice fiscale o partita IVA, unico
 -- tra le sedi visibili) si riusa invece di crearne un doppione.
--- I JSON dell'area temporanea restano come storico, con l'Id della registrazione creata.
+-- Dopo l'esecuzione l'area temporanea resta come storico, in sola lettura, con l'Id delle registrazioni create; si
+-- svuotano solo i JSON originali (restano su RENTRI).
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriImportazioni_esegui]
 	@IdSessione CHAR(16) = NULL,
 	@Id CHAR(16) = NULL,
@@ -666,6 +667,18 @@ BEGIN
 				FinoAlPrimoProblema = @FinoAlPrimoProblema,
 				DataEsecuzione = @adesso
 			WHERE Id = @Id;
+
+			-- ── 8. Pulizia dell'area temporanea ───────────────────────────────────────────────────
+			-- Si tolgono i JSON originali (restano su RENTRI), che sono quasi tutto lo spazio occupato. Resta il resto,
+			-- che la pagina mostra in sola lettura: testata, movimenti con i campi estratti (data, causale, EER, quantità,
+			-- azione, IdRegistrazione creata), soggetti, relazioni, causali e anomalie.
+			UPDATE dbo.tblRentriImportazioniMovimenti
+			SET
+				Json = NULL,
+				JsonDettaglio = NULL,
+				JsonValori = NULL,
+				JsonFormulario = NULL
+			WHERE IdImportazione = @Id;
 
 			DECLARE
 				@importate INT = (SELECT COUNT(*) FROM #imp),

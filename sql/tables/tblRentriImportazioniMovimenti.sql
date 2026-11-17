@@ -10,7 +10,7 @@ CREATE TABLE [dbo].[tblRentriImportazioniMovimenti](
 	[Progressivo] [int] NOT NULL,
 	[Identificativo] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[IsIntervallo] [bit] NOT NULL,
-	[Json] [nvarchar](max) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Json] [nvarchar](max) COLLATE Latin1_General_CI_AS NULL,
 	[JsonDettaglio] [nvarchar](max) COLLATE Latin1_General_CI_AS NULL,
 	[JsonValori] [nvarchar](max) COLLATE Latin1_General_CI_AS NULL,
 	[Tipo] [char](1) COLLATE Latin1_General_CI_AS NULL,

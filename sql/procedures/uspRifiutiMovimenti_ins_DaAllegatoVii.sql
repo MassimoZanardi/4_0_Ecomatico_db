@@ -11,8 +11,9 @@ GO
 -- La registrazione si fa solo dopo il passaggio su DIWASS che la giustifica: T*aT dopo la presa in carico del suo
 -- trasportatore, T* dopo la ricezione al suo impianto, aT dopo la prima presa in carico (decisione dell'utente del
 -- 2026-11-19). I soggetti si prendono dalle sedi in anagrafica collegate agli operatori DIWASS del documento, con
--- un'autorizzazione valida alla data del trasporto per il trasportatore e il destinatario: se ne manca uno la
--- registrazione non si crea e il messaggio dice tutto quello che manca (si completa l'anagrafica e si rifà).
+-- un'autorizzazione valida alla data del trasporto per il trasportatore e il destinatario: quelli non trovati restano
+-- vuoti, l'utente li sceglie nella scheda della registrazione (come nell'acquisizione da formulario digitale) e gli
+-- avvisi restituiti con l'Id dicono quali sono (decisione dell'utente del 2026-11-19).
 -- Documento di trasporto Allegato VII (IdTrasportoTransfrontalieroTipo = 'D'), numero DIWASS nelle note del movimento,
 -- registrazione collegata all'Allegato VII (tblDiwassAllegatiVii.IdRegistrazione)
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiMovimenti_ins_DaAllegatoVii]
@@ -347,7 +348,7 @@ BEGIN
 				IF @idSedeProduttore IS NULL
 					INSERT INTO @mancanti (Testo)
 					VALUES (IIF(@produttoreRuolo = 'P', N'il produttore ', N'chi organizza la spedizione (produttore) ') + ISNULL(@produttoreNome, N'') + ISNULL(N' (operatore DIWASS ' + CAST(@produttoreOperatore AS NVARCHAR(20)) + N')', N'')
-						+ N' non è collegato a un soggetto in anagrafica: inserirlo in Anagrafica e collegarlo in Diwass > Operatori');
+						+ N' non trovato in anagrafica');
 			END
 
 			IF @idSedeProduttore IS NOT NULL
@@ -401,7 +402,7 @@ BEGIN
 			IF @idSedeDestinatario IS NULL
 				INSERT INTO @mancanti (Testo)
 				VALUES (N'l''impianto ' + ISNULL(@destinatarioNome, N'') + ISNULL(N' (operatore DIWASS ' + CAST(@destinatarioOperatore AS NVARCHAR(20)) + N')', N'')
-					+ N' non è collegato a un soggetto in anagrafica: inserirlo in Anagrafica e collegarlo in Diwass > Operatori');
+					+ N' non trovato in anagrafica');
 			ELSE
 			BEGIN
 				SELECT TOP 1 @idAutorizzazioneDestinatario = a.Id
@@ -448,7 +449,7 @@ BEGIN
 
 			INSERT INTO @mancanti (Testo)
 			SELECT N'il trasportatore ' + ISNULL(t.Nome, N'') + ISNULL(N' (operatore DIWASS ' + CAST(t.OperatorInternalId AS NVARCHAR(20)) + N')', N'')
-				+ N' non è collegato a un soggetto in anagrafica: inserirlo in Anagrafica e collegarlo in Diwass > Operatori'
+				+ N' non trovato in anagrafica'
 			FROM @tras t
 			WHERE t.IdSede IS NULL
 			ORDER BY t.Pos;
@@ -496,15 +497,14 @@ BEGIN
 				VALUES (N'il documento non ha trasportatori');
 		END
 
+		-- Soggetti non trovati: la registrazione si crea lo stesso, l'avviso dice che cosa completare
+		DECLARE @avvisi NVARCHAR(2000) = NULL;
 		IF EXISTS (SELECT 1
 		FROM @mancanti)
-		BEGIN
-			SET @returnValue = -1;
-			SET @returnMessage = LEFT(N'Per registrare l''Allegato VII completare l''anagrafica: '
+			SET @avvisi = LEFT(N'Da completare nella registrazione: '
 				+ STUFF((SELECT N'; ' + Testo
-				FROM @mancanti ORDER BY Pos FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, N''), 2000);
-			GOTO BRANCH_END;
-		END
+				FROM @mancanti ORDER BY Pos FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, N'')
+				+ N'. Per trovarli in automatico la prossima volta inserirli in Anagrafica e collegarli in Diwass > Operatori', 2000);
 
 		-- ── Dati del movimento e della registrazione ────────────────────────────────────────────────────────────────
 		DECLARE @idUnitaMisura CHAR(2) = IIF(@unitaQuantita = 'M', 'MC', 'TN');
@@ -547,7 +547,7 @@ BEGIN
 				VALUES (@idMovimento, @idAutorizzazioneDestinatario, 0);
 
 			INSERT INTO dbo.tblRifiutiMovimentiTrasportatori (Id, IdAutorizzazione, IdTipo, Pos)
-			SELECT @idMovimento, IdAutorizzazione, IdTipo, Pos
+			SELECT @idMovimento, IdAutorizzazione, IdTipo, ROW_NUMBER() OVER (ORDER BY Pos) - 1
 			FROM @trasportatori;
 
 			INSERT INTO dbo.tblRifiutiRegistrazioni (Id, IdMovimento, Operazione, [Data], Numero, IdEsito, DataFineTrasporto, IdTrasportoTransfrontalieroTipo, Lock)
@@ -571,7 +571,9 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 
-	SELECT Id = @returnId;
+	SELECT
+		Id = @returnId,
+		Avvisi = @avvisi;
 
 END;
 GO

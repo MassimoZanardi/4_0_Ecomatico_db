@@ -4,10 +4,13 @@ SET QUOTED_IDENTIFIER ON
 GO
 -- Registri in cui registrare un Allegato VII dell'azienda del contesto (docs/regole/diwass.md D8.2): registri attivi
 -- delle sedi interne dell'azienda visibili all'utente, prima quelli della sede che compare nel documento con il ruolo
--- dell'azienda (stesso operatore DIWASS), poi per nome
+-- dell'azienda (stesso operatore DIWASS), poi per nome. Casella di ricerca a fianco della select (@Search sul testo,
+-- come Copia/incolla delle registrazioni): al massimo 20 voci, il registro scelto (@IdSelected) resta sempre in elenco
 CREATE OR ALTER PROCEDURE [dbo].[uspDiwassAllegatiVii_get_Registri_SelectList]
 	@Id CHAR(16) = NULL,
-	@IdSessione CHAR(16) = NULL
+	@IdSessione CHAR(16) = NULL,
+	@IdSelected CHAR(16) = NULL,
+	@Search VARCHAR(50) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -17,6 +20,8 @@ BEGIN
 
 		SET @Id = NULLIF(LTRIM(RTRIM(@Id)), '');
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		SET @IdSelected = NULLIF(LTRIM(RTRIM(@IdSelected)), '');
+		SET @Search = dbo.ufnStringhe_get_SenzaSpazi(@Search, 0, 1);
 
 		IF @Id IS NULL
 		BEGIN
@@ -60,7 +65,7 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		SELECT
+		SELECT TOP 20
 			g.Id,
 			[Text] = g.Nome + ' - ' + s.Nome + ' ' + s.IndirizzoCompleto
 		FROM
@@ -84,7 +89,14 @@ BEGIN
 		WHERE
 			g.Lock = 0
 			AND s.IdAziendaInterna = @idAzienda
-		ORDER BY ISNULL(d.Nel, 0) DESC, g.Nome, s.Nome;
+			AND
+				(
+				@Search IS NULL
+				OR g.Id = @IdSelected
+				OR (g.Nome + ' - ' + s.Nome + ' ' + s.IndirizzoCompleto) LIKE '%' + @Search + '%'
+				)
+		ORDER BY IIF(g.Id = @IdSelected, 0, 1), ISNULL(d.Nel, 0) DESC, g.Nome, s.Nome
+		OPTION (RECOMPILE);
 
 	END TRY
 	BEGIN CATCH

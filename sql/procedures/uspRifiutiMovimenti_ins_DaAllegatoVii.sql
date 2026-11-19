@@ -351,12 +351,12 @@ BEGIN
 		BEGIN
 			IF @produttoreSede = 1
 				INSERT INTO @req (Tipo, Etichetta, Nome, IdSede, NSedi)
-				SELECT 'P', N'il produttore', NomeCompleto, Id, 1
+				SELECT 'P', N'Produttore', NomeCompleto, Id, 1
 				FROM dbo.tblSedi
 				WHERE Id = @idSedeRegistro;
 			ELSE
 				INSERT INTO @req (Tipo, Etichetta, Nome, OperatorInternalId, IdSede, NSedi)
-				SELECT TOP 1 'P', IIF(Ruolo = 'P', N'il produttore', N'chi organizza la spedizione (produttore)'), Nome, OperatorInternalId, IdSede, NSedi
+				SELECT TOP 1 'P', IIF(Ruolo = 'P', N'Produttore', N'Chi organizza la spedizione (produttore)'), Nome, OperatorInternalId, IdSede, NSedi
 				FROM @soggetti
 				WHERE Ruolo IN ('P', 'O')
 				ORDER BY IIF(Ruolo = 'P', 0, 1), Pos;
@@ -367,12 +367,12 @@ BEGIN
 		BEGIN
 			IF @destinatarioSede = 1
 				INSERT INTO @req (Tipo, Etichetta, Nome, IdSede, NSedi)
-				SELECT 'D', N'il destinatario', NomeCompleto, Id, 1
+				SELECT 'D', N'Destinatario', NomeCompleto, Id, 1
 				FROM dbo.tblSedi
 				WHERE Id = @idSedeRegistro;
 			ELSE
 				INSERT INTO @req (Tipo, Etichetta, Nome, OperatorInternalId, IdSede, NSedi)
-				SELECT TOP 1 'D', N'l''impianto', Nome, OperatorInternalId, IdSede, NSedi
+				SELECT TOP 1 'D', N'Impianto', Nome, OperatorInternalId, IdSede, NSedi
 				FROM @soggetti
 				WHERE Ruolo = 'I'
 				ORDER BY Pos;
@@ -383,7 +383,7 @@ BEGIN
 		BEGIN
 			IF @trasportatoreSede = 1
 				INSERT INTO @req (Tipo, PosTrasportatore, Etichetta, Nome, MezzoTrasporto, IdSede, NSedi)
-				SELECT TOP 1 'T', 0, N'il trasportatore', z.NomeCompleto, s.MezzoTrasporto, @idAziendaRegistro, 1
+				SELECT TOP 1 'T', 0, N'Trasportatore', z.NomeCompleto, s.MezzoTrasporto, @idAziendaRegistro, 1
 				FROM
 					@soggetti s
 					INNER JOIN dbo.tblSedi z ON z.Id = @idAziendaRegistro
@@ -393,7 +393,7 @@ BEGIN
 				ORDER BY s.Pos;
 			ELSE
 				INSERT INTO @req (Tipo, PosTrasportatore, Etichetta, Nome, OperatorInternalId, MezzoTrasporto, IdSede, NSedi)
-				SELECT TOP 3 'T', ROW_NUMBER() OVER (ORDER BY Pos) - 1, N'il trasportatore', Nome, OperatorInternalId, MezzoTrasporto, IdSede, NSedi
+				SELECT TOP 3 'T', ROW_NUMBER() OVER (ORDER BY Pos) - 1, N'Trasportatore', Nome, OperatorInternalId, MezzoTrasporto, IdSede, NSedi
 				FROM @soggetti
 				WHERE Ruolo = 'T'
 				ORDER BY Pos;
@@ -457,17 +457,20 @@ BEGIN
 			AND IdAutorizzazione IS NULL;
 
 		-- Avvisi, uno per soggetto da completare
-		DECLARE @mancanti TABLE (Pos INT IDENTITY(1, 1), Testo NVARCHAR(400));
-		INSERT INTO @mancanti (Testo)
+		-- Avvisi, uno per soggetto da completare: ruolo (in grassetto nella finestra) e testo "soggetto – motivo"
+		DECLARE @mancanti TABLE (Pos INT IDENTITY(1, 1), Ruolo NVARCHAR(60), Testo NVARCHAR(400), Mancante BIT);
+		-- Mancante = 1: soggetto o autorizzazione da inserire in anagrafica; 0: più corrispondenze, solo da scegliere
+		INSERT INTO @mancanti (Ruolo, Testo, Mancante)
 		SELECT
-			q.Etichetta + N' ' + ISNULL(q.Nome, N'') + ISNULL(N' (operatore DIWASS ' + CAST(q.OperatorInternalId AS NVARCHAR(20)) + N')', N'')
+			q.Etichetta,
+			ISNULL(q.Nome, N'') + ISNULL(N' (operatore DIWASS ' + CAST(q.OperatorInternalId AS NVARCHAR(20)) + N')', N'') + N' – '
 			+ CASE
-				WHEN ISNULL(q.NSedi, 0) = 0 THEN N': non trovato in anagrafica'
-				WHEN q.NSedi > 1 THEN N': ' + CAST(q.NSedi AS NVARCHAR(10)) + N' soggetti in anagrafica collegati allo stesso operatore, sceglierlo nella registrazione'
-				WHEN q.NAutorizzazioni = 0 THEN N': nessuna autorizzazione da ' + IIF(q.Tipo = 'D', N'destinatario', N'trasportatore') + N' valida al ' + @dataTesto
-				ELSE N': ' + CAST(q.NAutorizzazioni AS NVARCHAR(10)) + N' autorizzazioni da ' + CASE q.Tipo WHEN 'P' THEN N'produttore' WHEN 'D' THEN N'destinatario' ELSE N'trasportatore' END
-					+ N' valide al ' + @dataTesto + N', sceglierla nella registrazione'
-			END
+				WHEN ISNULL(q.NSedi, 0) = 0 THEN N'non è in anagrafica'
+				WHEN q.NSedi > 1 THEN CAST(q.NSedi AS NVARCHAR(10)) + N' soggetti in anagrafica collegati allo stesso operatore, sceglierne uno'
+				WHEN q.NAutorizzazioni = 0 THEN N'nessuna autorizzazione da ' + IIF(q.Tipo = 'D', N'destinatario', N'trasportatore') + N' valida al ' + @dataTesto
+				ELSE CAST(q.NAutorizzazioni AS NVARCHAR(10)) + N' autorizzazioni valide al ' + @dataTesto + N', sceglierne una'
+			END,
+			CAST(IIF(ISNULL(q.NSedi, 0) = 0 OR (q.NSedi = 1 AND q.NAutorizzazioni = 0), 1, 0) AS BIT)
 		FROM @req q
 		WHERE
 			q.IdAutorizzazione IS NULL
@@ -477,11 +480,11 @@ BEGIN
 		IF @isTrasportatore = 1 AND NOT EXISTS (SELECT 1
 		FROM @req
 		WHERE Tipo = 'T')
-			INSERT INTO @mancanti (Testo)
-			VALUES (N'il trasportatore: il documento non ne indica nessuno');
+			INSERT INTO @mancanti (Ruolo, Testo, Mancante)
+			VALUES (N'Trasportatore', N'il documento non ne indica nessuno', 0);
 
 		-- Elenco per la finestra "Da completare" della scheda della registrazione
-		DECLARE @avvisi NVARCHAR(MAX) = (SELECT Testo
+		DECLARE @avvisi NVARCHAR(MAX) = (SELECT Ruolo, Testo, Mancante
 		FROM @mancanti
 		ORDER BY Pos
 		FOR JSON PATH);

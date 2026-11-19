@@ -277,30 +277,33 @@ BEGIN
 		IF ISNULL(@isAttivitaRs, 0) = 0 SET @idAttivitaRs = NULL;
 
 		-- Soggetti del formulario non abbinati (nessuna o più corrispondenze in anagrafica): restano vuoti e l'elenco
-		-- va nella finestra "Da completare" della scheda, solo per i ruoli che la causale prevede
-		DECLARE @dove NVARCHAR(20) = IIF(@ModalitaRitorno = 'F', N'nel formulario', N'nella registrazione');
-		DECLARE @mancanti TABLE (Pos INT, Testo NVARCHAR(400));
-		INSERT INTO @mancanti (Pos, Testo)
+		-- va nella finestra "Da completare" della scheda, solo per i ruoli che la causale prevede: ruolo (in grassetto
+		-- nella finestra) e testo "codice fiscale e autorizzazione – motivo"
+		DECLARE @mancanti TABLE (Pos INT, Ruolo NVARCHAR(60), Testo NVARCHAR(400), Mancante BIT);
+		-- Mancante = 1: soggetto da inserire in anagrafica; 0: più corrispondenze, solo da scegliere
+		INSERT INTO @mancanti (Pos, Ruolo, Testo, Mancante)
 		SELECT
 			r.Pos,
-			r.Ruolo + N' (codice fiscale ' + r.CodiceFiscale + ISNULL(N', autorizzazione ' + r.Autorizzazione, N'') + N')'
-			+ IIF(r.Corrispondenze = 0, N': non trovato in anagrafica',
-				N': ' + CAST(r.Corrispondenze AS NVARCHAR(10)) + N' corrispondenze in anagrafica, sceglierlo ' + @dove)
+			r.Ruolo,
+			N'codice fiscale ' + r.CodiceFiscale + ISNULL(N', autorizzazione ' + r.Autorizzazione, N'') + N' – '
+			+ IIF(r.Corrispondenze = 0, N'non è in anagrafica',
+				CAST(r.Corrispondenze AS NVARCHAR(10)) + N' corrispondenze in anagrafica, sceglierne una'),
+			CAST(IIF(r.Corrispondenze = 0, 1, 0) AS BIT)
 		FROM
 			#match m
 			CROSS APPLY (
 				VALUES
-					(1, N'il produttore', @ProduttoreCodiceFiscale, @ProduttoreAutorizzazione, m.CorrispondenzeProduttore, ISNULL(@isProduttore, 0)),
-					(2, N'il destinatario', @DestinatarioCodiceFiscale, @DestinatarioAutorizzazione, m.CorrispondenzeDestinatario, ISNULL(@isDestinatario, 0)),
-					(3, N'il trasportatore', @TrasportatoreCodiceFiscale, @TrasportatoreAutorizzazioneAlbo, m.CorrispondenzeTrasportatore, ISNULL(@isTrasportatore, 0)),
-					(4, N'l''intermediario', @IntermediarioCodiceFiscale, @IntermediarioAutorizzazioneAlbo, m.CorrispondenzeIntermediario1, ISNULL(@isIntermediario, 0)),
-					(5, N'il secondo intermediario', @Intermediario2CodiceFiscale, @Intermediario2AutorizzazioneAlbo, m.CorrispondenzeIntermediario2, ISNULL(@isIntermediario, 0))
+					(1, N'Produttore', @ProduttoreCodiceFiscale, @ProduttoreAutorizzazione, m.CorrispondenzeProduttore, ISNULL(@isProduttore, 0)),
+					(2, N'Destinatario', @DestinatarioCodiceFiscale, @DestinatarioAutorizzazione, m.CorrispondenzeDestinatario, ISNULL(@isDestinatario, 0)),
+					(3, N'Trasportatore', @TrasportatoreCodiceFiscale, @TrasportatoreAutorizzazioneAlbo, m.CorrispondenzeTrasportatore, ISNULL(@isTrasportatore, 0)),
+					(4, N'Intermediario', @IntermediarioCodiceFiscale, @IntermediarioAutorizzazioneAlbo, m.CorrispondenzeIntermediario1, ISNULL(@isIntermediario, 0)),
+					(5, N'Secondo intermediario', @Intermediario2CodiceFiscale, @Intermediario2AutorizzazioneAlbo, m.CorrispondenzeIntermediario2, ISNULL(@isIntermediario, 0))
 			) r (Pos, Ruolo, CodiceFiscale, Autorizzazione, Corrispondenze, Previsto)
 		WHERE
 			r.Previsto = 1
 			AND r.Corrispondenze IS NOT NULL;
 
-		DECLARE @avvisi NVARCHAR(MAX) = (SELECT Testo
+		DECLARE @avvisi NVARCHAR(MAX) = (SELECT Ruolo, Testo, Mancante
 		FROM @mancanti
 		ORDER BY Pos
 		FOR JSON PATH);

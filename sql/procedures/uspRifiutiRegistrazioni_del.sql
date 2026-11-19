@@ -308,6 +308,11 @@ BEGIN
 					WHERE
 						Id = @idOriginaleRettifica
 						AND IdRettifica = @Id;
+					-- Allegato VII collegato (nato dalla registrazione o che l'ha creata, docs/regole/diwass.md D5.3 e
+					-- D8.6): l'Allegato VII resta e perde la registrazione
+					UPDATE dbo.tblDiwassAllegatiVii
+					SET IdRegistrazione = NULL
+					WHERE IdRegistrazione = @Id;
 					DELETE dbo.tblRifiutiRegistrazioni
 					WHERE Id = @Id;
 					DELETE dbo.tblRifiutiFormulari
@@ -442,6 +447,11 @@ BEGIN
 				-- (viewRifiutiRegistrazioniEffettive considera solo Lock = 0), basta rimuovere il collegamento.
 				DELETE dbo.tblRentriRegistrazioniRettifiche
 				WHERE IdRettifica = @Id;
+				-- Bozza creata da un Allegato VII (Diwass > Allegati VII, Registra nel registro, docs/regole/diwass.md
+				-- D8.6): l'Allegato VII resta e perde la registrazione
+				UPDATE dbo.tblDiwassAllegatiVii
+				SET IdRegistrazione = NULL
+				WHERE IdRegistrazione = @Id;
 				DELETE dbo.tblRifiutiRegistrazioni
 				WHERE Id = @Id;
 				DELETE dbo.tblRifiutiFormulari

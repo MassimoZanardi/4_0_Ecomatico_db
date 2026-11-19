@@ -64,7 +64,8 @@ BEGIN
 			a.Id,
 			a.IdAziendaInterna,
 			AziendaNome = s.NomeCompleto,
-			a.IdRegistrazione,
+			-- Solo una registrazione attiva: una cancellata (Lock 4) o una bozza non si mostrano
+			IdRegistrazione = r.Id,
 			RegistrazioneNumero = r.Numero,
 			RegistrazioneData = r.Data,
 			a.Numero,
@@ -110,7 +111,7 @@ BEGIN
 		FROM
 			dbo.tblDiwassAllegatiVii a
 			INNER JOIN dbo.tblSedi s ON a.IdAziendaInterna = s.Id
-			LEFT JOIN dbo.tblRifiutiRegistrazioni r ON a.IdRegistrazione = r.Id
+			LEFT JOIN dbo.tblRifiutiRegistrazioni r ON a.IdRegistrazione = r.Id AND r.Lock < 2
 			LEFT JOIN dbo.tblRifiutiEer e ON a.IdEer = e.Id
 		WHERE a.Id = @Id;
 

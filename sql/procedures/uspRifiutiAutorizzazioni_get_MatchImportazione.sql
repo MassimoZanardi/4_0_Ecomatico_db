@@ -28,7 +28,10 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiAutorizzazioni_get_MatchImportazione]
 	@IntermediarioCodiceFiscale VARCHAR(20) = NULL,
 	@IntermediarioAutorizzazione VARCHAR(20) = NULL,
 	@Intermediario2CodiceFiscale VARCHAR(20) = NULL,
-	@Intermediario2Autorizzazione VARCHAR(20) = NULL
+	@Intermediario2Autorizzazione VARCHAR(20) = NULL,
+	-- 1 = anche il numero di corrispondenze per ogni ruolo non abbinato (acquisizione da formulario digitale); 0 = solo
+	-- gli Id, come lo legge uspRentriImportazioni_upd_Analisi
+	@ConMotivi BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -99,7 +102,12 @@ BEGIN
 			@idAutorizzazioneTrasportatore1 CHAR(16) = NULL,
 			@idAutorizzazioneIntermediario1 CHAR(16) = NULL,
 			@idAutorizzazioneIntermediario2 CHAR(16) = NULL,
-			@cnt INT;
+			@cnt INT,
+			@nProduttore INT = NULL,
+			@nDestinatario INT = NULL,
+			@nTrasportatore INT = NULL,
+			@nIntermediario1 INT = NULL,
+			@nIntermediario2 INT = NULL;
 
 		-- ── PRODUTTORE ───────────────────────────────────────────────────────────
 		IF @ProduttoreCodiceFiscale IS NOT NULL
@@ -130,6 +138,7 @@ BEGIN
 					AND (u.IdAziendaInterna = @idAziendaInterna OR u.Condivisa = 1)
 					AND s.CodiceFiscale = @ProduttoreCodiceFiscale;
 				IF @cnt <> 1 SET @idAutorizzazioneProduttoreDetentore = NULL;
+				SET @nProduttore = @cnt;
 			END
 
 			IF @idAutorizzazioneProduttoreDetentore IS NULL
@@ -148,6 +157,8 @@ BEGIN
 						WHERE na.IdSede = s.Id AND na.IdRuolo = 'P' AND na.Nessuna = 1 AND na.Lock = 0
 					);
 				IF @cnt <> 1 SET @idAutorizzazioneProduttoreDetentore = NULL;
+				-- Più autorizzazioni da produttore contano più delle sedi: è quella la scelta da fare
+				IF ISNULL(@nProduttore, 0) <= 1 SET @nProduttore = @cnt;
 			END
 		END
 
@@ -180,6 +191,7 @@ BEGIN
 					AND (u.IdAziendaInterna = @idAziendaInterna OR u.Condivisa = 1)
 					AND s.CodiceFiscale = @DestinatarioCodiceFiscale;
 				IF @cnt <> 1 SET @idAutorizzazioneDestinatario = NULL;
+				SET @nDestinatario = @cnt;
 			END
 		END
 
@@ -212,6 +224,7 @@ BEGIN
 					AND (u.IdAziendaInterna = @idAziendaInterna OR u.Condivisa = 1)
 					AND s.CodiceFiscale = @TrasportatoreCodiceFiscale;
 				IF @cnt <> 1 SET @idAutorizzazioneTrasportatore1 = NULL;
+				SET @nTrasportatore = @cnt;
 			END
 		END
 
@@ -244,6 +257,7 @@ BEGIN
 					AND (u.IdAziendaInterna = @idAziendaInterna OR u.Condivisa = 1)
 					AND s.CodiceFiscale = @IntermediarioCodiceFiscale;
 				IF @cnt <> 1 SET @idAutorizzazioneIntermediario1 = NULL;
+				SET @nIntermediario1 = @cnt;
 			END
 		END
 
@@ -276,15 +290,31 @@ BEGIN
 					AND (u.IdAziendaInterna = @idAziendaInterna OR u.Condivisa = 1)
 					AND s.CodiceFiscale = @Intermediario2CodiceFiscale;
 				IF @cnt <> 1 SET @idAutorizzazioneIntermediario2 = NULL;
+				SET @nIntermediario2 = @cnt;
 			END
 		END
 
-		SELECT
-			IdAutorizzazioneProduttoreDetentore = @idAutorizzazioneProduttoreDetentore,
-			IdAutorizzazioneDestinatario = @idAutorizzazioneDestinatario,
-			IdAutorizzazioneTrasportatore1 = @idAutorizzazioneTrasportatore1,
-			IdAutorizzazioneIntermediario1 = @idAutorizzazioneIntermediario1,
-			IdAutorizzazioneIntermediario2 = @idAutorizzazioneIntermediario2;
+		IF @ConMotivi = 1
+			-- Per ogni ruolo indicato nel formulario e non abbinato, quante corrispondenze ci sono (0 = nessuna, più
+			-- di una = da scegliere): servono all'avviso "Da completare" dell'acquisizione da formulario digitale
+			SELECT
+				IdAutorizzazioneProduttoreDetentore = @idAutorizzazioneProduttoreDetentore,
+				IdAutorizzazioneDestinatario = @idAutorizzazioneDestinatario,
+				IdAutorizzazioneTrasportatore1 = @idAutorizzazioneTrasportatore1,
+				IdAutorizzazioneIntermediario1 = @idAutorizzazioneIntermediario1,
+				IdAutorizzazioneIntermediario2 = @idAutorizzazioneIntermediario2,
+				CorrispondenzeProduttore = IIF(@ProduttoreCodiceFiscale IS NOT NULL AND @idAutorizzazioneProduttoreDetentore IS NULL, ISNULL(@nProduttore, 0), NULL),
+				CorrispondenzeDestinatario = IIF(@DestinatarioCodiceFiscale IS NOT NULL AND @idAutorizzazioneDestinatario IS NULL, ISNULL(@nDestinatario, 0), NULL),
+				CorrispondenzeTrasportatore = IIF(@TrasportatoreCodiceFiscale IS NOT NULL AND @idAutorizzazioneTrasportatore1 IS NULL, ISNULL(@nTrasportatore, 0), NULL),
+				CorrispondenzeIntermediario1 = IIF(@IntermediarioCodiceFiscale IS NOT NULL AND @idAutorizzazioneIntermediario1 IS NULL, ISNULL(@nIntermediario1, 0), NULL),
+				CorrispondenzeIntermediario2 = IIF(@Intermediario2CodiceFiscale IS NOT NULL AND @idAutorizzazioneIntermediario2 IS NULL, ISNULL(@nIntermediario2, 0), NULL);
+		ELSE
+			SELECT
+				IdAutorizzazioneProduttoreDetentore = @idAutorizzazioneProduttoreDetentore,
+				IdAutorizzazioneDestinatario = @idAutorizzazioneDestinatario,
+				IdAutorizzazioneTrasportatore1 = @idAutorizzazioneTrasportatore1,
+				IdAutorizzazioneIntermediario1 = @idAutorizzazioneIntermediario1,
+				IdAutorizzazioneIntermediario2 = @idAutorizzazioneIntermediario2;
 
 	END TRY
 	BEGIN CATCH

@@ -227,36 +227,38 @@ BEGIN
 			Nome NVARCHAR(250),
 			MezzoTrasporto CHAR(1),
 			IdSede CHAR(16),
+			NSedi INT,
 			DellAzienda BIT
 		);
-		INSERT INTO @soggetti (Ruolo, Pos, OperatorInternalId, Nome, MezzoTrasporto, IdSede, DellAzienda)
+		-- Sede: quella del documento se è dell'azienda, altrimenti l'unica sede dell'azienda collegata allo stesso
+		-- operatore; con più sedi collegate allo stesso operatore non si sceglie (NSedi > 1, la sceglie l'utente)
+		INSERT INTO @soggetti (Ruolo, Pos, OperatorInternalId, Nome, MezzoTrasporto, IdSede, NSedi, DellAzienda)
 		SELECT
 			x.Ruolo,
 			x.Pos,
 			v.OperatorInternalId,
 			ISNULL(sd.NomeCompleto, x.Nome),
 			x.MezzoTrasporto,
-			sc.Id,
+			ISNULL(sv.Id, IIF(sc.N = 1, sc.IdUnico, NULL)),
+			IIF(sv.Id IS NOT NULL, 1, sc.N),
 			CAST(IIF(si.Id IS NULL, 0, 1) AS BIT)
 		FROM
 			dbo.tblDiwassAllegatiViiSoggetti x
 			LEFT JOIN dbo.tblSedi sd ON x.IdSede = sd.Id
+			LEFT JOIN dbo.tblSedi sv ON x.IdSede = sv.Id AND sv.IdAziendaInterna = @idAzienda AND sv.Lock = 0
 			LEFT JOIN dbo.tblDiwassOperatori od ON x.IdSede = od.Id
 			CROSS APPLY (SELECT OperatorInternalId = ISNULL(od.OperatorInternalId, x.OperatorInternalId)) v
 			OUTER APPLY (
-				SELECT TOP 1 z.Id
+				SELECT
+					N = COUNT(*),
+					IdUnico = MIN(z.Id)
 				FROM
 					dbo.tblSedi z
-					LEFT JOIN dbo.tblDiwassOperatori oz ON z.Id = oz.Id
+					INNER JOIN dbo.tblDiwassOperatori oz ON z.Id = oz.Id
 				WHERE
 					z.IdAziendaInterna = @idAzienda
 					AND z.Lock = 0
-					AND
-						(
-						z.Id = x.IdSede
-						OR oz.OperatorInternalId = v.OperatorInternalId
-						)
-				ORDER BY IIF(z.Id = x.IdSede, 0, 1), IIF(z.InternaEsterna = 'I', 0, 1), z.Id
+					AND oz.OperatorInternalId = v.OperatorInternalId
 			) sc
 					OUTER APPLY (
 				SELECT TOP 1 z.Id
@@ -321,190 +323,189 @@ BEGIN
 		DECLARE @dataTrasporto DATE = ISNULL(@dataPresaInCarico, @dataSpedizione);
 
 		-- ── Soggetti della registrazione ────────────────────────────────────────────────────────────────────────────
-		DECLARE @mancanti TABLE (Pos INT IDENTITY(1, 1), Testo NVARCHAR(400));
+		-- Un soggetto per riga: la sede (fissa, quella del registro o dell'azienda, oppure dal documento) e
+		-- l'autorizzazione del ruolo valida alla data del trasporto. Si compila solo con una corrispondenza unica; con
+		-- nessuna o più corrispondenze il campo resta vuoto e l'avviso dice quale e perché (lo sceglie l'utente nella
+		-- registrazione, come nell'acquisizione da formulario digitale)
 		DECLARE @idAziendaRegistro CHAR(16) = (SELECT IdAziendaInterna
 		FROM dbo.tblSedi
 		WHERE Id = @idSedeRegistro);
+		DECLARE @dataTesto NVARCHAR(10) = CONVERT(NVARCHAR(10), @dataTrasporto, 103);
 
-		-- Produttore: la sede del registro (scarico a terzi) o il produttore del documento, se manca chi organizza;
-		-- un'autorizzazione da produttore valida o, senza, l'autorizzazione "Nessuna" della sede (creata se manca)
-		DECLARE @idSedeProduttore CHAR(16), @idAutorizzazioneProduttore CHAR(16), @idSedeProduttoreNessuna CHAR(16);
+		DECLARE @req TABLE (
+			Ordine INT IDENTITY(1, 1),
+			Tipo CHAR(1),
+			PosTrasportatore TINYINT,
+			Etichetta NVARCHAR(60),
+			Nome NVARCHAR(250),
+			OperatorInternalId BIGINT,
+			MezzoTrasporto CHAR(1),
+			IdSede CHAR(16),
+			NSedi INT,
+			IdAutorizzazione CHAR(16),
+			NAutorizzazioni INT
+		);
+
+		-- Produttore: la sede del registro (scarico a terzi) o il produttore del documento, se manca chi organizza
 		IF @isProduttore = 1
 		BEGIN
 			IF @produttoreSede = 1
-				SET @idSedeProduttore = @idSedeRegistro;
-			ELSE
-			BEGIN
-				DECLARE @produttoreNome NVARCHAR(250), @produttoreOperatore BIGINT, @produttoreRuolo CHAR(1);
-				SELECT TOP 1
-					@idSedeProduttore = IdSede,
-					@produttoreNome = Nome,
-					@produttoreOperatore = OperatorInternalId,
-					@produttoreRuolo = Ruolo
-				FROM @soggetti
-				WHERE Ruolo IN ('P', 'O')
-				ORDER BY IIF(Ruolo = 'P', 0, 1), Pos;
-
-				IF @idSedeProduttore IS NULL
-					INSERT INTO @mancanti (Testo)
-					VALUES (IIF(@produttoreRuolo = 'P', N'il produttore ', N'chi organizza la spedizione (produttore) ') + ISNULL(@produttoreNome, N'') + ISNULL(N' (operatore DIWASS ' + CAST(@produttoreOperatore AS NVARCHAR(20)) + N')', N'')
-						+ N' non trovato in anagrafica');
-			END
-
-			IF @idSedeProduttore IS NOT NULL
-			BEGIN
-				SELECT TOP 1 @idAutorizzazioneProduttore = a.Id
-				FROM dbo.tblRifiutiAutorizzazioni a
-				WHERE
-					a.IdSede = @idSedeProduttore
-					AND a.IdRuolo = 'P'
-					AND a.Lock = 0
-					AND ISNULL(a.Disabilitata, 0) = 0
-					AND ISNULL(a.Nessuna, 0) = 0
-					AND @dataTrasporto BETWEEN a.DataInizio AND a.DataFine
-				ORDER BY a.DataFine DESC, a.Id;
-
-				IF @idAutorizzazioneProduttore IS NULL
-					SELECT TOP 1 @idAutorizzazioneProduttore = a.Id
-					FROM dbo.tblRifiutiAutorizzazioni a
-					WHERE
-						a.IdSede = @idSedeProduttore
-						AND a.IdRuolo = 'P'
-						AND a.Nessuna = 1
-						AND a.Lock = 0;
-
-				IF @idAutorizzazioneProduttore IS NULL
-					SET @idSedeProduttoreNessuna = @idSedeProduttore;
-			END
-		END
-
-		-- Destinatario: la sede del registro (carico da terzi) o l'impianto del documento, con un'autorizzazione da
-		-- destinatario valida alla data del trasporto
-		DECLARE @idAutorizzazioneDestinatario CHAR(16);
-		IF @isDestinatario = 1
-		BEGIN
-			DECLARE @idSedeDestinatario CHAR(16), @destinatarioNome NVARCHAR(250), @destinatarioOperatore BIGINT;
-			IF @destinatarioSede = 1
-				SELECT
-					@idSedeDestinatario = Id,
-					@destinatarioNome = NomeCompleto
+				INSERT INTO @req (Tipo, Etichetta, Nome, IdSede, NSedi)
+				SELECT 'P', N'il produttore', NomeCompleto, Id, 1
 				FROM dbo.tblSedi
 				WHERE Id = @idSedeRegistro;
 			ELSE
-				SELECT TOP 1
-					@idSedeDestinatario = s.IdSede,
-					@destinatarioNome = s.Nome,
-					@destinatarioOperatore = s.OperatorInternalId
-				FROM @soggetti s
-				WHERE s.Ruolo = 'I'
-				ORDER BY s.Pos;
-
-			IF @idSedeDestinatario IS NULL
-				INSERT INTO @mancanti (Testo)
-				VALUES (N'l''impianto ' + ISNULL(@destinatarioNome, N'') + ISNULL(N' (operatore DIWASS ' + CAST(@destinatarioOperatore AS NVARCHAR(20)) + N')', N'')
-					+ N' non trovato in anagrafica');
-			ELSE
-			BEGIN
-				SELECT TOP 1 @idAutorizzazioneDestinatario = a.Id
-				FROM
-					dbo.tblRifiutiAutorizzazioni a
-					INNER JOIN dbo.tblSedi z ON z.Id = @idSedeDestinatario
-				WHERE
-					a.IdSede IN (z.Id, z.IdParent)
-					AND a.IdRuolo = 'D'
-					AND a.Lock = 0
-					AND ISNULL(a.Disabilitata, 0) = 0
-					AND ISNULL(a.Nessuna, 0) = 0
-					AND @dataTrasporto BETWEEN a.DataInizio AND a.DataFine
-				ORDER BY IIF(a.IdSede = z.Id, 0, 1), a.DataFine DESC, a.Id;
-
-				IF @idAutorizzazioneDestinatario IS NULL
-					INSERT INTO @mancanti (Testo)
-					VALUES (ISNULL(@destinatarioNome, N'l''impianto') + N' non ha un''autorizzazione da destinatario valida al ' + CONVERT(NVARCHAR(10), @dataTrasporto, 103));
-			END
+				INSERT INTO @req (Tipo, Etichetta, Nome, OperatorInternalId, IdSede, NSedi)
+				SELECT TOP 1 'P', IIF(Ruolo = 'P', N'il produttore', N'chi organizza la spedizione (produttore)'), Nome, OperatorInternalId, IdSede, NSedi
+				FROM @soggetti
+				WHERE Ruolo IN ('P', 'O')
+				ORDER BY IIF(Ruolo = 'P', 0, 1), Pos;
 		END
 
-		-- Trasportatori: l'azienda del registro (trasporto) o i trasportatori del documento, ciascuno con
-		-- un'autorizzazione da trasportatore valida alla data del trasporto; mezzo dal documento
-		DECLARE @trasportatori TABLE (Pos TINYINT, IdAutorizzazione CHAR(16), IdTipo CHAR(1));
+		-- Destinatario: la sede del registro (carico da terzi) o il primo impianto del documento
+		IF @isDestinatario = 1
+		BEGIN
+			IF @destinatarioSede = 1
+				INSERT INTO @req (Tipo, Etichetta, Nome, IdSede, NSedi)
+				SELECT 'D', N'il destinatario', NomeCompleto, Id, 1
+				FROM dbo.tblSedi
+				WHERE Id = @idSedeRegistro;
+			ELSE
+				INSERT INTO @req (Tipo, Etichetta, Nome, OperatorInternalId, IdSede, NSedi)
+				SELECT TOP 1 'D', N'l''impianto', Nome, OperatorInternalId, IdSede, NSedi
+				FROM @soggetti
+				WHERE Ruolo = 'I'
+				ORDER BY Pos;
+		END
+
+		-- Trasportatori: l'azienda del registro (trasporto) o fino a tre trasportatori del documento; mezzo dal documento
 		IF @isTrasportatore = 1
 		BEGIN
-			DECLARE @tras TABLE (Pos TINYINT, IdSede CHAR(16), Nome NVARCHAR(250), OperatorInternalId BIGINT, MezzoTrasporto CHAR(1));
 			IF @trasportatoreSede = 1
-				INSERT INTO @tras (Pos, IdSede, Nome, OperatorInternalId, MezzoTrasporto)
-				SELECT TOP 1 0, @idAziendaRegistro, ISNULL(z.NomeCompleto, s.Nome), NULL, s.MezzoTrasporto
+				INSERT INTO @req (Tipo, PosTrasportatore, Etichetta, Nome, MezzoTrasporto, IdSede, NSedi)
+				SELECT TOP 1 'T', 0, N'il trasportatore', z.NomeCompleto, s.MezzoTrasporto, @idAziendaRegistro, 1
 				FROM
 					@soggetti s
-					LEFT JOIN dbo.tblSedi z ON z.Id = @idAziendaRegistro
+					INNER JOIN dbo.tblSedi z ON z.Id = @idAziendaRegistro
 				WHERE
 					s.Ruolo = 'T'
 					AND s.DellAzienda = 1
 				ORDER BY s.Pos;
 			ELSE
-				INSERT INTO @tras (Pos, IdSede, Nome, OperatorInternalId, MezzoTrasporto)
-				SELECT TOP 3 ROW_NUMBER() OVER (ORDER BY s.Pos) - 1, s.IdSede, s.Nome, s.OperatorInternalId, s.MezzoTrasporto
-				FROM @soggetti s
-				WHERE s.Ruolo = 'T'
-				ORDER BY s.Pos;
-
-			INSERT INTO @mancanti (Testo)
-			SELECT N'il trasportatore ' + ISNULL(t.Nome, N'') + ISNULL(N' (operatore DIWASS ' + CAST(t.OperatorInternalId AS NVARCHAR(20)) + N')', N'')
-				+ N' non trovato in anagrafica'
-			FROM @tras t
-			WHERE t.IdSede IS NULL
-			ORDER BY t.Pos;
-
-			INSERT INTO @trasportatori (Pos, IdAutorizzazione, IdTipo)
-			SELECT
-				t.Pos,
-				au.Id,
-				CASE t.MezzoTrasporto
-					WHEN 'R' THEN 'G'
-					WHEN 'T' THEN 'T'
-					WHEN 'S' THEN 'N'
-				END
-			FROM
-				@tras t
-				INNER JOIN dbo.tblSedi z ON t.IdSede = z.Id
-				OUTER APPLY (
-					SELECT TOP 1 a.Id
-					FROM dbo.tblRifiutiAutorizzazioni a
-					WHERE
-						a.IdSede IN (z.Id, z.IdParent)
-						AND a.IdRuolo = 'T'
-						AND a.Lock = 0
-						AND ISNULL(a.Disabilitata, 0) = 0
-						AND ISNULL(a.Nessuna, 0) = 0
-						AND @dataTrasporto BETWEEN a.DataInizio AND a.DataFine
-					ORDER BY IIF(a.IdSede = z.Id, 0, 1), a.DataFine DESC, a.Id
-				) au;
-
-			INSERT INTO @mancanti (Testo)
-			SELECT ISNULL(z.NomeCompleto, t.Nome) + N' non ha un''autorizzazione da trasportatore valida al ' + CONVERT(NVARCHAR(10), @dataTrasporto, 103)
-			FROM
-				@tras t
-				INNER JOIN dbo.tblSedi z ON t.IdSede = z.Id
-				INNER JOIN @trasportatori r ON t.Pos = r.Pos
-			WHERE r.IdAutorizzazione IS NULL
-			ORDER BY t.Pos;
-
-			DELETE @trasportatori
-			WHERE IdAutorizzazione IS NULL;
-
-			IF NOT EXISTS (SELECT 1
-			FROM @tras)
-				INSERT INTO @mancanti (Testo)
-				VALUES (N'il documento non ha trasportatori');
+				INSERT INTO @req (Tipo, PosTrasportatore, Etichetta, Nome, OperatorInternalId, MezzoTrasporto, IdSede, NSedi)
+				SELECT TOP 3 'T', ROW_NUMBER() OVER (ORDER BY Pos) - 1, N'il trasportatore', Nome, OperatorInternalId, MezzoTrasporto, IdSede, NSedi
+				FROM @soggetti
+				WHERE Ruolo = 'T'
+				ORDER BY Pos;
 		END
 
-		-- Soggetti non trovati: la registrazione si crea lo stesso, l'avviso dice che cosa completare
-		DECLARE @avvisi NVARCHAR(2000) = NULL;
-		IF EXISTS (SELECT 1
-		FROM @mancanti)
-			SET @avvisi = LEFT(N'Da completare nella registrazione: '
-				+ STUFF((SELECT N'; ' + Testo
-				FROM @mancanti ORDER BY Pos FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, N'')
-				+ N'. Per trovarli in automatico la prossima volta inserirli in Anagrafica e collegarli in Diwass > Operatori', 2000);
+		-- Autorizzazione del ruolo valida alla data del trasporto (non "Nessuna"): della sede o, se la sede non ne ha,
+		-- della sua azienda (per destinatario e trasportatore); compilata solo se è una
+		UPDATE q
+		SET
+			NAutorizzazioni = au.N,
+			IdAutorizzazione = IIF(au.N = 1, au.IdUnico, NULL)
+		FROM
+			@req q
+			INNER JOIN dbo.tblSedi z ON q.IdSede = z.Id
+			CROSS APPLY (
+				SELECT TOP 1
+					N = COUNT(*),
+					IdUnico = MIN(a.Id)
+				FROM dbo.tblRifiutiAutorizzazioni a
+				WHERE
+					(
+					a.IdSede = z.Id
+					OR
+						(
+						q.Tipo IN ('D', 'T')
+						AND a.IdSede = z.IdParent
+						)
+					)
+					AND a.IdRuolo = q.Tipo
+					AND a.Lock = 0
+					AND ISNULL(a.Disabilitata, 0) = 0
+					AND ISNULL(a.Nessuna, 0) = 0
+					AND @dataTrasporto BETWEEN a.DataInizio AND a.DataFine
+				GROUP BY IIF(a.IdSede = z.Id, 0, 1)
+				ORDER BY IIF(a.IdSede = z.Id, 0, 1)
+			) au
+		WHERE q.NSedi = 1;
+
+		UPDATE @req
+		SET NAutorizzazioni = 0
+		WHERE
+			NSedi = 1
+			AND NAutorizzazioni IS NULL;
+
+		-- Produttore senza autorizzazioni da produttore: l'autorizzazione "Nessuna" della sede (creata se manca)
+		DECLARE @idSedeProduttoreNessuna CHAR(16) = NULL;
+		UPDATE q
+		SET IdAutorizzazione = ( SELECT TOP 1 a.Id FROM dbo.tblRifiutiAutorizzazioni a WHERE a.IdSede = q.IdSede AND a.IdRuolo = 'P' AND a.Nessuna = 1 AND a.Lock = 0 )
+		FROM @req q
+		WHERE
+			q.Tipo = 'P'
+			AND q.NSedi = 1
+			AND q.NAutorizzazioni = 0;
+
+		SELECT @idSedeProduttoreNessuna = IdSede
+		FROM @req
+		WHERE
+			Tipo = 'P'
+			AND NSedi = 1
+			AND NAutorizzazioni = 0
+			AND IdAutorizzazione IS NULL;
+
+		-- Avvisi, uno per soggetto da completare
+		DECLARE @mancanti TABLE (Pos INT IDENTITY(1, 1), Testo NVARCHAR(400));
+		INSERT INTO @mancanti (Testo)
+		SELECT
+			q.Etichetta + N' ' + ISNULL(q.Nome, N'') + ISNULL(N' (operatore DIWASS ' + CAST(q.OperatorInternalId AS NVARCHAR(20)) + N')', N'')
+			+ CASE
+				WHEN ISNULL(q.NSedi, 0) = 0 THEN N': non trovato in anagrafica'
+				WHEN q.NSedi > 1 THEN N': ' + CAST(q.NSedi AS NVARCHAR(10)) + N' soggetti in anagrafica collegati allo stesso operatore, sceglierlo nella registrazione'
+				WHEN q.NAutorizzazioni = 0 THEN N': nessuna autorizzazione da ' + IIF(q.Tipo = 'D', N'destinatario', N'trasportatore') + N' valida al ' + @dataTesto
+				ELSE N': ' + CAST(q.NAutorizzazioni AS NVARCHAR(10)) + N' autorizzazioni da ' + CASE q.Tipo WHEN 'P' THEN N'produttore' WHEN 'D' THEN N'destinatario' ELSE N'trasportatore' END
+					+ N' valide al ' + @dataTesto + N', sceglierla nella registrazione'
+			END
+		FROM @req q
+		WHERE
+			q.IdAutorizzazione IS NULL
+			AND NOT (q.Tipo = 'P' AND q.NSedi = 1 AND q.NAutorizzazioni = 0)
+		ORDER BY q.Ordine;
+
+		IF @isTrasportatore = 1 AND NOT EXISTS (SELECT 1
+		FROM @req
+		WHERE Tipo = 'T')
+			INSERT INTO @mancanti (Testo)
+			VALUES (N'il trasportatore: il documento non ne indica nessuno');
+
+		-- Elenco per la finestra "Da completare" della scheda della registrazione
+		DECLARE @avvisi NVARCHAR(MAX) = (SELECT Testo
+		FROM @mancanti
+		ORDER BY Pos
+		FOR JSON PATH);
+
+		DECLARE @idAutorizzazioneProduttore CHAR(16) = (SELECT IdAutorizzazione
+		FROM @req
+		WHERE Tipo = 'P');
+		DECLARE @idAutorizzazioneDestinatario CHAR(16) = (SELECT IdAutorizzazione
+		FROM @req
+		WHERE Tipo = 'D');
+		DECLARE @trasportatori TABLE (Pos TINYINT, IdAutorizzazione CHAR(16), IdTipo CHAR(1));
+		INSERT INTO @trasportatori (Pos, IdAutorizzazione, IdTipo)
+		SELECT
+			PosTrasportatore,
+			IdAutorizzazione,
+			CASE MezzoTrasporto
+				WHEN 'R' THEN 'G'
+				WHEN 'T' THEN 'T'
+				WHEN 'S' THEN 'N'
+			END
+		FROM @req
+		WHERE
+			Tipo = 'T'
+			AND IdAutorizzazione IS NOT NULL;
 
 		-- ── Dati del movimento e della registrazione ────────────────────────────────────────────────────────────────
 		DECLARE @idUnitaMisura CHAR(2) = IIF(@unitaQuantita = 'M', 'MC', 'TN');

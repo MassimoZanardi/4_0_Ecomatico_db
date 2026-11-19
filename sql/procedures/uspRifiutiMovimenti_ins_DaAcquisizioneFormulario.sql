@@ -13,7 +13,8 @@ GO
 -- logica: uspRifiutiAutorizzazioni_get_MatchImportazione (Produttore/Destinatario/Trasportatore/
 -- Intermediario per Codice Fiscale) e uspRifiutiRegistrazioni_get_MatchCodiciImportazione (stato
 -- fisico/attività R-D/esito/causale respingimento/analisi/ADR/unità di misura). Nessun match trovato -> il
--- relativo campo resta NULL, l'utente completa a mano da Edit.
+-- relativo campo resta NULL, l'utente completa a mano da Edit; i soggetti non abbinati (nessuna o più
+-- corrispondenze) tornano con l'Id in Avvisi (JSON) per la finestra "Da completare" della scheda.
 --
 -- La bozza risultante (Lock=2) segue esattamente lo stesso ciclo di vita di "Nuova registrazione"/"Nuovo
 -- formulario": se l'utente preme Annulla in Edit, uspRifiutiRegistrazioni_del/uspRifiutiFormulari_del la
@@ -208,10 +209,16 @@ BEGIN
 			IdAutorizzazioneDestinatario CHAR(16) NULL,
 			IdAutorizzazioneTrasportatore1 CHAR(16) NULL,
 			IdAutorizzazioneIntermediario1 CHAR(16) NULL,
-			IdAutorizzazioneIntermediario2 CHAR(16) NULL
+			IdAutorizzazioneIntermediario2 CHAR(16) NULL,
+			CorrispondenzeProduttore INT NULL,
+			CorrispondenzeDestinatario INT NULL,
+			CorrispondenzeTrasportatore INT NULL,
+			CorrispondenzeIntermediario1 INT NULL,
+			CorrispondenzeIntermediario2 INT NULL
 		);
 		INSERT #match
 		EXEC dbo.uspRifiutiAutorizzazioni_get_MatchImportazione
+			@ConMotivi = 1,
 			@IdSessione = @IdSessione, @IdRegistro = @IdRegistro,
 			@ProduttoreCodiceFiscale = @ProduttoreCodiceFiscale, @ProduttoreAutorizzazione = @ProduttoreAutorizzazione,
 			@DestinatarioCodiceFiscale = @DestinatarioCodiceFiscale, @DestinatarioAutorizzazione = @DestinatarioAutorizzazione,
@@ -268,6 +275,35 @@ BEGIN
 			SET @RespingimentoMotivo = NULL;
 		END
 		IF ISNULL(@isAttivitaRs, 0) = 0 SET @idAttivitaRs = NULL;
+
+		-- Soggetti del formulario non abbinati (nessuna o più corrispondenze in anagrafica): restano vuoti e l'elenco
+		-- va nella finestra "Da completare" della scheda, solo per i ruoli che la causale prevede
+		DECLARE @dove NVARCHAR(20) = IIF(@ModalitaRitorno = 'F', N'nel formulario', N'nella registrazione');
+		DECLARE @mancanti TABLE (Pos INT, Testo NVARCHAR(400));
+		INSERT INTO @mancanti (Pos, Testo)
+		SELECT
+			r.Pos,
+			r.Ruolo + N' (codice fiscale ' + r.CodiceFiscale + ISNULL(N', autorizzazione ' + r.Autorizzazione, N'') + N')'
+			+ IIF(r.Corrispondenze = 0, N': non trovato in anagrafica',
+				N': ' + CAST(r.Corrispondenze AS NVARCHAR(10)) + N' corrispondenze in anagrafica, sceglierlo ' + @dove)
+		FROM
+			#match m
+			CROSS APPLY (
+				VALUES
+					(1, N'il produttore', @ProduttoreCodiceFiscale, @ProduttoreAutorizzazione, m.CorrispondenzeProduttore, ISNULL(@isProduttore, 0)),
+					(2, N'il destinatario', @DestinatarioCodiceFiscale, @DestinatarioAutorizzazione, m.CorrispondenzeDestinatario, ISNULL(@isDestinatario, 0)),
+					(3, N'il trasportatore', @TrasportatoreCodiceFiscale, @TrasportatoreAutorizzazioneAlbo, m.CorrispondenzeTrasportatore, ISNULL(@isTrasportatore, 0)),
+					(4, N'l''intermediario', @IntermediarioCodiceFiscale, @IntermediarioAutorizzazioneAlbo, m.CorrispondenzeIntermediario1, ISNULL(@isIntermediario, 0)),
+					(5, N'il secondo intermediario', @Intermediario2CodiceFiscale, @Intermediario2AutorizzazioneAlbo, m.CorrispondenzeIntermediario2, ISNULL(@isIntermediario, 0))
+			) r (Pos, Ruolo, CodiceFiscale, Autorizzazione, Corrispondenze, Previsto)
+		WHERE
+			r.Previsto = 1
+			AND r.Corrispondenze IS NOT NULL;
+
+		DECLARE @avvisi NVARCHAR(MAX) = (SELECT Testo
+		FROM @mancanti
+		ORDER BY Pos
+		FOR JSON PATH);
 
 		-- ── Normalizzazione quantità/date con sentinella (stesso principio della legacy) ─────
 		DECLARE @quantitaFinale DECIMAL(18, 3) = IIF(@Quantita >= 0, @Quantita, 0);
@@ -406,7 +442,9 @@ BEGIN
 		THROW 50001, @returnMessage, 1;
 	END
 
-	SELECT Id = @returnId;
+	SELECT
+		Id = @returnId,
+		Avvisi = @avvisi;
 
 END;
 GO

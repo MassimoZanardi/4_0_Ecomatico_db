@@ -71,6 +71,8 @@ BEGIN
 			a.Numero,
 			a.Stato,
 			StatoDescrizione = dbo.ufnDiwassAllegatiVii_get_StatoDescrizione(a.Stato),
+			-- La scheda (DiwassAllegatoVii.StatoNome) legge lo stato con questo nome, come l'elenco
+			StatoNome = dbo.ufnDiwassAllegatiVii_get_StatoDescrizione(a.Stato),
 			-- Un documento ricevuto da DIWASS (organizzato da altri o fuori da Ecomatico) è in sola lettura
 			Modificabile = CAST(IIF(ISNULL(a.Ricevuto, 0) = 0 AND (a.Stato IS NULL OR a.Stato = 'ANNOUNCED'), 1, 0) AS BIT),
 			Ricevuto = CAST(ISNULL(a.Ricevuto, 0) AS BIT),

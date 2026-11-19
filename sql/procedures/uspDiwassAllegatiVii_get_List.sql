@@ -11,7 +11,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspDiwassAllegatiVii_get_List]
 	@Search VARCHAR(50) = NULL,
 	@Stato VARCHAR(20) = NULL,
 	@Ruolo CHAR(1) = NULL,
-	@DaFare BIT = NULL
+	@DaFare BIT = NULL,
+	@SenzaRegistrazione BIT = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -83,6 +84,11 @@ BEGIN
 			PaeseDestinazione = n.Nome,
 			a.Quantita,
 			a.UnitaQuantita,
+			IdRegistrazione = r.Id,
+			RegistrazioneNumero = r.Numero,
+			RegistrazioneData = r.[Data],
+			-- Documento che l'azienda può registrare (D8.1): senza registrazione la colonna lo dice
+			Registrabile = CAST(IIF(a.Numero IS NOT NULL AND ISNULL(a.Stato, '') <> 'CANCELLED' AND ISNULL(a.Ruoli, IIF(ISNULL(a.Ricevuto, 0) = 0, 'O', '')) LIKE '%[TIPO]%', 1, 0) AS BIT),
 			RowsCount = COUNT(*) OVER ()
 		FROM
 			dbo.tblDiwassAllegatiVii a
@@ -93,6 +99,8 @@ BEGIN
 			LEFT JOIN dbo.tblDiwassAllegatiViiSoggetti xo ON a.Id = xo.Id AND xo.Ruolo = 'O' AND xo.Pos = 1
 			LEFT JOIN dbo.tblSedi so ON xo.IdSede = so.Id
 			LEFT JOIN dbo.tblNazioni n ON a.IdNazioneDestinazione = n.Id
+			-- Registrazione collegata, solo se attiva (D8.6)
+			LEFT JOIN dbo.tblRifiutiRegistrazioni r ON a.IdRegistrazione = r.Id AND r.Lock < 2
 			OUTER APPLY dbo.ufnDiwassAllegatiVii_get_Avanzamento(a.Id) v
 		WHERE
 			s.Id = @IdSessione
@@ -125,6 +133,19 @@ BEGIN
 				(
 				ISNULL(@DaFare, 0) = 0
 				OR v.DaFare IS NOT NULL
+				)
+			-- @SenzaRegistrazione = 1: documenti inviati o ricevuti, non annullati, che l'azienda può registrare (trasportatore,
+			-- impianto, produttore o chi organizza, D8.1) e senza una registrazione attiva collegata (D8.6)
+			AND
+				(
+				ISNULL(@SenzaRegistrazione, 0) = 0
+				OR
+					(
+					a.Numero IS NOT NULL
+					AND ISNULL(a.Stato, '') <> 'CANCELLED'
+					AND ISNULL(a.Ruoli, IIF(ISNULL(a.Ricevuto, 0) = 0, 'O', '')) LIKE '%[TIPO]%'
+					AND NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiRegistrazioni r WHERE r.Id = a.IdRegistrazione AND r.Lock < 2)
+					)
 				)
 		ORDER BY a.DataSpedizione DESC, a.Id DESC
 		OFFSET (@PageNumber - 1) * @RowsPerPage ROWS

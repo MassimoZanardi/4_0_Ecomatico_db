@@ -15,6 +15,7 @@ CREATE OR ALTER PROCEDURE dbo.uspDiwassAllegatiVii_get_Esportazione
 	@Stato VARCHAR(20) = NULL,
 	@Ruolo CHAR(1) = NULL,
 	@DaFare BIT = NULL,
+	@SenzaRegistrazione BIT = NULL,
 	@MaxRighe INT = NULL
 AS
 BEGIN
@@ -70,7 +71,9 @@ BEGIN
 			[Ricezione all'impianto] = v.RicezioneImpiantoData,
 			[Recupero completato] = v.CompletamentoData,
 			[Da fare] = v.DaFare,
-			[Scadenza] = v.Scadenza
+			[Scadenza] = v.Scadenza,
+			[Registrazione n.] = r.Numero,
+			[Registrazione del] = r.[Data]
 		FROM
 			dbo.tblDiwassAllegatiVii a
 			INNER JOIN dbo.tblSessioni s ON a.IdAziendaInterna = s.IdAzienda
@@ -81,6 +84,8 @@ BEGIN
 			LEFT JOIN dbo.tblSedi so ON xo.IdSede = so.Id
 			LEFT JOIN dbo.tblNazioni n ON a.IdNazioneDestinazione = n.Id
 			LEFT JOIN dbo.tblNazioni ns ON a.IdNazioneSpedizione = ns.Id
+			-- Registrazione collegata, solo se attiva (D8.6)
+			LEFT JOIN dbo.tblRifiutiRegistrazioni r ON a.IdRegistrazione = r.Id AND r.Lock < 2
 			OUTER APPLY dbo.ufnDiwassAllegatiVii_get_Avanzamento(a.Id) v
 		WHERE
 			s.Id = @IdSessione
@@ -113,6 +118,19 @@ BEGIN
 				(
 				ISNULL(@DaFare, 0) = 0
 				OR v.DaFare IS NOT NULL
+				)
+			-- @SenzaRegistrazione = 1: documenti inviati o ricevuti, non annullati, che l'azienda può registrare (trasportatore,
+			-- impianto, produttore o chi organizza, D8.1) e senza una registrazione attiva collegata (D8.6)
+			AND
+				(
+				ISNULL(@SenzaRegistrazione, 0) = 0
+				OR
+					(
+					a.Numero IS NOT NULL
+					AND ISNULL(a.Stato, '') <> 'CANCELLED'
+					AND ISNULL(a.Ruoli, IIF(ISNULL(a.Ricevuto, 0) = 0, 'O', '')) LIKE '%[TIPO]%'
+					AND NOT EXISTS (SELECT 1 FROM dbo.tblRifiutiRegistrazioni r WHERE r.Id = a.IdRegistrazione AND r.Lock < 2)
+					)
 				)
 		ORDER BY a.DataSpedizione DESC, a.Id DESC
 		OPTION (RECOMPILE);

@@ -83,6 +83,14 @@ BEGIN
 			ELSE DATEADD(MINUTE, 59, DATEADD(HOUR, 23, @DallaData))
 		END;
 
+		-- Scaduti (da eseguire o in esecuzione con la data passata): tutti quelli rimasti indietro, senza Dalla data né
+		-- intervallo, altrimenti con la partenza da oggi non comparirebbero mai (docs/regole/scadenze-servizi.md S7.1)
+		IF @Stato = 'S'
+		BEGIN
+			SET @DallaData = '19000101';
+			SET @AllaData = GETDATE();
+		END
+
 		DECLARE @Offset INT = (@PageNumber - 1) * @RowsPerPage;
 
 		DECLARE @stmt NVARCHAR(MAX);

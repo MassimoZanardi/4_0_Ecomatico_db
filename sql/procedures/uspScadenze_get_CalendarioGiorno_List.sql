@@ -67,7 +67,9 @@ BEGIN
 		;WITH cteCalendario AS (
 			SELECT
 				[Data] = DATEADD(HOUR, value, @DallaData),
-				DataMezza = DATEADD(MINUTE, 30, DATEADD(HOUR, value, @DallaData)),
+				-- Fine della cella: hh:59 (con SMALLDATETIME equivale a < hh+1:00), cosi' anche
+				-- le scadenze con i minuti fra 31 e 59 cadono nella cella della loro ora
+				DataFine = DATEADD(MINUTE, 59, DATEADD(HOUR, value, @DallaData)),
 				Ora = FORMAT(DATEADD(HOUR, value, @DallaData), 'HH:mm')
 			FROM GENERATE_SERIES(0, 23, 1)
 		),
@@ -75,7 +77,7 @@ BEGIN
 			SELECT c.[Data], c.Ora, s.Id, t.IdEvento, t.Scaduto, t.Eseguito, t.AvvisoTesto
 			FROM
 				cteCalendario c
-				LEFT JOIN #tEventi t ON t.[Data] BETWEEN c.[Data] AND c.DataMezza
+				LEFT JOIN #tEventi t ON t.[Data] BETWEEN c.[Data] AND c.DataFine
 				LEFT JOIN dbo.tblScadenze s ON t.IdEvento = s.IdEvento
 		)
 		SELECT

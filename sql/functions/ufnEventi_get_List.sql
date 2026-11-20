@@ -63,9 +63,21 @@ RETURN
 			INNER JOIN dbo.tblSedi s ON c.IdSede = s.Id
 			-- Ricorrenza: NULL per eventi singoli
 			LEFT JOIN dbo.tblRicorrenze r ON e.Id = r.Id
-			-- Eccezione: cerca le eccezioni dell'evento originale (z.Id = evento originale)
-			LEFT JOIN dbo.tblRicorrenzeEccezioni z ON e.Id = z.Id
-													AND z.Lock = 0
+			-- Eccezione: cerca le eccezioni dell'evento originale (z.Id = evento originale).
+			-- FIX: OUTER APPLY con TOP (1) invece di LEFT JOIN, perche' una serie con piu'
+			-- eccezioni attive restituiva ogni sua occorrenza una volta per eccezione
+			-- (doppioni nei calendari, negli elenchi e nei conteggi); serve solo sapere
+			-- se la serie ha eccezioni, le date escluse sono filtrate in fondo (x)
+			OUTER APPLY (
+				SELECT TOP (1)
+					z1.Id,
+					z1.IdEvento
+				FROM dbo.tblRicorrenzeEccezioni z1
+				WHERE
+					z1.Id = e.Id
+					AND z1.Lock = 0
+				ORDER BY z1.[Data]
+			) z
 			-- FIX NumberMax: calcola una sola volta il DATEDIFF nell'unita'
 			-- corretta, poi deriva da esso sia il NumberMax originale sia
 			-- quello di finestra

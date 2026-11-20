@@ -40,7 +40,7 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		DECLARE @AllaData SMALLDATETIME = DATEADD(MINUTE, -30, DATEADD(DAY, 42, @DallaData));
+		DECLARE @AllaData SMALLDATETIME = DATEADD(MINUTE, -1, DATEADD(DAY, 42, @DallaData));
 
 		DECLARE @IdCalendario tvpId_char_16;
 		INSERT INTO @IdCalendario (Id)
@@ -68,7 +68,8 @@ BEGIN
 			SELECT
 				Settimana = value / 7,
 				[Data] = DATEADD(DAY, value, @DallaData),
-				DataFine = DATEADD(HOUR, 23, DATEADD(MINUTE, 30, DATEADD(DAY, value, @DallaData))),
+				-- Fine della cella: 23:59 del giorno, cosi' anche i servizi dopo le 23:30 cadono nel loro giorno
+				DataFine = DATEADD(MINUTE, 59, DATEADD(HOUR, 23, DATEADD(DAY, value, @DallaData))),
 				Giorno = DATEPART(DW, DATEADD(DAY, value, @DallaData))
 			FROM GENERATE_SERIES(0, 41, 1)
 		),

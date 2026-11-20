@@ -62,6 +62,9 @@ BEGIN
 		INSERT INTO @IdTipo (Id) VALUES ('V');
 
 		DECLARE @AllaData SMALLDATETIME = CASE
+			-- '1H' = la cella dell'ora delle viste Giorno e Settimana (hh:00-hh:59)
+			WHEN @IdIntervallo = '1H' THEN DATEADD(MINUTE, 59, @DallaData)
+			-- '30' = vecchia cella di mezz'ora: resta finche' l'applicazione non passa '1H'
 			WHEN @IdIntervallo = '30' THEN DATEADD(MINUTE, 30, @DallaData)
 			WHEN @IdIntervallo = '1D' THEN DATEADD(MINUTE, 59, DATEADD(HOUR, 23, @DallaData))
 			ELSE @DallaData

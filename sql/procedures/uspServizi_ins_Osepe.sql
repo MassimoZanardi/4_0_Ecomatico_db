@@ -69,6 +69,48 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- La risorsa deve essere tra quelle che la scheda propone (uspOsepe_get_SelectList con @Contesto = 5 e
+		-- @ImpiegabileServizi = 1): persona o oggetto impiegabile nei servizi, non disabilitato, dell'azienda del
+		-- calendario del servizio o condiviso tramite le Aree. Una risorsa gia' nel servizio resta modificabile
+		-- (quantita') anche se nel frattempo non e' piu' impiegabile
+		IF NOT EXISTS (
+			SELECT 1
+			FROM dbo.tblServiziOsepe
+			WHERE
+				Id = @Id
+				AND IdOsepe = @IdOsepe
+		)
+		AND NOT EXISTS (
+			SELECT 1
+			FROM
+				dbo.tblServizi s
+				INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
+				INNER JOIN dbo.tblCalendari c ON e.IdCalendario = c.Id
+				INNER JOIN dbo.tblSedi d ON c.IdSede = d.Id
+				CROSS JOIN dbo.tblSessioni n
+				CROSS APPLY dbo.ufnOsepe_get_ByUtente_List(n.IdUtente) u
+			WHERE
+				s.Id = @Id
+				AND n.Id = @IdSessione
+				AND u.Id = @IdOsepe
+				AND
+					(
+						(
+						u.IdDominio = n.IdDominio
+						AND u.Condivisa = 1
+						)
+					OR u.IdSede = d.IdAziendaInterna
+					)
+				AND u.Tipo IN ('P', 'O')
+				AND u.Disabilitata = 0
+				AND u.ImpiegabileServizi = 1
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La persona o l''oggetto indicato non è impiegabile nei servizi';
+			GOTO BRANCH_END;
+		END
+
 		BEGIN TRANSACTION;
 			-- Upsert: DELETE + INSERT per evitare duplicati su PK (Id, IdOsepe)
 			DELETE dbo.tblServiziOsepe

@@ -67,7 +67,9 @@ BEGIN
 		;WITH cteCalendario AS (
 			SELECT
 				[Data] = DATEADD(HOUR, value, @DallaData),
-				DataFine = DATEADD(MINUTE, 30, DATEADD(HOUR, value, @DallaData)),
+				-- Fine della cella: hh:59 (con SMALLDATETIME equivale a < hh+1:00), cosi' anche
+				-- le scadenze con i minuti fra 31 e 59 cadono nella cella della loro ora
+				DataFine = DATEADD(MINUTE, 59, DATEADD(HOUR, value, @DallaData)),
 				Giorno = DATEPART(DW, DATEADD(HOUR, value, @DallaData)),
 				Ora = FORMAT(DATEADD(HOUR, value, @DallaData), 'HH:mm')
 			FROM GENERATE_SERIES(0, 167, 1)

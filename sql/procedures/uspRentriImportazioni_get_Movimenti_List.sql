@@ -2,8 +2,9 @@
 GO
 SET QUOTED_IDENTIFIER ON
 GO
--- Rentri > Importazione: movimenti dell'anteprima, in ordine di anno e numero, con l'azione prevista e le anomalie
--- di ciascuno (la più grave determina il Livello: E bloccante, W avviso, I informazione).
+-- Rentri > Importazione: movimenti dell'anteprima, in ordine di anno e numero, con l'azione prevista e il Livello
+-- dell'anomalia più grave di ciascuno (E bloccante, W avviso, I informazione). Il testo delle anomalie è nella
+-- uspRentriImportazioni_get_Anomalie_List (la pagina le raggruppa per registrazione).
 CREATE OR ALTER PROCEDURE [dbo].[uspRentriImportazioni_get_Movimenti_List]
 	@IdSessione CHAR(16) = NULL,
 	@Id CHAR(16) = NULL
@@ -81,15 +82,13 @@ BEGIN
 			m.IsRettificato,
 			m.IsIntervallo,
 			m.Azione,
-			Livello = CASE x.Ordine WHEN 1 THEN 'E' WHEN 2 THEN 'W' WHEN 3 THEN 'I' ELSE NULL END,
-			Anomalie = x.Anomalie
+			Livello = CASE x.Ordine WHEN 1 THEN 'E' WHEN 2 THEN 'W' WHEN 3 THEN 'I' ELSE NULL END
 		FROM
 			dbo.tblRentriImportazioniMovimenti m
 			LEFT JOIN dbo.tblRifiutiOperazioni o ON m.IdOperazione = o.Id
 			OUTER APPLY (
 				SELECT
-					Ordine = MIN(CASE y.Livello WHEN 'E' THEN 1 WHEN 'W' THEN 2 ELSE 3 END),
-					Anomalie = STRING_AGG(CAST(y.Messaggio AS NVARCHAR(MAX)), N' - ') WITHIN GROUP (ORDER BY y.Id)
+					Ordine = MIN(CASE y.Livello WHEN 'E' THEN 1 WHEN 'W' THEN 2 ELSE 3 END)
 				FROM dbo.tblRentriImportazioniAnomalie y
 				WHERE y.IdImportazione = m.IdImportazione AND y.Anno = m.Anno AND y.Progressivo = m.Progressivo
 			) x

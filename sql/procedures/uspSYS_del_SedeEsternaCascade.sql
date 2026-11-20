@@ -242,7 +242,9 @@ BEGIN
             -- tblRentriRegistri è 1:1 a chiave condivisa su tblRifiutiRegistri.Id (NOT NULL, nessun
             -- ON DELETE CASCADE): va rimosso prima, altrimenti la DELETE sottostante fallisce per FK.
             -- In pratica un Registro RENTRI appartiene sempre a una sede interna, ma la SP resta
-            -- generica per coerenza con la raccolta #RifiutiRegistri già fatta sopra.
+            -- generica per coerenza con la raccolta #RifiutiRegistri già fatta sopra. Lo stesso per le
+            -- importazioni da RENTRI (FK su IdRegistro; le tabelle figlie si cancellano a cascata).
+            DELETE FROM dbo.tblRentriImportazioni WHERE IdRegistro IN (SELECT Id FROM #RifiutiRegistri);
             DELETE FROM dbo.tblRentriRegistri  WHERE Id IN (SELECT Id FROM #RifiutiRegistri);
             DELETE FROM dbo.tblRifiutiRegistri WHERE Id IN (SELECT Id FROM #RifiutiRegistri);
 

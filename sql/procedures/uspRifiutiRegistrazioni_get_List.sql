@@ -23,7 +23,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_List]
 	@XfirSenzaPresaVisione BIT = 0,
 	@XfirAttesaAccettazione BIT = 0,
 	@XfirCopiaNonCaricata BIT = 0,
-	@XfirCopiaNonTrasmessa BIT = 0
+	@XfirCopiaNonTrasmessa BIT = 0,
+	@ImportateRentri BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -223,6 +224,16 @@ BEGIN
 
 		IF @XfirCopiaNonTrasmessa = 1
 			SET @stmt = @stmt + N' AND m.RentriFormularioStato IS NOT NULL AND m.RentriFormularioDataTrasmissione IS NULL';
+
+		-- Importate da RENTRI (Rentri > Importazione): create da un'importazione eseguita (azione I; le "già presenti"
+		-- hanno IdRegistrazione ma non sono state create dall'importazione)
+		IF @ImportateRentri = 1
+			SET @stmt = @stmt + N' AND EXISTS (
+                SELECT 1
+                FROM dbo.tblRentriImportazioniMovimenti im
+                INNER JOIN dbo.tblRentriImportazioni ri ON im.IdImportazione = ri.Id
+                WHERE im.IdRegistrazione = r.Id AND im.Azione = ''I'' AND ri.Stato = ''E''
+            )';
 
 		SET @stmt = @stmt + N'
         )

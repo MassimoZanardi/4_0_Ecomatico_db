@@ -45,6 +45,17 @@ CREATE TABLE [dbo].[tblRentriImportazioniMovimenti](
 
 GO
 
+-- Registrazioni create dalle importazioni (filtro "Importate da RENTRI" e finestra "RENTRI - Stato"). Non filtrato
+-- (WHERE IdRegistrazione IS NOT NULL): un indice filtrato farebbe fallire le scritture delle SP installate con
+-- QUOTED_IDENTIFIER OFF (default di sqlcmd)
+CREATE NONCLUSTERED INDEX [IX_RentriImportazioniMovimenti_IdRegistrazione] ON [dbo].[tblRentriImportazioniMovimenti]
+(
+	[IdRegistrazione] ASC
+)
+INCLUDE([Azione])
+WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+
 ALTER TABLE [dbo].[tblRentriImportazioniMovimenti]  WITH CHECK ADD  CONSTRAINT [FK_tblRentriImportazioniMovimenti_tblRentriImportazioni] FOREIGN KEY([IdImportazione])
 REFERENCES [dbo].[tblRentriImportazioni] ([Id])
 ON DELETE CASCADE

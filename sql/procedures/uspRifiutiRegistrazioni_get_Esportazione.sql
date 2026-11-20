@@ -30,6 +30,7 @@ CREATE OR ALTER PROCEDURE dbo.uspRifiutiRegistrazioni_get_Esportazione
 	@XfirAttesaAccettazione BIT = 0,
 	@XfirCopiaNonCaricata BIT = 0,
 	@XfirCopiaNonTrasmessa BIT = 0,
+	@ImportateRentri BIT = 0,
 	@MaxRighe INT = NULL
 AS
 BEGIN
@@ -220,6 +221,15 @@ BEGIN
 
 		IF @XfirCopiaNonTrasmessa = 1
 			SET @stmt = @stmt + N' AND m.RentriFormularioStato IS NOT NULL AND m.RentriFormularioDataTrasmissione IS NULL';
+
+		-- Importate da RENTRI: stesso filtro di uspRifiutiRegistrazioni_get_List
+		IF @ImportateRentri = 1
+			SET @stmt = @stmt + N' AND EXISTS (
+                SELECT 1
+                FROM dbo.tblRentriImportazioniMovimenti im
+                INNER JOIN dbo.tblRentriImportazioni ri ON im.IdImportazione = ri.Id
+                WHERE im.IdRegistrazione = r.Id AND im.Azione = ''I'' AND ri.Stato = ''E''
+            )';
 
 		SET @stmt = @stmt + N'
         ORDER BY r.Data DESC, r.Numero DESC

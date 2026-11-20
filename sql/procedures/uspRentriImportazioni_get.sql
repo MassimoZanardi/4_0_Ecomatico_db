@@ -66,7 +66,9 @@ BEGIN
 			m.DataCreazione,
 			m.DataAnalisi,
 			m.DataEsecuzione,
-			UtenteNome = LTRIM(RTRIM(CONCAT(u.Nome, ' ', u.Cognome))),
+			-- Account (email di accesso) di chi ha letto da RENTRI ed eseguito: resta anche se l'utente viene cancellato
+			-- (cancellazione logica, Lock = 4), con l'indicazione
+			UtenteAccount = CASE WHEN u.Email IS NULL THEN NULL WHEN u.Lock = 4 THEN CONCAT(u.Email, ' (utente cancellato)') ELSE u.Email END,
 			Movimenti = s.Movimenti,
 			DaImportare = s.DaImportare,
 			GiaPresenti = s.GiaPresenti,

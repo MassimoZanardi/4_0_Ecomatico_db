@@ -112,6 +112,10 @@ BEGIN
             UPDATE dbo.tblRifiutiLimiti SET IdRegistro = NULL WHERE IdRegistro = @IdRegistro;
             SET @limitiScollegati = @@ROWCOUNT;
 
+            -- Importazioni da RENTRI del registro (FK su IdRegistro, nessun ON DELETE CASCADE): anteprime e storico;
+            -- le tabelle figlie (movimenti, anomalie, soggetti, relazioni, causali) si cancellano a cascata
+            DELETE FROM dbo.tblRentriImportazioni WHERE IdRegistro = @IdRegistro;
+
             -- tblRentriRegistri è 1:1 a chiave condivisa (Id NOT NULL, nessun ON DELETE CASCADE):
             -- va rimosso prima, altrimenti la DELETE sottostante fallisce per violazione FK.
             DELETE FROM dbo.tblRentriRegistri WHERE Id = @IdRegistro;

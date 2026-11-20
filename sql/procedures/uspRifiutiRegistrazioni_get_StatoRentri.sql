@@ -11,6 +11,8 @@ GO
 -- RentriFormularioDataConservazione e' invece la conservazione del singolo xFIR ("RENTRI - Conservazione
 -- sostitutiva xFIR", Rifiuti/Registrazioni/Index), gia' su tblRifiutiMovimenti - cosa diversa dalla
 -- conservazione del registro nel suo insieme sopra (RentriDataInvioConservazione).
+-- Importazione*: registrazione creata da Rentri > Importazione (importazione eseguita, azione I); ImportazioneId
+-- (per aprirla in sola lettura) solo a chi ha il permesso sulla pagina dell'importazione (funzione RNT).
 CREATE OR ALTER PROCEDURE [dbo].[uspRifiutiRegistrazioni_get_StatoRentri]
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL
@@ -65,6 +67,12 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		DECLARE @permessoImportazione TINYINT;
+		EXEC dbo.uspSessione_get_FunzionePermesso
+			@Id = @IdSessione,
+			@IdFunzione = 'RNT',
+			@Permesso = @permessoImportazione OUTPUT;
+
 		SELECT
 			RentriData = r.RentriData,
 			RentriFormularioStato = m.RentriFormularioStato,
@@ -73,7 +81,10 @@ BEGIN
 			DataEsito = r.DataFineTrasporto,
 			RentriFormularioDataTrasmissione = m.RentriFormularioDataTrasmissione,
 			RentriDataInvioConservazione = cons.Data,
-			RentriFormularioDataConservazione = m.RentriFormularioDataConservazione
+			RentriFormularioDataConservazione = m.RentriFormularioDataConservazione,
+			ImportazioneId = IIF(ISNULL(@permessoImportazione, 0) >= 1, imp.Id, NULL),
+			ImportazioneData = imp.DataEsecuzione,
+			ImportazioneUtente = imp.UtenteAccount
 		FROM
 			dbo.tblRifiutiRegistrazioni r
 			INNER JOIN dbo.tblRifiutiMovimenti m ON r.IdMovimento = m.Id
@@ -88,6 +99,22 @@ BEGIN
 					AND c.Conservazione = 1
 				ORDER BY c.Data DESC
 			) cons
+			OUTER APPLY (
+				SELECT TOP 1
+					ri.Id,
+					ri.DataEsecuzione,
+					-- Account (email di accesso), anche di un utente cancellato (Lock = 4), con l'indicazione
+					UtenteAccount = CASE WHEN u.Email IS NULL THEN NULL WHEN u.Lock = 4 THEN CONCAT(u.Email, ' (utente cancellato)') ELSE u.Email END
+				FROM
+					dbo.tblRentriImportazioniMovimenti im
+					INNER JOIN dbo.tblRentriImportazioni ri ON im.IdImportazione = ri.Id
+					LEFT JOIN dbo.tblUtenti u ON ri.IdUtente = u.Id
+				WHERE
+					im.IdRegistrazione = r.Id
+					AND im.Azione = 'I'
+					AND ri.Stato = 'E'
+				ORDER BY ri.DataEsecuzione DESC
+			) imp
 		WHERE r.Id = @Id;
 
 	END TRY

@@ -355,6 +355,10 @@ BEGIN
 
             DELETE FROM dbo.tblRifiutiMovimenti WHERE Id IN (SELECT Id FROM #RifiutiMovimenti);
 
+            -- Importazioni da RENTRI dei registri (FK su IdRegistro, nessun ON DELETE CASCADE): anteprime e storico;
+            -- le tabelle figlie (movimenti, anomalie, soggetti, relazioni, causali) si cancellano a cascata
+            DELETE FROM dbo.tblRentriImportazioni WHERE IdRegistro IN (SELECT Id FROM #RifiutiRegistri);
+
             -- tblRentriRegistri è 1:1 a chiave condivisa su tblRifiutiRegistri.Id (NOT NULL, nessun
             -- ON DELETE CASCADE): va rimosso prima, altrimenti la DELETE sottostante fallisce per FK.
             DELETE FROM dbo.tblRentriRegistri  WHERE Id IN (SELECT Id FROM #RifiutiRegistri);

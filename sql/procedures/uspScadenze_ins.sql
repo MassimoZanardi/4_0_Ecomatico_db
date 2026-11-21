@@ -110,13 +110,28 @@ BEGIN
 				IF @OccorrenzaESuccessive = 1
 				BEGIN
 					-- Copia la ricorrenza dell'evento originale
+					-- Con un numero di ripetizioni la nuova serie ha solo quelle rimaste: si tolgono le occorrenze della
+					-- serie originale prima di @Data (n = posizione dell'occorrenza), altrimenti la serie si allungherebbe
 					INSERT INTO dbo.tblRicorrenze
 						(Id, IdParent, IdIntervallo, Frequenza, DataFine, Ripetizioni, Relativo)
 					SELECT
 						@returnIdEvento, @IdEvento,
-						IdIntervallo, Frequenza, DataFine, Ripetizioni, Relativo
-					FROM dbo.tblRicorrenze
-					WHERE Id = @IdEvento;
+						r.IdIntervallo, r.Frequenza, r.DataFine,
+						IIF(r.Ripetizioni > 0, IIF(r.Ripetizioni - n.Precedenti < 1, 1, r.Ripetizioni - n.Precedenti), r.Ripetizioni),
+						r.Relativo
+					FROM
+						dbo.tblRicorrenze r
+						INNER JOIN dbo.tblEventi e ON r.Id = e.Id
+						CROSS APPLY (
+							SELECT Precedenti = ISNULL(CASE r.IdIntervallo
+								WHEN 'DD' THEN DATEDIFF(DAY, e.[Data], @Data) / NULLIF(r.Frequenza, 0)
+								WHEN 'WK' THEN DATEDIFF(DAY, e.[Data], @Data) / NULLIF(7 * r.Frequenza, 0)
+								WHEN 'MM' THEN DATEDIFF(MONTH, e.[Data], @Data) / NULLIF(r.Frequenza, 0)
+								WHEN 'YY' THEN DATEDIFF(YEAR, e.[Data], @Data) / NULLIF(r.Frequenza, 0)
+								ELSE 0
+							END, 0)
+						) n
+					WHERE r.Id = @IdEvento;
 				END
 				ELSE
 				BEGIN

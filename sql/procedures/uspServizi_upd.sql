@@ -16,6 +16,7 @@ CREATE OR ALTER PROCEDURE [dbo].[uspServizi_upd]
 	@IdStato CHAR(1) = NULL,
 	@Data SMALLDATETIME = NULL,
 	@InGiornata BIT = 0,
+	@Durata INT = NULL,
 	@Ricorre BIT = 0,
 	@Avviso BIT = 0,
 	@AvvisoAnticipo INT = 0,
@@ -127,6 +128,25 @@ BEGIN
 				SET @returnValue = -1;
 				GOTO BRANCH_END;
 			END
+		END
+
+		-- Durata in minuti, facoltativa (NULL = non indicata): il servizio termina entro la mezzanotte del giorno di
+		-- inizio, cosi' non occupa il giorno successivo (vale anche per le occorrenze della serie, alla stessa ora).
+		-- "In giornata" non ha un'ora precisa: la durata arriva a 24 ore, qualunque sia l'ora rimasta nella data
+		IF @Durata IS NOT NULL AND @Durata <= 0
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'La durata del servizio deve essere maggiore di zero';
+			GOTO BRANCH_END;
+		END
+
+		IF @Durata IS NOT NULL
+		   AND DATEADD(MINUTE, @Durata, IIF(ISNULL(@InGiornata, 0) = 1, CAST(CAST(@Data AS DATE) AS DATETIME), CAST(@Data AS DATETIME)))
+			   > DATEADD(DAY, 1, CAST(CAST(@Data AS DATE) AS DATETIME))
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il servizio deve terminare entro la mezzanotte del giorno di inizio: ridurre la durata o anticipare l''ora';
+			GOTO BRANCH_END;
 		END
 
 		IF @Ricorre = 1 AND EXISTS (SELECT 1
@@ -268,9 +288,15 @@ BEGIN
 				FROM dbo.tblRicorrenze
 				WHERE Id = @IdEvento;
 
+				-- La serie originale finisce il giorno prima dell'occorrenza scelta (la data della nuova serie
+				-- prima del salvataggio, scritta da uspServizi_ins), anche se la nuova serie viene spostata
+				SELECT @minuti = DATEDIFF(MINUTE, [Data], @Data)
+				FROM dbo.tblEventi
+				WHERE Id = @IdEvento;
+
 				SET @dataFineParent =
 					DATEADD(MINUTE, 59, DATEADD(HOUR, 23,
-						DATEADD(DAY, DATEDIFF(DAY, 0, @Data), -1)));
+						DATEADD(DAY, DATEDIFF(DAY, 0, DATEADD(MINUTE, -ISNULL(@minuti, 0), @Data)), -1)));
 
 				UPDATE dbo.tblRicorrenze
 				SET
@@ -286,6 +312,36 @@ BEGIN
 					Ripetizioni = @Ripetizioni,
 					Relativo = @Relativo
 				WHERE Id = @IdEvento;
+
+				-- Le occorrenze cancellate o modificate della serie originale dalla data scelta in poi passano alla
+				-- nuova serie, spostate come la nuova serie (stessa regola della modifica di tutta la serie):
+				-- cancellate, una cancellata ricomparirebbe e una modificata sarebbe doppia. Se cambia la frequenza
+				-- le date non coincidono piu': passano solo le occorrenze modificate (eventi a se', S5.4)
+				INSERT dbo.tblRicorrenzeEccezioni (Id, [Data], IdEvento, Lock)
+				SELECT @IdEvento, DATEADD(MINUTE, ISNULL(@minuti, 0), z.[Data]), z.IdEvento, z.Lock
+				FROM
+					dbo.tblRicorrenzeEccezioni z
+					INNER JOIN dbo.tblRicorrenze p ON z.Id = p.Id
+				WHERE
+					z.Id = @idEventoParent
+					AND z.[Data] > @dataFineParent
+					AND
+						(
+						z.IdEvento IS NOT NULL
+						OR
+							(
+							p.IdIntervallo = @IdIntervallo
+							AND p.Frequenza = @Frequenza
+							AND p.Relativo = @Relativo
+							)
+						)
+					AND NOT EXISTS (
+						SELECT 1
+						FROM dbo.tblRicorrenzeEccezioni y
+						WHERE
+							y.Id = @IdEvento
+							AND y.[Data] = DATEADD(MINUTE, ISNULL(@minuti, 0), z.[Data])
+					);
 
 				DELETE dbo.tblRicorrenzeEccezioni
 				WHERE
@@ -349,7 +405,8 @@ BEGIN
 			SET
 				IdRichiedente = @IdRichiedente,
 				DataRichiesta = @DataRichiesta,
-				Descrizione = @Descrizione
+				Descrizione = @Descrizione,
+				Durata = @Durata
 			WHERE Id = @Id;
 
 			IF @@ROWCOUNT = 0

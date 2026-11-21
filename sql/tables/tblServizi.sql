@@ -11,6 +11,7 @@ CREATE TABLE [dbo].[tblServizi](
 	[IdRichiedente] [char](16) COLLATE Latin1_General_CI_AS NULL,
 	[DataRichiesta] [smalldatetime] NULL,
 	[Descrizione] [varchar](1000) COLLATE Latin1_General_CI_AS NULL,
+	[Durata] [int] NULL,
  CONSTRAINT [PK_tblServizi] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
@@ -50,4 +51,10 @@ REFERENCES [dbo].[tblTipi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblServizi] CHECK CONSTRAINT [FK_tblServizi_tblTipi]
+GO
+
+ALTER TABLE [dbo].[tblServizi]  WITH CHECK ADD  CONSTRAINT [CK_tblServizi_Durata] CHECK  (([Durata]>(0) AND [Durata]<=(1440)))
+GO
+
+ALTER TABLE [dbo].[tblServizi] CHECK CONSTRAINT [CK_tblServizi_Durata]
 GO

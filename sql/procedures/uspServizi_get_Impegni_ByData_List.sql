@@ -108,10 +108,13 @@ BEGIN
 		*   IG = colonna "In giornata" della vista Giorno
 		*   1D = giorno delle viste Settimana e Mese, tutti i servizi del giorno
 		*/
-		DECLARE @inizio SMALLDATETIME = IIF(@IdIntervallo = '1H', @DallaData, CAST(CAST(@DallaData AS DATE) AS SMALLDATETIME));
-		DECLARE @fine SMALLDATETIME = IIF(@IdIntervallo = '1H',
-			DATEADD(MINUTE, 59, @inizio),
-			DATEADD(MINUTE, 59, DATEADD(HOUR, 23, @inizio)));
+		-- Si leggono i servizi che iniziano nel giorno della cella: con la durata un servizio iniziato
+		-- prima dell'ora della cella puo' occuparla (termina sempre entro la mezzanotte, uspServizi_upd)
+		DECLARE @inizio SMALLDATETIME = CAST(CAST(@DallaData AS DATE) AS SMALLDATETIME);
+		DECLARE @fine SMALLDATETIME = DATEADD(MINUTE, 59, DATEADD(HOUR, 23, @inizio));
+		-- Ora della cella (1H): hh:00-hh:59
+		DECLARE @oraInizio SMALLDATETIME = DATEADD(HOUR, DATEPART(HOUR, @DallaData), @inizio);
+		DECLARE @oraFine SMALLDATETIME = DATEADD(HOUR, 1, @oraInizio);
 
 		-- Solo i calendari delle sedi accessibili all'utente in cui la risorsa e' impiegata:
 		-- i servizi degli altri calendari compaiono nella cella come "Occupato" ma non si elencano
@@ -144,7 +147,7 @@ BEGIN
 				END,
 				StatoDescrizione = e.Stato + IIF(e.IdStato IN ('D', 'I') AND e.[Data] < GETDATE(), ' - Scaduto', ''),
 				IdSerie = ISNULL(s2.Id, s.Id),
-				Descrizione = e.AvvisoTesto,
+				Descrizione = dbo.ufnServizi_get_Orario(e.[Data], e.InGiornata, s.Durata) + ' - ' + ISNULL(e.AvvisoTesto, ''),
 				s.IdEvento,
 				e.[Data],
 				e.Ricorre,
@@ -153,7 +156,16 @@ BEGIN
 				dbo.tblServizi s
 				INNER JOIN dbo.ufnEventi_get_List(@inizio, @fine, @IdCalendario, @IdTipo) e ON s.IdEvento = e.Id
 				INNER JOIN dbo.tblServiziOsepe o ON s.Id = o.Id
-				LEFT JOIN dbo.tblServizi s2 ON e.IdEccezione = s2.IdEvento
+				-- Serie dell'occorrenza modificata (sostituto di un'eccezione): "Tutta la serie" apre la serie, non la sola occorrenza
+				OUTER APPLY (
+					SELECT TOP (1) s3.Id
+					FROM dbo.tblRicorrenzeEccezioni zs
+					INNER JOIN dbo.tblServizi s3 ON zs.Id = s3.IdEvento
+					WHERE
+						zs.IdEvento = s.IdEvento
+						AND zs.Lock = 0
+						AND e.Ricorre = 0
+				) s2
 			WHERE
 				o.IdOsepe = @IdOsepe
 				AND e.IdStato <> 'A'
@@ -164,6 +176,10 @@ BEGIN
 						(
 						@IdIntervallo = '1H'
 						AND ISNULL(e.InGiornata, 0) = 0
+						-- Il servizio occupa l'ora se inizia prima della sua fine e finisce dopo il suo inizio;
+						-- senza durata conta il solo minuto di inizio
+						AND e.[Data] < @oraFine
+						AND DATEADD(MINUTE, ISNULL(s.Durata, 1), e.[Data]) > @oraInizio
 						)
 					OR
 						(

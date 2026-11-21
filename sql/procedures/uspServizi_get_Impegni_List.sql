@@ -144,22 +144,33 @@ BEGIN
 
 		-- Servizi del periodo per risorsa, annullati esclusi. La colonna (Data) e' l'inizio della
 		-- cella: l'ora (hh:00) nella vista Giorno, il giorno (00:00) nelle viste Settimana e Mese;
-		-- nella vista Giorno i servizi "In giornata" vanno nella colonna dedicata (InGiornata = 1)
+		-- nella vista Giorno i servizi "In giornata" vanno nella colonna dedicata (InGiornata = 1).
+		-- Durata (minuti, facoltativa): nella vista Giorno il servizio occupa ogni ora che tocca, dall'ora
+		-- di inizio a quella dell'ultimo minuto (h); senza durata la sola ora di inizio. Il servizio
+		-- termina entro la mezzanotte del giorno di inizio (uspServizi_upd), quindi resta nel suo giorno e
+		-- basta leggere i servizi che iniziano nel periodo. Durata del servizio di una serie: e' quella
+		-- della serie (s.IdEvento = e.Id, l'Id della serie per le occorrenze generate)
 		SELECT
 			IdOsepe = r.Id,
 			[Data] = CASE
 				WHEN @IdVista = 'G' AND ISNULL(e.InGiornata, 0) = 0
-					THEN DATEADD(HOUR, DATEDIFF(HOUR, @inizio, e.[Data]), @inizio)
+					THEN DATEADD(HOUR, h.value, CAST(CAST(e.[Data] AS DATE) AS SMALLDATETIME))
 				ELSE CAST(CAST(e.[Data] AS DATE) AS SMALLDATETIME)
 			END,
 			InGiornata = CAST(IIF(@IdVista = 'G' AND ISNULL(e.InGiornata, 0) = 1, 1, 0) AS BIT),
 			Scaduto = IIF(e.IdStato IN ('D', 'I') AND e.[Data] < GETDATE(), 1, 0),
 			Eseguito = IIF(e.IdStato = 'E', 1, 0),
-			Testo = CASE
-				WHEN v.Id IS NULL THEN 'Occupato'
-				WHEN @IdVista = 'G' THEN ISNULL(e.AvvisoTesto, '')
-				ELSE IIF(ISNULL(e.InGiornata, 0) = 1, 'In giornata', FORMAT(e.[Data], 'HH:mm')) + ' - ' + ISNULL(e.AvvisoTesto, '')
-			END
+			Minuti = ISNULL(s.Durata, 0),
+			Testo = dbo.ufnServizi_get_Orario(e.[Data], e.InGiornata, s.Durata) + ' - '
+				+ IIF(v.Id IS NULL, 'Occupato', ISNULL(e.AvvisoTesto, '')),
+			-- Occorrenza del servizio (le occorrenze generate di una serie hanno lo stesso servizio e date diverse)
+			-- con l'orario vero, per le sovrapposizioni: senza durata conta il solo minuto di inizio;
+			-- i servizi "In giornata" non hanno un'ora e non si confrontano (Oraria = 0)
+			IdServizio = s.Id,
+			Inizio = e.[Data],
+			Fine = DATEADD(MINUTE, ISNULL(s.Durata, 1), e.[Data]),
+			Oraria = IIF(ISNULL(e.InGiornata, 0) = 0, 1, 0),
+			Sovrapposto = 0
 		INTO #tEventi
 		FROM
 			dbo.ufnEventi_get_List(@inizio, @fine, @IdCalendario, @IdTipo) e
@@ -167,7 +178,34 @@ BEGIN
 			INNER JOIN dbo.tblServiziOsepe o ON s.Id = o.Id
 			INNER JOIN #tRisorse r ON o.IdOsepe = r.Id
 			LEFT JOIN #tCalendariVisibili v ON e.IdCalendario = v.Id
+			-- Ore occupate nella vista Giorno (una riga per ora); nelle altre viste e per "In giornata" una sola riga
+			CROSS APPLY GENERATE_SERIES(
+				DATEPART(HOUR, e.[Data]),
+				IIF(@IdVista = 'G' AND ISNULL(e.InGiornata, 0) = 0 AND s.Durata IS NOT NULL,
+					DATEPART(HOUR, DATEADD(MINUTE, s.Durata - 1, e.[Data])),
+					DATEPART(HOUR, e.[Data]))) h
 		WHERE e.IdStato <> 'A';
+
+		-- Sovrapposizioni vere: nella stessa cella un servizio e' sovrapposto se un altro servizio della risorsa
+		-- inizia prima della sua fine e finisce dopo il suo inizio. Due servizi in fila nella stessa ora
+		-- (09:00-09:30 e 09:30-10:00) contano come 2 eventi ma non sono sovrapposti
+		UPDATE a
+		SET Sovrapposto = 1
+		FROM #tEventi a
+		WHERE
+			a.Oraria = 1
+			AND EXISTS (
+				SELECT 1
+				FROM #tEventi b
+				WHERE
+					b.IdOsepe = a.IdOsepe
+					AND b.[Data] = a.[Data]
+					AND b.InGiornata = a.InGiornata
+					AND b.Oraria = 1
+					AND NOT (b.IdServizio = a.IdServizio AND b.Inizio = a.Inizio)
+					AND b.Inizio < a.Fine
+					AND a.Inizio < b.Fine
+			);
 
 		SELECT
 			r.Id AS IdOsepe,
@@ -178,6 +216,8 @@ BEGIN
 			Eventi = ISNULL(d.Eventi, 0),
 			Scaduti = ISNULL(d.Scaduti, 0),
 			Eseguiti = ISNULL(d.Eseguiti, 0),
+			Minuti = ISNULL(d.Minuti, 0),
+			Sovrapposti = ISNULL(d.Sovrapposti, 0),
 			d.Testo
 		FROM
 			#tRisorse r
@@ -189,6 +229,10 @@ BEGIN
 					Eventi = COUNT(*),
 					Scaduti = SUM(Scaduto),
 					Eseguiti = SUM(Eseguito),
+					-- Somma delle durate indicate (viste Settimana e Mese: ore impegnate nel giorno)
+					Minuti = SUM(Minuti),
+					-- Servizi della cella che si accavallano davvero con un altro
+					Sovrapposti = SUM(Sovrapposto),
 					-- Usato dalla cella solo quando c'e' un servizio
 					Testo = MAX(Testo)
 				FROM #tEventi

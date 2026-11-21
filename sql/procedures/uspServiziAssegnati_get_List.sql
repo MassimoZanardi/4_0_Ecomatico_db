@@ -121,9 +121,11 @@ BEGIN
                 Tipo             = t.Nome,
                 s.Descrizione,
                 Richiedente      = r.NomeCompleto + '' - '' + r.IndirizzoCompleto,
-                Etichette        = dbo.ufnEventi_get_Etichette(s.IdEvento)
+                -- Copia delle etichette sull evento (tblEventi.Etichette, come nelle Scadenze), non la funzione per ogni riga
+                Etichette        = ev.Etichette
             FROM
                 dbo.ufnEventi_get_Assegnati_List(@DallaData, @AllaData, @IdUtente, @IdCalendario) e
+                INNER JOIN dbo.tblEventi  ev ON e.Id          = ev.Id
                 INNER JOIN dbo.tblServizi s ON e.Id          = s.IdEvento
                 INNER JOIN dbo.tblSedi    r ON s.IdRichiedente = r.Id
                 INNER JOIN dbo.tblTipi    t ON s.IdTipo       = t.Id

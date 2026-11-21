@@ -58,6 +58,7 @@ BEGIN
 			e.[Data],
 			Scaduto = IIF(e.IdStato IN ('D', 'I') AND e.[Data] < GETDATE(), 1, 0),
 			Eseguito = IIF(e.IdStato = 'E', 1, 0),
+			Annullato = IIF(e.IdStato = 'A', 1, 0),
 			AvvisoTesto = e.AvvisoTesto
 		INTO #tEventi
 		FROM dbo.ufnEventi_get_List(@DallaData, @AllaData, @IdCalendario, @IdTipo) e;
@@ -74,7 +75,7 @@ BEGIN
 			FROM GENERATE_SERIES(0, 23, 1)
 		),
 		cteDati AS (
-			SELECT c.[Data], c.Ora, s.Id, t.IdEvento, t.Scaduto, t.Eseguito, t.AvvisoTesto
+			SELECT c.[Data], c.Ora, s.Id, t.IdEvento, t.Scaduto, t.Eseguito, t.Annullato, t.AvvisoTesto
 			FROM
 				cteCalendario c
 				LEFT JOIN #tEventi t ON t.[Data] BETWEEN c.[Data] AND c.DataFine
@@ -82,12 +83,13 @@ BEGIN
 		)
 		SELECT
 			t0.Ora,
-			Dati = '{"MenuNuovo":"Nuova scadenza","Eventi":' + CAST(t0.Eventi AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t0.[Data], 'yyyy-MM-ddTHH:mm:ssZ'), '') + '","Scaduti":' + CAST(ISNULL(t0.Scaduti,0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t0.Eseguiti,0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t0.Testo,''), '"', '\"') + '"}'
+			Dati = '{"MenuNuovo":"Nuova scadenza","Eventi":' + CAST(t0.Eventi AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t0.[Data], 'yyyy-MM-ddTHH:mm:ssZ'), '') + '","Scaduti":' + CAST(ISNULL(t0.Scaduti,0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t0.Eseguiti,0) AS VARCHAR(10)) + ',"Annullati":' + CAST(ISNULL(t0.Annullati,0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t0.Testo,''), '"', '\"') + '"}'
 		FROM (
 			SELECT [Data], Ora,
 				Eventi = COUNT(Id),
 				Scaduti = SUM(ISNULL(Scaduto, 0)),
 				Eseguiti = SUM(ISNULL(Eseguito, 0)),
+				Annullati = SUM(ISNULL(Annullato, 0)),
 				Testo = MAX(AvvisoTesto)
 			FROM cteDati
 			GROUP BY [Data], Ora

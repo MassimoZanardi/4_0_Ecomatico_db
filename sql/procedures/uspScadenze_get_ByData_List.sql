@@ -91,7 +91,16 @@ BEGIN
 				dbo.tblScadenze s
 				INNER JOIN dbo.ufnEventi_get_List(@DallaData, @AllaData, @IdCalendario, @IdTipo) e
 					ON s.IdEvento = e.Id
-				LEFT JOIN dbo.tblScadenze s2 ON e.IdEccezione = s2.IdEvento
+				-- Serie dell'occorrenza modificata (sostituto di un'eccezione): "Tutta la serie" apre la serie, non la sola occorrenza
+				OUTER APPLY (
+					SELECT TOP (1) s3.Id
+					FROM dbo.tblRicorrenzeEccezioni zs
+					INNER JOIN dbo.tblScadenze s3 ON zs.Id = s3.IdEvento
+					WHERE
+						zs.IdEvento = s.IdEvento
+						AND zs.Lock = 0
+						AND e.Ricorre = 0
+				) s2
 		)
 		SELECT
 			tbl.Id, tbl.StatoValore, tbl.StatoDescrizione,

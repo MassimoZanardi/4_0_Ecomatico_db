@@ -118,7 +118,13 @@ BEGIN
                 INNER JOIN dbo.tblTipi t ON s.IdTipo = t.Id
                 INNER JOIN dbo.ufnEventi_get_List(@DallaData, @AllaData, @IdCalendario, @IdTipo) e
                     ON s.IdEvento = e.Id
-                LEFT  JOIN dbo.tblScadenze s2 ON e.IdEccezione = s2.IdEvento
+                -- Serie della occorrenza modificata (sostituto di una eccezione): con Tutta la serie si apre la serie
+                OUTER APPLY (
+                    SELECT TOP (1) s3.Id
+                    FROM dbo.tblRicorrenzeEccezioni zs
+                    INNER JOIN dbo.tblScadenze s3 ON zs.Id = s3.IdEvento
+                    WHERE zs.IdEvento = s.IdEvento AND zs.Lock = 0 AND e.Ricorre = 0
+                ) s2
             WHERE 1 = 1';
 
 		IF @Etichetta IS NOT NULL

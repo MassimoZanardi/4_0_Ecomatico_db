@@ -82,7 +82,7 @@ BEGIN
 				END,
 				StatoDescrizione = e.Stato + IIF(e.IdStato IN ('D', 'I') AND e.[Data] < GETDATE(), ' - Scaduto', ''),
 				IdSerie = ISNULL(s2.Id, s.Id),
-				Descrizione = e.AvvisoTesto,
+				Descrizione = dbo.ufnServizi_get_Orario(e.[Data], e.InGiornata, s.Durata) + ' - ' + ISNULL(e.AvvisoTesto, ''),
 				s.IdEvento,
 				e.[Data],
 				e.Ricorre,
@@ -91,7 +91,16 @@ BEGIN
 				dbo.tblServizi s
 				INNER JOIN dbo.ufnEventi_get_List(@DallaData, @AllaData, @IdCalendario, @IdTipo) e
 					ON s.IdEvento = e.Id
-				LEFT JOIN dbo.tblServizi s2 ON e.IdEccezione = s2.IdEvento
+				-- Serie dell'occorrenza modificata (sostituto di un'eccezione): "Tutta la serie" apre la serie, non la sola occorrenza
+				OUTER APPLY (
+					SELECT TOP (1) s3.Id
+					FROM dbo.tblRicorrenzeEccezioni zs
+					INNER JOIN dbo.tblServizi s3 ON zs.Id = s3.IdEvento
+					WHERE
+						zs.IdEvento = s.IdEvento
+						AND zs.Lock = 0
+						AND e.Ricorre = 0
+				) s2
 		)
 		SELECT
 			tbl.Id, tbl.StatoValore, tbl.StatoDescrizione,

@@ -117,6 +117,23 @@ BEGIN
 			END
 		END
 
+		-- La durata non si cambia da qui (la decide chi gestisce i Servizi), ma con la nuova data e ora il servizio
+		-- deve ancora terminare entro la mezzanotte del giorno di inizio (regola di uspServizi_upd)
+		IF EXISTS (
+			SELECT 1
+			FROM dbo.tblServizi
+			WHERE
+				Id = @Id
+				AND Durata IS NOT NULL
+				AND ISNULL(@InGiornata, 0) = 0
+				AND DATEADD(MINUTE, Durata, CAST(@Data AS DATETIME)) > DATEADD(DAY, 1, CAST(CAST(@Data AS DATE) AS DATETIME))
+		)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il servizio deve terminare entro la mezzanotte del giorno di inizio: con la sua durata non può iniziare a quest''ora';
+			GOTO BRANCH_END;
+		END
+
 		IF @FirmaRichiedente IS NOT NULL
 			SELECT @idFirmaRichiedente = IdFirma
 			FROM dbo.tblEventiFirme

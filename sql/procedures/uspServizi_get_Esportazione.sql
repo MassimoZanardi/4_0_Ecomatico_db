@@ -40,10 +40,11 @@ BEGIN
 			Ricorre BIT NULL,
 			Eccezione BIT NULL,
 			Etichette VARCHAR(MAX) COLLATE DATABASE_DEFAULT NULL,
+			Durata INT NULL,
 			RowsCount INT NULL
 		);
 
-		INSERT INTO #righe (Id, StatoValore, StatoDescrizione, IdSerie, Tipo, Descrizione, Richiedente, IdEvento, [Data], Ricorre, Eccezione, Etichette, RowsCount)
+		INSERT INTO #righe (Id, StatoValore, StatoDescrizione, IdSerie, Tipo, Descrizione, Richiedente, IdEvento, [Data], Ricorre, Eccezione, Etichette, Durata, RowsCount)
 		EXEC dbo.uspServizi_get_List
 			@PageNumber = 1,
 			@RowsPerPage = @righe,
@@ -56,6 +57,8 @@ BEGIN
 
 		SELECT
 			[Data] = [Data],
+			-- Durata in ore (numero, 2:30 = 2,5), vuota se non indicata (esportazione.md, E3.5)
+			[Durata (ore)] = CAST(Durata / 60.0 AS DECIMAL(6, 2)),
 			[Tipo] = Tipo,
 			[Descrizione] = Descrizione,
 			[Richiedente] = Richiedente,

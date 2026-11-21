@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE [dbo].[uspServizi_ins]
+﻿CREATE OR ALTER PROCEDURE [dbo].[uspServizi_ins]
 	@IdSessione CHAR(16) = NULL,
 	@IdTipo CHAR(16) = NULL,
 	@IdEvento CHAR(16) = NULL,
@@ -115,13 +115,29 @@ BEGIN
 				IF @OccorrenzaESuccessive = 1
 				BEGIN
 					-- Copia la ricorrenza dell'evento originale
+					-- Con un numero di ripetizioni la nuova serie ha solo quelle rimaste: si tolgono le occorrenze della
+					-- serie originale prima di @Data (n = posizione dell'occorrenza), altrimenti la serie si allungherebbe
+					-- (7 volte dall'8 divisa al 12 = 12, 13, 14, non 7 volte dal 12)
 					INSERT INTO dbo.tblRicorrenze
 						(Id, IdParent, IdIntervallo, Frequenza, DataFine, Ripetizioni, Relativo)
 					SELECT
 						@returnIdEvento, @IdEvento,
-						IdIntervallo, Frequenza, DataFine, Ripetizioni, Relativo
-					FROM dbo.tblRicorrenze
-					WHERE Id = @IdEvento;
+						r.IdIntervallo, r.Frequenza, r.DataFine,
+						IIF(r.Ripetizioni > 0, IIF(r.Ripetizioni - n.Precedenti < 1, 1, r.Ripetizioni - n.Precedenti), r.Ripetizioni),
+						r.Relativo
+					FROM
+						dbo.tblRicorrenze r
+						INNER JOIN dbo.tblEventi e ON r.Id = e.Id
+						CROSS APPLY (
+							SELECT Precedenti = ISNULL(CASE r.IdIntervallo
+								WHEN 'DD' THEN DATEDIFF(DAY, e.[Data], @Data) / NULLIF(r.Frequenza, 0)
+								WHEN 'WK' THEN DATEDIFF(DAY, e.[Data], @Data) / NULLIF(7 * r.Frequenza, 0)
+								WHEN 'MM' THEN DATEDIFF(MONTH, e.[Data], @Data) / NULLIF(r.Frequenza, 0)
+								WHEN 'YY' THEN DATEDIFF(YEAR, e.[Data], @Data) / NULLIF(r.Frequenza, 0)
+								ELSE 0
+							END, 0)
+						) n
+					WHERE r.Id = @IdEvento;
 				END
 				ELSE
 				BEGIN
@@ -136,8 +152,8 @@ BEGIN
 				END
 
 				-- Copia il servizio originale (TOP 1: relazione 1:1 evento-servizio)
-				INSERT INTO dbo.tblServizi (Id, IdEvento, IdTipo, IdRichiedente, DataRichiesta, Descrizione)
-				SELECT TOP 1 @returnId, @returnIdEvento, IdTipo, IdRichiedente, DataRichiesta, Descrizione
+				INSERT INTO dbo.tblServizi (Id, IdEvento, IdTipo, IdRichiedente, DataRichiesta, Descrizione, Durata)
+				SELECT TOP 1 @returnId, @returnIdEvento, IdTipo, IdRichiedente, DataRichiesta, Descrizione, Durata
 				FROM dbo.tblServizi
 				WHERE IdEvento = @IdEvento;
 

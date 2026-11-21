@@ -58,9 +58,13 @@ BEGIN
 			e.[Data],
 			Scaduto = IIF(e.IdStato IN ('D', 'I') AND e.[Data] < GETDATE(), 1, 0),
 			Eseguito = IIF(e.IdStato = 'E', 1, 0),
-			AvvisoTesto = FORMAT(e.[Data], 'HH:mm') + ' - ' + e.AvvisoTesto
+			Annullato = IIF(e.IdStato = 'A', 1, 0),
+			-- Orario del servizio (inizio e fine con la durata, "In giornata" senza ora)
+			AvvisoTesto = dbo.ufnServizi_get_Orario(e.[Data], e.InGiornata, s.Durata) + ' - ' + ISNULL(e.AvvisoTesto, '')
 		INTO #tEventi
-		FROM dbo.ufnEventi_get_List(@DallaData, @AllaData, @IdCalendario, @IdTipo) e;
+		FROM
+			dbo.ufnEventi_get_List(@DallaData, @AllaData, @IdCalendario, @IdTipo) e
+			LEFT JOIN dbo.tblServizi s ON e.Id = s.IdEvento;
 
 		CREATE INDEX IX_tEventi_Data ON #tEventi ([Data]);
 
@@ -74,7 +78,7 @@ BEGIN
 			FROM GENERATE_SERIES(0, 41, 1)
 		),
 		cteDati AS (
-			SELECT c.[Data], c.Giorno, c.Settimana, s.Id, t.IdEvento, t.Scaduto, t.Eseguito, t.AvvisoTesto
+			SELECT c.[Data], c.Giorno, c.Settimana, s.Id, t.IdEvento, t.Scaduto, t.Eseguito, t.Annullato, t.AvvisoTesto
 			FROM
 				cteCalendario c
 				LEFT JOIN #tEventi t ON t.[Data] BETWEEN c.[Data] AND c.DataFine
@@ -82,13 +86,13 @@ BEGIN
 		)
 		SELECT
 			Riferimento = t0.Settimana,
-			Lun = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[1] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[1], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[1],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[1],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[1],''), '"', '\"') + '"}',
-			Mar = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[2] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[2], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[2],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[2],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[2],''), '"', '\"') + '"}',
-			Mer = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[3] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[3], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[3],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[3],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[3],''), '"', '\"') + '"}',
-			Gio = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[4] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[4], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[4],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[4],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[4],''), '"', '\"') + '"}',
-			Ven = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[5] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[5], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[5],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[5],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[5],''), '"', '\"') + '"}',
-			Sab = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[6] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[6], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[6],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[6],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[6],''), '"', '\"') + '"}',
-			Dom = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[7] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[7], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[7],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[7],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[7],''), '"', '\"') + '"}'
+			Lun = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[1] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[1], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[1],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[1],0) AS VARCHAR(10)) + ',"Annullati":' + CAST(ISNULL(t5.[1],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[1],''), '"', '\"') + '"}',
+			Mar = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[2] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[2], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[2],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[2],0) AS VARCHAR(10)) + ',"Annullati":' + CAST(ISNULL(t5.[2],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[2],''), '"', '\"') + '"}',
+			Mer = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[3] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[3], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[3],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[3],0) AS VARCHAR(10)) + ',"Annullati":' + CAST(ISNULL(t5.[3],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[3],''), '"', '\"') + '"}',
+			Gio = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[4] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[4], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[4],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[4],0) AS VARCHAR(10)) + ',"Annullati":' + CAST(ISNULL(t5.[4],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[4],''), '"', '\"') + '"}',
+			Ven = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[5] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[5], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[5],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[5],0) AS VARCHAR(10)) + ',"Annullati":' + CAST(ISNULL(t5.[5],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[5],''), '"', '\"') + '"}',
+			Sab = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[6] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[6], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[6],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[6],0) AS VARCHAR(10)) + ',"Annullati":' + CAST(ISNULL(t5.[6],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[6],''), '"', '\"') + '"}',
+			Dom = '{"MenuNuovo":"Nuovo servizio","Eventi":' + CAST(t0.[7] AS VARCHAR(10)) + ',"Data":"' + ISNULL(FORMAT(t1.[7], 'yyyy-MM-dd'), '') + '","Scaduti":' + CAST(ISNULL(t2.[7],0) AS VARCHAR(10)) + ',"Eseguiti":' + CAST(ISNULL(t3.[7],0) AS VARCHAR(10)) + ',"Annullati":' + CAST(ISNULL(t5.[7],0) AS VARCHAR(10)) + ',"Testo":"' + REPLACE(ISNULL(t4.[7],''), '"', '\"') + '"}'
 		FROM
 			(SELECT Settimana,[1],[2],[3],[4],[5],[6],[7]
 			FROM (SELECT Giorno,Settimana,Id
@@ -102,6 +106,9 @@ BEGIN
 			LEFT JOIN (SELECT Settimana,[1],[2],[3],[4],[5],[6],[7]
 			FROM (SELECT Giorno,Settimana,Eseguito=ISNULL(Eseguito,0)
 			FROM cteDati) t PIVOT (SUM(Eseguito) FOR Giorno IN ([1],[2],[3],[4],[5],[6],[7])) p) t3 ON t0.Settimana=t3.Settimana
+			LEFT JOIN (SELECT Settimana,[1],[2],[3],[4],[5],[6],[7]
+			FROM (SELECT Giorno,Settimana,Annullato=ISNULL(Annullato,0)
+			FROM cteDati) t PIVOT (SUM(Annullato) FOR Giorno IN ([1],[2],[3],[4],[5],[6],[7])) p) t5 ON t0.Settimana=t5.Settimana
 			LEFT JOIN (SELECT Settimana,[1],[2],[3],[4],[5],[6],[7]
 			FROM (SELECT Giorno,Settimana,AvvisoTesto
 			FROM cteDati) t PIVOT (MAX(AvvisoTesto) FOR Giorno IN ([1],[2],[3],[4],[5],[6],[7])) p) t4 ON t0.Settimana=t4.Settimana

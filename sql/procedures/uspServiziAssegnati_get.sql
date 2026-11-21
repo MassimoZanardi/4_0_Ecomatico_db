@@ -73,6 +73,7 @@ BEGIN
 			IdStato = ISNULL(e.IdStato, 'D'),
 			[Data] = ISNULL(e.[Data], DATEADD(MINUTE, ((DATEDIFF(MINUTE, 0, GETDATE()) / 30) * 30), 0)),
 			InGiornata = ISNULL(e.InGiornata, 0),
+			s.Durata,
 			e.Lock,
 			Proprieta = dbo.ufnEventi_get_TipoProprieta(s.IdEvento, s.IdTipo),
 			FirmaRichiedente = fr.Firma

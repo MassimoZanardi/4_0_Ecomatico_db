@@ -110,6 +110,7 @@ BEGIN
 			Tipo = t.Nome,
 			e.[Data],
 			e.InGiornata,
+			s.Durata,
 			s.DataRichiesta,
 			Stato = st.Nome,
 			s.Descrizione,

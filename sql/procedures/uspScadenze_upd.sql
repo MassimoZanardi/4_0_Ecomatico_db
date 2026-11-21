@@ -227,9 +227,15 @@ BEGIN
 				FROM dbo.tblRicorrenze
 				WHERE Id = @IdEvento;
 
+				-- La serie originale finisce il giorno prima dell'occorrenza scelta (la data della nuova serie
+				-- prima del salvataggio, scritta da uspScadenze_ins), anche se la nuova serie viene spostata
+				SELECT @minuti = DATEDIFF(MINUTE, [Data], @Data)
+				FROM dbo.tblEventi
+				WHERE Id = @IdEvento;
+
 				SET @dataFineParent =
 					DATEADD(MINUTE, 59, DATEADD(HOUR, 23,
-						DATEADD(DAY, DATEDIFF(DAY, 0, @Data), -1)));
+						DATEADD(DAY, DATEDIFF(DAY, 0, DATEADD(MINUTE, -ISNULL(@minuti, 0), @Data)), -1)));
 
 				UPDATE dbo.tblRicorrenze
 				SET
@@ -245,6 +251,36 @@ BEGIN
 					Ripetizioni = @Ripetizioni,
 					Relativo = @Relativo
 				WHERE Id = @IdEvento;
+
+				-- Le occorrenze cancellate o modificate della serie originale dalla data scelta in poi passano alla
+				-- nuova serie, spostate come la nuova serie (stessa regola della modifica di tutta la serie):
+				-- cancellate, una cancellata ricomparirebbe e una modificata sarebbe doppia. Se cambia la frequenza
+				-- le date non coincidono piu': passano solo le occorrenze modificate (eventi a se', S5.4)
+				INSERT dbo.tblRicorrenzeEccezioni (Id, [Data], IdEvento, Lock)
+				SELECT @IdEvento, DATEADD(MINUTE, ISNULL(@minuti, 0), z.[Data]), z.IdEvento, z.Lock
+				FROM
+					dbo.tblRicorrenzeEccezioni z
+					INNER JOIN dbo.tblRicorrenze p ON z.Id = p.Id
+				WHERE
+					z.Id = @idEventoParent
+					AND z.[Data] > @dataFineParent
+					AND
+						(
+						z.IdEvento IS NOT NULL
+						OR
+							(
+							p.IdIntervallo = @IdIntervallo
+							AND p.Frequenza = @Frequenza
+							AND p.Relativo = @Relativo
+							)
+						)
+					AND NOT EXISTS (
+						SELECT 1
+						FROM dbo.tblRicorrenzeEccezioni y
+						WHERE
+							y.Id = @IdEvento
+							AND y.[Data] = DATEADD(MINUTE, ISNULL(@minuti, 0), z.[Data])
+					);
 
 				DELETE dbo.tblRicorrenzeEccezioni
 				WHERE

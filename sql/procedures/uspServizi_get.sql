@@ -76,6 +76,7 @@ BEGIN
 			IdStato = ISNULL(e.IdStato, 'D'),
 			[Data] = ISNULL(e.[Data], DATEADD(MINUTE, ((DATEDIFF(MINUTE, 0, GETDATE()) / 30) * 30), 0)),
 			InGiornata = ISNULL(e.InGiornata, 0),
+			s.Durata,
 			Ricorre = CAST(IIF(r.Id IS NULL, 0, 1) AS BIT),
 			Avviso = CAST(IIF(e.AvvisoAnticipo IS NULL, 0, 1) AS BIT),
 			Email = ISNULL(e.Email, ''),

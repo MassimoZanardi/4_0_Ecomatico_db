@@ -9,6 +9,7 @@ CREATE OR ALTER PROCEDURE dbo.uspFatture_get_List
 	@Tipo CHAR(1) = NULL,
 	@Nome VARCHAR(50) = NULL,
 	@Numero VARCHAR(30) = NULL,
+	@Amministratore VARCHAR(50) = NULL,
 	@DataDa DATE = NULL,
 	@DataA DATE = NULL,
 	@IdTipo CHAR(4) = NULL,
@@ -24,6 +25,7 @@ BEGIN
 		SET @Tipo = UPPER(NULLIF(LTRIM(RTRIM(@Tipo)), ''));
 		SET @Nome = dbo.ufnStringhe_get_SenzaSpazi(@Nome, 0, 1);
 		SET @Numero = NULLIF(LTRIM(RTRIM(@Numero)), '');
+		SET @Amministratore = dbo.ufnStringhe_get_SenzaSpazi(@Amministratore, 0, 1);
 		SET @IdTipo = NULLIF(NULLIF(LTRIM(RTRIM(@IdTipo)), ''), REPLICATE('0', 4));
 		SET @IdStato = NULLIF(NULLIF(LTRIM(RTRIM(@IdStato)), ''), '0');
 
@@ -82,6 +84,24 @@ BEGIN
 				AND f.Tipo = @Tipo
 				AND f.Lock = 0
 				AND (@Nome IS NULL OR s.NomeCompleto LIKE '%' + @Nome + '%')
+				-- Amministratore (fatture clienti): solo i clienti amministrati da un amministratore attivo dell'azienda
+				-- della fattura il cui nome contiene il testo, senza guardare le date dell'incarico (come Anagrafica > Soggetti)
+				AND
+					(
+					@Amministratore IS NULL
+					OR EXISTS (
+						SELECT 1
+						FROM
+							dbo.tblAmministratoriSedi ax
+							INNER JOIN dbo.tblAmministratori am ON ax.Id = am.Id
+							INNER JOIN dbo.tblSedi ams ON am.IdSede = ams.Id
+						WHERE
+							ax.IdSede = c.IdSede
+							AND am.IdAziendaInterna = f.IdSede
+							AND am.Lock = 0
+							AND ams.NomeCompleto LIKE '%' + @Amministratore + '%'
+						)
+					)
 				AND
 					(
 					@Numero IS NULL

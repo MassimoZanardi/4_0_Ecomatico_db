@@ -68,16 +68,18 @@ BEGIN
 
 		SET @DallaData = DATEADD(DAY, DATEDIFF(DAY, 0, @DallaData), 0);
 
-		DECLARE @AllaData SMALLDATETIME = CASE
-			WHEN @IdIntervallo = '1D' THEN DATEADD(MINUTE, 59, DATEADD(HOUR, 23, @DallaData))
-			WHEN @IdIntervallo = '1W' THEN DATEADD(MINUTE, 59, DATEADD(HOUR, 23, DATEADD(WEEK, 1, @DallaData)))
-			WHEN @IdIntervallo = '2W' THEN DATEADD(MINUTE, 59, DATEADD(HOUR, 23, DATEADD(WEEK, 2, @DallaData)))
-			WHEN @IdIntervallo = '1M' THEN DATEADD(MINUTE, 59, DATEADD(HOUR, 23, DATEADD(MONTH, 1, @DallaData)))
-			WHEN @IdIntervallo = '2M' THEN DATEADD(MINUTE, 59, DATEADD(HOUR, 23, DATEADD(MONTH, 2, @DallaData)))
-			WHEN @IdIntervallo = '6M' THEN DATEADD(MINUTE, 59, DATEADD(HOUR, 23, DATEADD(MONTH, 6, @DallaData)))
-			WHEN @IdIntervallo = '1Y' THEN DATEADD(MINUTE, 59, DATEADD(HOUR, 23, DATEADD(YEAR, 1, @DallaData)))
-			ELSE DATEADD(MINUTE, 59, DATEADD(HOUR, 23, @DallaData))
-		END;
+		-- Periodo esatto: dalla data (00:00) per l'intervallo, fine esclusa (1 giorno = il solo giorno della data,
+		-- 1 settimana = 7 giorni), come uspServizi_get_Impegni_Elenco_List. Fino al 2026-11-22 arrivava alla fine
+		-- del giorno dopo l'intervallo (docs/regole/scadenze-servizi.md S4.7.5)
+		DECLARE @AllaData SMALLDATETIME = DATEADD(MINUTE, -1, CASE
+			WHEN @IdIntervallo = '1W' THEN DATEADD(WEEK, 1, @DallaData)
+			WHEN @IdIntervallo = '2W' THEN DATEADD(WEEK, 2, @DallaData)
+			WHEN @IdIntervallo = '1M' THEN DATEADD(MONTH, 1, @DallaData)
+			WHEN @IdIntervallo = '2M' THEN DATEADD(MONTH, 2, @DallaData)
+			WHEN @IdIntervallo = '6M' THEN DATEADD(MONTH, 6, @DallaData)
+			WHEN @IdIntervallo = '1Y' THEN DATEADD(YEAR, 1, @DallaData)
+			ELSE DATEADD(DAY, 1, @DallaData)
+		END);
 
 		DECLARE @Offset INT = (@PageNumber - 1) * @RowsPerPage;
 

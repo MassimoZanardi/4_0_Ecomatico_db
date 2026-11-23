@@ -101,6 +101,13 @@ BEGIN
 				FROM dbo.tblEventi
 				WHERE Id = @IdEvento;
 
+				-- Copia le proprieta' dell'evento originale (come uspServizi_ins: fino al 2026-11-23 non venivano
+				-- copiate e l'occorrenza modificata perdeva i valori delle proprieta' del tipo)
+				INSERT INTO dbo.tblEventiProprieta (Id, IdProprieta, Valore)
+				SELECT @returnIdEvento, IdProprieta, Valore
+				FROM dbo.tblEventiProprieta
+				WHERE Id = @IdEvento;
+
 				-- Copia le etichette dell'evento originale
 				INSERT INTO dbo.tblEventiEtichette (Id, IdEtichetta)
 				SELECT @returnIdEvento, IdEtichetta

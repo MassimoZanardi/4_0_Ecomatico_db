@@ -102,7 +102,8 @@ BEGIN
 			Richiedente = r.NomeCompleto,
 			Indirizzo = r.IndirizzoCompleto,
 			ev.Etichette,
-			-- Proprieta' del tipo compilate (con un valore) e in tutto, per l'icona della scheda
+			-- Proprieta' del tipo compilate (con un valore) e in tutto, per l'icona della scheda. Le caselle si/no (tipo dato
+			-- B) non contano: la scheda le salva sempre (false se non spuntate) e "no" e' gia' una risposta
 			ProprietaCompilate = ISNULL(p.Compilate, 0),
 			ProprietaTotali = ISNULL(p.Totali, 0)
 		FROM
@@ -118,9 +119,11 @@ BEGIN
 				FROM
 					dbo.tblTipiProprieta tp
 					LEFT JOIN dbo.tblEventiProprieta v ON v.Id = e.Id AND v.IdProprieta = tp.IdProprieta
+					INNER JOIN dbo.tblProprieta pr ON tp.IdProprieta = pr.Id
 				WHERE
 					tp.Id = s.IdTipo
 					AND tp.Lock = 0
+					AND pr.IdTipoDato <> 'B'
 			) p
 		ORDER BY
 			e.[Data],

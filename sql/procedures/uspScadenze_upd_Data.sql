@@ -176,8 +176,7 @@ BEGIN
 			BEGIN TRANSACTION;
 
 				-- Copia dell'occorrenza come in uspScadenze_ins (ramo della singola occorrenza), gia' alla nuova data e
-				-- senza bozza (Lock = 0): non passa dalla scheda. Copia anche le proprieta' del tipo, che
-				-- uspScadenze_ins non copia (uspServizi_ins si')
+				-- senza bozza (Lock = 0): non passa dalla scheda. Proprieta' del tipo comprese
 				INSERT INTO dbo.tblEventi
 					(Id, IdCalendario, IdStato, IdTipo, [Data], InGiornata, AvvisoAnticipo, Email, Avviso, Etichette, Lock)
 				SELECT

@@ -3,17 +3,24 @@
 	@IdEvento CHAR(16) = NULL,
 	@DataOccorrenza SMALLDATETIME = NULL,
 	@DataCella SMALLDATETIME = NULL,
-	@IdIntervallo CHAR(2) = NULL
+	@IdIntervallo CHAR(2) = NULL,
+	@IdOsepeDa CHAR(16) = NULL,
+	@IdOsepeA CHAR(16) = NULL
 AS
 -- Sposta un servizio nella cella di un'altra data e ora (trascinamento nel calendario, S4.7.6): cambia solo la data,
 -- il resto del servizio resta com'e'. @IdEvento e @DataOccorrenza (la data del servizio o dell'occorrenza) sono quelli
--- della cella di partenza, letti con uspServizi_get_ByData_List; @DataCella e' l'inizio della cella di arrivo, @IdIntervallo
--- la sua ampiezza: '1H' l'ora delle viste Giorno e Settimana (nuova ora = ora della cella con i minuti del servizio),
--- '1D' il giorno della vista Mese (cambia solo il giorno). Il servizio "In giornata" cambia sempre solo il giorno.
--- Per un'occorrenza di una serie ricorrente si sposta la sola occorrenza, che diventa un'occorrenza modificata
--- (eccezione con un evento sostituto, come "Solo questa occorrenza" della scheda, S5.3): la serie non si sposta mai
--- trascinando. Si spostano solo i servizi da eseguire o in esecuzione. Restituisce l'Id del servizio spostato
--- (il nuovo, per un'occorrenza).
+-- del servizio trascinato; @DataCella e' l'inizio della cella di arrivo, @IdIntervallo la sua ampiezza: '1H' l'ora delle
+-- viste Giorno e Settimana (nuova ora = ora della cella con i minuti del servizio), '1D' il giorno (vista Mese e fascia
+-- In giornata: cambia solo il giorno). Il servizio "In giornata" cambia sempre solo il giorno.
+-- Impegni per risorsa (S9.10): con @IdOsepeDa (risorsa della colonna di partenza) e @IdOsepeA (risorsa della colonna di
+-- arrivo) diverse cambia anche la risorsa, nella stessa transazione: stesso tipo (persona con persona, oggetto con
+-- oggetto), Da ancora nel servizio, A impiegabile come in uspServizi_ins_Osepe (S4.5.1); A prende la quantita' di Da,
+-- oppure, se e' gia' nel servizio, si toglie solo Da.
+-- Per un'occorrenza di una serie ricorrente si cambia la sola occorrenza, che diventa un'occorrenza modificata
+-- (eccezione con un evento sostituto, come "Solo questa occorrenza" della scheda, S5.3): la serie non si cambia mai
+-- trascinando. Si spostano solo i servizi da eseguire o in esecuzione. Restituisce l'Id del servizio (il nuovo, per
+-- un'occorrenza) ed Esito: "Servizio spostato", "Risorsa cambiata" o "Servizio spostato e risorsa cambiata" (NULL se
+-- non cambia niente).
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
 	SET DATEFORMAT YMD;
@@ -33,10 +40,15 @@ BEGIN
 		DECLARE @data SMALLDATETIME;
 		DECLARE @idCalendario CHAR(16);
 		DECLARE @idServizio CHAR(16);
+		DECLARE @cambioRisorsa BIT = 0;
+		DECLARE @esito NVARCHAR(50) = NULL;
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
 		SET @IdEvento = NULLIF(LTRIM(RTRIM(@IdEvento)), '');
 		SET @IdIntervallo = NULLIF(LTRIM(RTRIM(@IdIntervallo)), '');
+		SET @IdOsepeDa = NULLIF(LTRIM(RTRIM(@IdOsepeDa)), '');
+		SET @IdOsepeA = NULLIF(LTRIM(RTRIM(@IdOsepeA)), '');
+		SET @cambioRisorsa = IIF(@IdOsepeDa IS NOT NULL AND @IdOsepeA IS NOT NULL AND @IdOsepeDa <> @IdOsepeA, 1, 0);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -142,22 +154,118 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		-- Nessuno spostamento: rilasciato nella cella da cui e' partito
-		IF @data = @dataPartenza
+		-- Cambio di risorsa (Impegni per risorsa): controlli prima di scrivere qualunque cosa
+		IF @cambioRisorsa = 1
 		BEGIN
-			SELECT @idServizio AS Id;
+			IF NOT EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblOsepe da
+					INNER JOIN dbo.tblOsepe a ON a.Tipo = da.Tipo
+				WHERE
+					da.Id = @IdOsepeDa
+					AND a.Id = @IdOsepeA
+					AND da.Tipo IN ('P', 'O')
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Si sostituisce una persona con una persona e un oggetto con un oggetto';
+				GOTO BRANCH_END;
+			END
+
+			IF NOT EXISTS (
+				SELECT 1
+				FROM dbo.tblServiziOsepe
+				WHERE
+					Id = @idServizio
+					AND IdOsepe = @IdOsepeDa
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'La persona o l''oggetto non è più nel servizio: aggiornare la pagina';
+				GOTO BRANCH_END;
+			END
+
+			-- Stesso controllo di uspServizi_ins_Osepe (S4.5.1): impiegabile nei servizi, non disabilitato, dell'azienda
+			-- del calendario del servizio o condiviso tramite le Aree; una risorsa gia' nel servizio va sempre bene
+			IF NOT EXISTS (
+				SELECT 1
+				FROM dbo.tblServiziOsepe
+				WHERE
+					Id = @idServizio
+					AND IdOsepe = @IdOsepeA
+			)
+			AND NOT EXISTS (
+				SELECT 1
+				FROM
+					dbo.tblCalendari c
+					INNER JOIN dbo.tblSedi d ON c.IdSede = d.Id
+					CROSS JOIN dbo.tblSessioni n
+					CROSS APPLY dbo.ufnOsepe_get_ByUtente_List(n.IdUtente) u
+				WHERE
+					c.Id = @idCalendario
+					AND n.Id = @IdSessione
+					AND u.Id = @IdOsepeA
+					AND
+						(
+							(
+							u.IdDominio = n.IdDominio
+							AND u.Condivisa = 1
+							)
+						OR u.IdSede = d.IdAziendaInterna
+						)
+					AND u.Tipo IN ('P', 'O')
+					AND u.Disabilitata = 0
+					AND u.ImpiegabileServizi = 1
+			)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'La persona o l''oggetto indicato non è impiegabile nei servizi';
+				GOTO BRANCH_END;
+			END
+		END
+
+		-- Nessuna modifica: rilasciato nella cella da cui e' partito, nella stessa risorsa
+		IF @data = @dataPartenza AND @cambioRisorsa = 0
+		BEGIN
+			SELECT @idServizio AS Id, @esito AS Esito;
 			GOTO BRANCH_END;
 		END
 
+		SET @esito = CASE
+			WHEN @data <> @dataPartenza AND @cambioRisorsa = 1 THEN 'Servizio spostato e risorsa cambiata'
+			WHEN @cambioRisorsa = 1 THEN 'Risorsa cambiata'
+			ELSE 'Servizio spostato'
+		END;
+
 		IF @ricorre = 0
 		BEGIN
-			UPDATE dbo.tblEventi
-			SET [Data] = @data
-			WHERE
-				Id = @IdEvento
-				AND Lock = 0;
+			BEGIN TRANSACTION;
 
-			SET @returnId = @idServizio;
+				UPDATE dbo.tblEventi
+				SET [Data] = @data
+				WHERE
+					Id = @IdEvento
+					AND Lock = 0;
+
+				SET @returnId = @idServizio;
+
+				IF @cambioRisorsa = 1
+				BEGIN
+					IF EXISTS (SELECT 1 FROM dbo.tblServiziOsepe WHERE Id = @returnId AND IdOsepe = @IdOsepeA)
+						DELETE dbo.tblServiziOsepe
+						WHERE
+							Id = @returnId
+							AND IdOsepe = @IdOsepeDa;
+					ELSE
+						UPDATE dbo.tblServiziOsepe
+						SET IdOsepe = @IdOsepeA
+						WHERE
+							Id = @returnId
+							AND IdOsepe = @IdOsepeDa;
+				END
+
+			COMMIT TRANSACTION;
 		END
 		ELSE
 		BEGIN
@@ -220,17 +328,24 @@ BEGIN
 				FROM dbo.tblServizi
 				WHERE IdEvento = @IdEvento;
 
+				-- Risorse della serie; con il cambio di risorsa A prende il posto di Da (o, se c'e' gia', si toglie Da)
 				INSERT INTO dbo.tblServiziOsepe (Id, IdOsepe, Quantita)
-				SELECT @returnId, o.IdOsepe, o.Quantita
+				SELECT @returnId, IIF(@cambioRisorsa = 1 AND o.IdOsepe = @IdOsepeDa, @IdOsepeA, o.IdOsepe), o.Quantita
 				FROM dbo.tblServiziOsepe o
-				WHERE o.Id = @idServizio;
+				WHERE
+					o.Id = @idServizio
+					AND NOT (
+						@cambioRisorsa = 1
+						AND o.IdOsepe = @IdOsepeDa
+						AND EXISTS (SELECT 1 FROM dbo.tblServiziOsepe x WHERE x.Id = @idServizio AND x.IdOsepe = @IdOsepeA)
+					);
 
 			COMMIT TRANSACTION;
 		END
 
 		EXEC dbo.uspId_upd @Id = @returnId, @IdSessione = @IdSessione, @Operazione = 'U';
 
-		SELECT @returnId AS Id;
+		SELECT @returnId AS Id, @esito AS Esito;
 
 	END TRY
 	BEGIN CATCH

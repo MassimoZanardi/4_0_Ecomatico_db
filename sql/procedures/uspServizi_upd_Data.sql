@@ -11,7 +11,8 @@ AS
 -- il resto del servizio resta com'e'. @IdEvento e @DataOccorrenza (la data del servizio o dell'occorrenza) sono quelli
 -- del servizio trascinato; @DataCella e' l'inizio della cella di arrivo, @IdIntervallo la sua ampiezza: '1H' l'ora delle
 -- viste Giorno e Settimana (nuova ora = ora della cella con i minuti del servizio), '1D' il giorno (vista Mese e fascia
--- In giornata: cambia solo il giorno). Il servizio "In giornata" cambia sempre solo il giorno.
+-- In giornata: cambia solo il giorno), '30' la mezz'ora (viste Giorno e Settimana dal 2026-11-23:
+-- @DataCella e' il nuovo inizio, su :00 o :30, come nell'anteprima del trascinamento). Il servizio "In giornata" cambia sempre solo il giorno.
 -- Impegni per risorsa (S9.10): con @IdOsepeDa (risorsa della colonna di partenza) e @IdOsepeA (risorsa della colonna di
 -- arrivo) diverse cambia anche la risorsa, nella stessa transazione: stesso tipo (persona con persona, oggetto con
 -- oggetto), Da ancora nel servizio, A impiegabile come in uspServizi_ins_Osepe (S4.5.1); A prende la quantita' di Da,
@@ -68,10 +69,17 @@ BEGIN
 			SET @returnMessage = 'Il parametro @DataCella non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		IF @IdIntervallo IS NULL OR @IdIntervallo NOT IN ('1H', '1D')
+		IF @IdIntervallo IS NULL OR @IdIntervallo NOT IN ('1H', '1D', '30')
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Il parametro @IdIntervallo non è valido';
+			GOTO BRANCH_END;
+		END
+		-- Mezz'ora: la cella parte alle :00 o alle :30
+		IF @IdIntervallo = '30' AND DATEPART(MINUTE, @DataCella) NOT IN (0, 30)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Il parametro @DataCella non è l''inizio di una mezz''ora';
 			GOTO BRANCH_END;
 		END
 
@@ -133,6 +141,9 @@ BEGIN
 		IF @IdIntervallo = '1D' OR @inGiornata = 1
 			SET @data = DATEADD(MINUTE, DATEDIFF(MINUTE, CAST(CAST(@dataPartenza AS DATE) AS SMALLDATETIME), @dataPartenza),
 				CAST(CAST(@DataCella AS DATE) AS SMALLDATETIME));
+		ELSE IF @IdIntervallo = '30'
+			-- Mezz'ora (anteprima del trascinamento): l'inizio e' quello della cella
+			SET @data = @DataCella;
 		ELSE
 			SET @data = DATEADD(MINUTE, DATEPART(MINUTE, @dataPartenza),
 				DATEADD(HOUR, DATEDIFF(HOUR, CAST(CAST(@DataCella AS DATE) AS SMALLDATETIME), @DataCella), CAST(CAST(@DataCella AS DATE) AS SMALLDATETIME)));

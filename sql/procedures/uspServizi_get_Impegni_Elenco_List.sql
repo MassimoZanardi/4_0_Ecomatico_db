@@ -12,7 +12,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspServizi_get_Impegni_Elenco_List]
 	@Stato CHAR(1) = 'T',
 	@Etichetta VARCHAR(50) = NULL,
 	@Search VARCHAR(50) = NULL,
-	@IdOsepe CHAR(16) = NULL
+	@IdOsepe CHAR(16) = NULL,
+	@SoloSovrapposti BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -151,6 +152,20 @@ BEGIN
 		DECLARE @IdTipo tvpId_char_1;
 		INSERT INTO @IdTipo (Id) VALUES ('V');
 
+		-- Solo con sovrapposizioni (S9.14): le occorrenze sovrapposte del periodo per risorsa, calcolate su tutti i
+		-- calendari delle risorse ("Occupato" conta), prima della pagina
+		CREATE TABLE #tSovrapposti (
+			IdOsepe CHAR(16) COLLATE Latin1_General_CI_AS NOT NULL,
+			IdServizio CHAR(16) COLLATE Latin1_General_CI_AS NOT NULL,
+			Inizio SMALLDATETIME NOT NULL
+		);
+		IF ISNULL(@SoloSovrapposti, 0) = 1
+			INSERT INTO #tSovrapposti (IdOsepe, IdServizio, Inizio)
+			SELECT x.IdOsepe, x.IdServizio, x.Inizio
+			FROM
+				dbo.ufnServizi_get_Sovrapposti_List(@inizio, @fine, @IdCalendario, @IdTipo) x
+				INNER JOIN #tRisorse r ON x.IdOsepe = r.Id;
+
 		DECLARE @Offset INT = (@PageNumber - 1) * @RowsPerPage;
 
 		/*
@@ -181,6 +196,11 @@ BEGIN
 				LEFT JOIN #tCalendariVisibili v ON e.IdCalendario = v.Id
 			WHERE
 				e.IdStato <> 'A'
+				AND
+					(
+					ISNULL(@SoloSovrapposti, 0) = 0
+					OR EXISTS (SELECT 1 FROM #tSovrapposti x WHERE x.IdOsepe = r.Id AND x.IdServizio = s.Id AND x.Inizio = e.[Data])
+					)
 				AND
 					(
 					@Stato = 'T'

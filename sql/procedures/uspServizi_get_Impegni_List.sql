@@ -10,7 +10,8 @@ CREATE OR ALTER PROCEDURE [dbo].[uspServizi_get_Impegni_List]
 	@TipoRisorsa CHAR(1) = NULL,
 	@Risorsa VARCHAR(50) = NULL,
 	@PageNumber INT = NULL,
-	@RowsPerPage INT = NULL
+	@RowsPerPage INT = NULL,
+	@SoloSovrapposti BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -121,6 +122,35 @@ BEGIN
 			AND (@TipoRisorsa IS NULL OR u.Tipo = @TipoRisorsa)
 			AND (@Risorsa IS NULL OR u.[Text] LIKE '%' + @Risorsa + '%')
 		GROUP BY u.Id, u.Tipo;
+
+		-- Solo con sovrapposizioni (S9.14): restano le risorse con almeno un servizio sovrapposto nel periodo, prima
+		-- delle pagine (le pagine contano solo queste); i calendari sono quelli di tutti i loro servizi ("Occupato" conta)
+		IF ISNULL(@SoloSovrapposti, 0) = 1
+		BEGIN
+			DECLARE @calendariSovrapposti tvpId_char_16;
+			INSERT INTO @calendariSovrapposti (Id)
+			SELECT DISTINCT e.IdCalendario
+			FROM
+				#tRisorse r
+				INNER JOIN dbo.tblServiziOsepe o ON r.Id = o.IdOsepe
+				INNER JOIN dbo.tblServizi s ON o.Id = s.Id
+				INNER JOIN dbo.tblEventi e ON s.IdEvento = e.Id
+			WHERE
+				e.IdTipo = 'V'
+				AND e.Lock = 0
+				AND e.IdCalendario IS NOT NULL;
+
+			DECLARE @tipiSovrapposti tvpId_char_1;
+			INSERT INTO @tipiSovrapposti (Id) VALUES ('V');
+
+			DELETE r
+			FROM #tRisorse r
+			WHERE NOT EXISTS (
+				SELECT 1
+				FROM dbo.ufnServizi_get_Sovrapposti_List(@inizio, @fine, @calendariSovrapposti, @tipiSovrapposti) x
+				WHERE x.IdOsepe = r.Id
+			);
+		END
 
 		-- Paracadute (S9.13): le risorse a pagine, @RowsPerPage per pagina nello stesso ordine delle righe (prima le
 		-- persone, poi gli oggetti, per nome); senza @RowsPerPage tutte. Le altre si tolgono qui, prima di leggere i

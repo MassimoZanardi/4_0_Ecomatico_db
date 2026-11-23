@@ -6,7 +6,11 @@ GO
 CREATE OR ALTER PROCEDURE [dbo].[uspServizi_get_Impegni_Eventi_List]
 	@IdSessione CHAR(16) = NULL,
 	@DallaData SMALLDATETIME = NULL,
-	@AllaData SMALLDATETIME = NULL
+	@AllaData SMALLDATETIME = NULL,
+	@TipoRisorsa CHAR(1) = NULL,
+	@Risorsa VARCHAR(50) = NULL,
+	@PageNumber INT = NULL,
+	@RowsPerPage INT = NULL
 AS
 -- Servizi > Impegni a blocchi (S9.9): una riga per risorsa e servizio da @DallaData (compresa) ad @AllaData (esclusa),
 -- con i campi del calendario a blocchi (uspServizi_get_Calendario_Eventi_List). Stesse risorse e stessi servizi di
@@ -27,6 +31,9 @@ BEGIN
 		DECLARE @permesso TINYINT;
 
 		SET @IdSessione = NULLIF(LTRIM(RTRIM(@IdSessione)), '');
+		-- Filtro della finestra Cerca degli Impegni (S9.12): tipo di risorsa (P persone, O oggetti) e testo contenuto nel nome
+		SET @TipoRisorsa = NULLIF(LTRIM(RTRIM(@TipoRisorsa)), '');
+		SET @Risorsa = dbo.ufnStringhe_get_SenzaSpazi(@Risorsa, 0, 1);
 
 		IF @IdSessione IS NULL
 		BEGIN
@@ -88,8 +95,26 @@ BEGIN
 			AND u.Tipo IN ('P', 'O')
 			AND u.Disabilitata = 0
 			AND u.ImpiegabileServizi = 1
+			AND (@TipoRisorsa IS NULL OR u.Tipo = @TipoRisorsa)
+			AND (@Risorsa IS NULL OR u.[Text] LIKE '%' + @Risorsa + '%')
 		GROUP BY u.Id, u.Tipo;
 
+		-- Paracadute (S9.13): le risorse a pagine, @RowsPerPage per pagina nello stesso ordine delle righe (prima le
+		-- persone, poi gli oggetti, per nome); senza @RowsPerPage tutte. Le altre si tolgono qui, prima di leggere i
+		-- servizi, cosi' il carico e' quello della sola pagina
+		DECLARE @risorseCount INT = (SELECT COUNT(*) FROM #tRisorse);
+		IF ISNULL(@RowsPerPage, 0) > 0
+		BEGIN
+			SET @PageNumber = IIF(ISNULL(@PageNumber, 0) < 1, 1, @PageNumber);
+			DELETE r
+			FROM
+				#tRisorse r
+				INNER JOIN (
+					SELECT Id, Numero = ROW_NUMBER() OVER (ORDER BY IIF(Tipo = 'P', 0, 1), Risorsa, Id)
+					FROM #tRisorse
+				) n ON r.Id = n.Id
+			WHERE n.Numero NOT BETWEEN (@PageNumber - 1) * @RowsPerPage + 1 AND @PageNumber * @RowsPerPage;
+		END
 		CREATE UNIQUE CLUSTERED INDEX IX_tRisorse_Id ON #tRisorse (Id);
 
 		-- Calendari in cui le risorse sono impiegate, anche di sedi non accessibili all'utente ("Occupato")

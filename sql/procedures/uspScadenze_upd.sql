@@ -124,6 +124,25 @@ BEGIN
 			END
 		END
 
+		-- Campi obbligatori del tipo (S3.6): per segnare come eseguito la scadenza vanno compilati (le caselle si/no spuntate),
+		-- con i valori inviati dalla scheda o quelli gia' salvati
+		IF @IdStato = 'E'
+		BEGIN
+			IF @idTipo IS NULL
+				SELECT @idTipo = IdTipo
+				FROM dbo.tblScadenze
+				WHERE Id = @Id;
+
+			SELECT @returnMessage = Messaggio
+			FROM dbo.ufnEventi_get_ProprietaObbligatoriaMancante(@IdEvento, @idTipo, @Proprieta);
+
+			IF @returnMessage IS NOT NULL
+			BEGIN
+				SET @returnValue = -1;
+				GOTO BRANCH_END;
+			END
+		END
+
 		-- Limiti della serie: le date ammesse dall'applicazione (ufnDate_get_Min / _Max = Constants.SQL.MinDate / MaxDate)
 		IF @Ricorre = 1 AND @Data < dbo.ufnDate_get_Min()
 		BEGIN

@@ -130,6 +130,25 @@ BEGIN
 			END
 		END
 
+		-- Campi obbligatori del tipo (S3.6): per segnare come eseguito il servizio vanno compilati (le caselle si/no spuntate),
+		-- con i valori inviati dalla scheda o quelli gia' salvati
+		IF @IdStato = 'E'
+		BEGIN
+			IF @idTipo IS NULL
+				SELECT @idTipo = IdTipo
+				FROM dbo.tblServizi
+				WHERE Id = @Id;
+
+			SELECT @returnMessage = Messaggio
+			FROM dbo.ufnEventi_get_ProprietaObbligatoriaMancante(@IdEvento, @idTipo, @Proprieta);
+
+			IF @returnMessage IS NOT NULL
+			BEGIN
+				SET @returnValue = -1;
+				GOTO BRANCH_END;
+			END
+		END
+
 		-- Durata in minuti, facoltativa (NULL = non indicata): il servizio termina entro la mezzanotte del giorno di
 		-- inizio, cosi' non occupa il giorno successivo (vale anche per le occorrenze della serie, alla stessa ora).
 		-- "In giornata" non ha un'ora precisa: la durata arriva a 24 ore, qualunque sia l'ora rimasta nella data

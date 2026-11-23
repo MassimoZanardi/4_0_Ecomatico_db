@@ -117,6 +117,25 @@ BEGIN
 			END
 		END
 
+		-- Campi obbligatori del tipo (S3.6): per segnare come eseguito il servizio vanno compilati (le caselle si/no spuntate),
+		-- con i valori inviati dalla scheda o quelli gia' salvati
+		IF @IdStato = 'E'
+		BEGIN
+			IF @idTipo IS NULL
+				SELECT @idTipo = IdTipo
+				FROM dbo.tblServizi
+				WHERE Id = @Id;
+
+			SELECT @returnMessage = Messaggio
+			FROM dbo.ufnEventi_get_ProprietaObbligatoriaMancante(@IdEvento, @idTipo, @Proprieta);
+
+			IF @returnMessage IS NOT NULL
+			BEGIN
+				SET @returnValue = -1;
+				GOTO BRANCH_END;
+			END
+		END
+
 		-- La durata non si cambia da qui (la decide chi gestisce i Servizi), ma con la nuova data e ora il servizio
 		-- deve ancora terminare entro la mezzanotte del giorno di inizio (regola di uspServizi_upd)
 		IF EXISTS (

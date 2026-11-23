@@ -113,9 +113,10 @@ BEGIN
 			LEFT JOIN dbo.tblTipi t ON s.IdTipo = t.Id
 			LEFT JOIN dbo.tblSedi r ON s.IdRichiedente = r.Id
 			OUTER APPLY (
+				-- Con campi obbligatori (S3.6) contano solo quelli (una casella obbligatoria e' compilata se spuntata)
 				SELECT
 					Totali = COUNT(*),
-					Compilate = SUM(IIF(NULLIF(LTRIM(RTRIM(v.Valore)), '') IS NULL, 0, 1))
+					Compilate = SUM(IIF(NULLIF(LTRIM(RTRIM(v.Valore)), '') IS NULL OR (pr.IdTipoDato = 'B' AND v.Valore <> 'true'), 0, 1))
 				FROM
 					dbo.tblTipiProprieta tp
 					LEFT JOIN dbo.tblEventiProprieta v ON v.Id = e.Id AND v.IdProprieta = tp.IdProprieta
@@ -123,7 +124,8 @@ BEGIN
 				WHERE
 					tp.Id = s.IdTipo
 					AND tp.Lock = 0
-					AND pr.IdTipoDato <> 'B'
+					AND IIF(EXISTS (SELECT 1 FROM dbo.tblTipiProprieta o WHERE o.Id = s.IdTipo AND o.Lock = 0 AND o.Obbligatorio = 1),
+						tp.Obbligatorio, IIF(pr.IdTipoDato <> 'B', 1, 0)) = 1
 			) p
 		ORDER BY
 			e.[Data],

@@ -2,7 +2,8 @@
 	@Id CHAR(16) = NULL,
 	@IdSessione CHAR(16) = NULL,
 	@IdTipoDato CHAR(1) = NULL,
-	@Nome VARCHAR(50) = NULL
+	@Nome VARCHAR(50) = NULL,
+	@Obbligatorio BIT = 0
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -96,8 +97,8 @@ BEGIN
 				AND Lock = 0
 		);
 		BEGIN TRANSACTION;
-			INSERT INTO dbo.tblTipiProprieta (Id, IdProprieta, Nome, Pos, Lock)
-			VALUES (@Id, @idProprieta, @Nome, ISNULL(@pos + 1, 0), 0);
+			INSERT INTO dbo.tblTipiProprieta (Id, IdProprieta, Nome, Pos, Lock, Obbligatorio)
+			VALUES (@Id, @idProprieta, @Nome, ISNULL(@pos + 1, 0), 0, ISNULL(@Obbligatorio, 0));
 		COMMIT TRANSACTION;
 		-- Log FUORI dalla transazione
 		EXEC dbo.uspId_upd

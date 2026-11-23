@@ -78,6 +78,7 @@ BEGIN
 			Valore = CASE p.IdTipoDato
 				WHEN 'D' THEN CONVERT(VARCHAR(10), TRY_CONVERT(DATE, ep.Valore, 23), 103)
 				WHEN 'B' THEN NULL
+				WHEN 'I' THEN REPLACE(NULLIF(ep.Valore, ''), '.', ',')
 				ELSE NULLIF(ep.Valore, '')
 			END,
 			Spuntata = CAST(IIF(p.IdTipoDato = 'B' AND ep.Valore = 'true', 1, 0) AS BIT)

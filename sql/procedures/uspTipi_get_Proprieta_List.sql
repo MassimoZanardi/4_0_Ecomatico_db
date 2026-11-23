@@ -50,7 +50,8 @@ BEGIN
 			t.Nome,
 			p.IdTipoDato,
 			TipoDato = d.Nome,
-			t.Pos
+			t.Pos,
+			t.Obbligatorio
 		FROM
 			dbo.tblTipiProprieta t
 			INNER JOIN dbo.tblProprieta p ON t.IdProprieta = p.Id

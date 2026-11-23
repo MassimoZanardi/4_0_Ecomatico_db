@@ -10,6 +10,7 @@ CREATE TABLE [dbo].[tblTipiProprieta](
 	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NULL,
 	[Pos] [int] NULL,
 	[Lock] [tinyint] NULL,
+	[Obbligatorio] [bit] NOT NULL,
  CONSTRAINT [PK_tblServiziTipiProprieta] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC,
@@ -31,4 +32,7 @@ REFERENCES [dbo].[tblTipi] ([Id])
 GO
 
 ALTER TABLE [dbo].[tblTipiProprieta] CHECK CONSTRAINT [FK_tblTipiProprieta_tblTipi]
+GO
+
+ALTER TABLE [dbo].[tblTipiProprieta] ADD  CONSTRAINT [DF_tblTipiProprieta_Obbligatorio]  DEFAULT ((0)) FOR [Obbligatorio]
 GO

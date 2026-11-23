@@ -22,7 +22,7 @@ RETURN (
 		t.Pos,
 		v.Valore,
 		Errore = IIF(j.Valore IS NOT NULL AND v.Valore IS NULL,
-						'La proprietà "' + t.Nome + '" ' + CASE p.IdTipoDato
+						'Il campo "' + t.Nome + '" ' + CASE p.IdTipoDato
 							WHEN 'B' THEN 'deve essere Sì o No'
 							WHEN 'I' THEN 'deve essere un numero intero'
 							WHEN 'D' THEN 'deve essere una data'

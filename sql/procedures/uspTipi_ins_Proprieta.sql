@@ -70,7 +70,7 @@ BEGIN
 		IF @idProprieta IS NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Proprietà esaurite per il tipo di dato indicato';
+			SET @returnMessage = 'Sono già presenti 5 campi di questo tipo, il massimo consentito';
 			GOTO BRANCH_END;
 		END
 		IF EXISTS (
@@ -84,7 +84,7 @@ BEGIN
 		)
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Un''altra proprietà con lo stesso nome è già presente';
+			SET @returnMessage = 'Un altro campo con lo stesso nome è già presente';
 			GOTO BRANCH_END;
 		END
 		-- Posizione = max corrente + 1, oppure 0 se prima proprietà

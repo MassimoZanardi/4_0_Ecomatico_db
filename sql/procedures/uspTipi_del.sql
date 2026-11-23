@@ -81,7 +81,7 @@ BEGIN
 			)
 			BEGIN
 				SET @returnValue = -1;
-				SET @returnMessage = 'Un tipo che ha proprietà associate non può essere cancellato';
+				SET @returnMessage = 'Un tipo che ha campi aggiuntivi non può essere cancellato';
 				GOTO BRANCH_END;
 			END
 

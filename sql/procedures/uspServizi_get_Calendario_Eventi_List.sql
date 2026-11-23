@@ -73,13 +73,17 @@ BEGIN
 			END,
 			StatoDescrizione = e.Stato + IIF(e.IdStato IN ('D', 'I') AND e.[Data] < GETDATE(), ' - Scaduto', ''),
 			Orario = dbo.ufnServizi_get_Orario(e.[Data], e.InGiornata, s.Durata),
-			Descrizione = ISNULL(e.AvvisoTesto, ''),
+			-- Nel blocco solo tipo e richiedente (leggibile anche stretto); l'indirizzo va nel tooltip e nell'elenco
+			Descrizione = ISNULL(NULLIF(CONCAT_WS(' - ', t.Nome, r0.NomeCompleto), ''), ISNULL(e.AvvisoTesto, '')),
+			Indirizzo = r0.IndirizzoCompleto,
 			Risorse = r.Risorse,
 			e.Ricorre,
 			e.Eccezione
 		FROM
 			dbo.tblServizi s
 			INNER JOIN dbo.ufnEventi_get_List(@DallaData, @fine, @IdCalendario, @IdTipo) e ON s.IdEvento = e.Id
+			LEFT JOIN dbo.tblTipi t ON s.IdTipo = t.Id
+			LEFT JOIN dbo.tblSedi r0 ON s.IdRichiedente = r0.Id
 			-- Serie dell'occorrenza modificata (come uspServizi_get_ByData_List)
 			OUTER APPLY (
 				SELECT TOP (1) s3.Id

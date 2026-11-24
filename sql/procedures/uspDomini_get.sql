@@ -76,14 +76,20 @@ BEGIN
 			-- Spazio per i file allegati: massimo in MB (in tabella in byte), consumato in byte
 			FileQuotaMaxMb = CAST(ISNULL(FileQuotaMax, 0) / 1048576 AS INT),
 			FileQuotaConsumata = ISNULL(FileQuotaConsumata, 0),
+			-- Modulo Email: massimi del giorno e del mese, email contate oggi e nel mese (ufnEmail_get_Consumi)
+			EmailGiornoMax = c.GiornoMax,
+			EmailMeseMax = c.MeseMax,
+			EmailGiorno = c.Giorno,
+			EmailMese = c.Mese,
 			Demo,
 			Logo,
 			Codice = LOWER(ISNULL(Codice, RIGHT(CONVERT(VARCHAR(36), NEWID()), 5))),
 			[Url] = ISNULL([Url], ''),
 			Lock
 		FROM
-			dbo.tblDomini
-		WHERE Id = @Id;
+			dbo.tblDomini d
+			CROSS APPLY dbo.ufnEmail_get_Consumi(d.Id) c
+		WHERE d.Id = @Id;
 
 	END TRY
 	BEGIN CATCH

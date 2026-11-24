@@ -28,6 +28,8 @@ CREATE TABLE [dbo].[tblDomini](
 	[Url] [varchar](200) COLLATE Latin1_General_CI_AS NULL,
 	[FileQuotaMax] [bigint] NULL,
 	[FileQuotaConsumata] [bigint] NULL,
+	[EmailGiornoMax] [int] NULL,
+	[EmailMeseMax] [int] NULL,
 	[Lock] [tinyint] NULL,
  CONSTRAINT [PK_tblDomini] PRIMARY KEY CLUSTERED 
 (

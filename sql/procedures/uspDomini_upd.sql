@@ -21,6 +21,9 @@ CREATE OR ALTER PROCEDURE [dbo].[uspDomini_upd]
 	@ConservazioniXfirMax INT = 0,
 	-- Spazio per i file allegati in MB (tblDomini.FileQuotaMax in byte); NULL lascia il valore attuale
 	@FileQuotaMaxMb INT = NULL,
+	-- Modulo Email: massimo di email al giorno e al mese di calendario (NULL lascia il valore attuale, 0 = email non attive)
+	@EmailGiornoMax INT = NULL,
+	@EmailMeseMax INT = NULL,
 	@Demo BIT = 0,
 	@Codice CHAR(5) = NULL,
 	@NoLogo BIT = 0,
@@ -90,6 +93,19 @@ BEGIN
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Lo spazio per i file allegati deve essere compreso tra 0 e 1.048.576 MB';
+			GOTO BRANCH_END;
+		END
+
+		IF @EmailGiornoMax < 0 OR @EmailGiornoMax > 100000 OR @EmailMeseMax < 0 OR @EmailMeseMax > 1000000
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Le email al giorno devono essere tra 0 e 100.000, quelle al mese tra 0 e 1.000.000';
+			GOTO BRANCH_END;
+		END
+		IF @EmailGiornoMax > 0 AND @EmailMeseMax > 0 AND @EmailGiornoMax > @EmailMeseMax
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Le email al giorno non possono superare quelle al mese';
 			GOTO BRANCH_END;
 		END
 
@@ -226,6 +242,8 @@ BEGIN
 				ConservazioniMax = @ConservazioniMax,
 				ConservazioniXfirMax = @ConservazioniXfirMax,
 				FileQuotaMax = IIF(@FileQuotaMaxMb IS NULL, FileQuotaMax, CAST(@FileQuotaMaxMb AS BIGINT) * 1048576),
+				EmailGiornoMax = ISNULL(@EmailGiornoMax, EmailGiornoMax),
+				EmailMeseMax = ISNULL(@EmailMeseMax, EmailMeseMax),
 				Demo = @Demo,
 				Codice = ISNULL(@Codice, Codice),
 				Logo = IIF(@NoLogo = 1, NULL, Logo),

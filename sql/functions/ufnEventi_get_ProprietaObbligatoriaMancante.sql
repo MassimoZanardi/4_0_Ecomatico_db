@@ -8,7 +8,9 @@ GO
 -- _upd lo chiamano solo con lo stato Eseguito e restituiscono il messaggio. Il valore e' quello inviato dalla scheda
 -- (@Proprieta, JSON [{"Id","Valore"}], normalizzato da ufnEventi_get_ProprietaValori_List) se il campo c'e', altrimenti
 -- quello gia' salvato sull'evento. Una casella si/no obbligatoria deve essere spuntata ('true'). Un campo disattivato (S3.8) non
--- e' obbligatorio.
+-- e' obbligatorio. Messaggio come gli altri campi obbligatori delle schede (dal 2026-11-24, decisione dell'utente; prima
+-- 'Per segnare come eseguito compilare il campo "Nome"'): Indicare "Nome", Selezionare "Nome" per l'Elenco a scelta,
+-- Spuntare "Nome" per la casella si/no.
 -- Usata da uspScadenze_upd, uspServizi_upd, uspServiziAssegnati_upd
 CREATE OR ALTER FUNCTION [dbo].[ufnEventi_get_ProprietaObbligatoriaMancante]
 (
@@ -20,7 +22,11 @@ RETURNS TABLE
 AS
 RETURN (
 	SELECT TOP (1)
-		Messaggio = 'Per segnare come eseguito ' + IIF(p.IdTipoDato = 'B', 'spuntare', 'compilare') + ' il campo "' + t.Nome + '"'
+		Messaggio = CASE p.IdTipoDato
+			WHEN 'B' THEN 'Spuntare'
+			WHEN 'L' THEN 'Selezionare'
+			ELSE 'Indicare'
+		END + ' "' + t.Nome + '"'
 	FROM
 		dbo.tblTipiProprieta t
 		INNER JOIN dbo.tblProprieta p ON t.IdProprieta = p.Id

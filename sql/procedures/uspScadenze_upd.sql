@@ -143,6 +143,20 @@ BEGIN
 			END
 		END
 
+		-- La serie è solo pianificazione, come nei servizi (S5.9, dal 2026-11-24): le occorrenze generate hanno lo stato
+		-- della serie, quindi una serie Eseguita renderebbe eseguite anche quelle future. Si esegue l'occorrenza
+		-- modificata, che è una scadenza a sé (sostituto di un'eccezione della serie)
+		IF @IdStato = 'E'
+		   AND (@Ricorre = 1 OR @OccorrenzaESuccessive = 1)
+		   AND NOT EXISTS (SELECT 1
+		FROM dbo.tblRicorrenzeEccezioni
+		WHERE IdEvento = @IdEvento)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Una scadenza ricorrente non può essere eseguita: per segnare come eseguita un''occorrenza, modificare la sola occorrenza';
+			GOTO BRANCH_END;
+		END
+
 		-- Limiti della serie: le date ammesse dall'applicazione (ufnDate_get_Min / _Max = Constants.SQL.MinDate / MaxDate)
 		IF @Ricorre = 1 AND @Data < dbo.ufnDate_get_Min()
 		BEGIN

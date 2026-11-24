@@ -13,6 +13,10 @@ GO
 -- (ufnFatture_get_Totali: il totale comprende il bollo). Per conto si sommano gli imponibili delle righe,
 -- perché il conto sta sulla riga: niente IVA né totale, e le righe senza conto vanno in "(Senza conto)".
 -- Al massimo @MaxRighe + 1 righe (la riga in più dice all'applicazione che il limite è superato).
+-- @Tipo = D, @Raggruppamento = N (P2.9, dal 2026-11-24): documenti dell'anno non ancora fatturati (registrazioni dei
+-- rifiuti, DDT di magazzino e servizi eseguiti dei moduli attivi), dalla stessa funzione della procedura automatica
+-- (ufnFattureGenera_get_Documenti, pre-fatture comprese), con il motivo per cui la procedura li lascerebbe fuori;
+-- esclusi gli annullati e quelli indicati come non fatturabili. Senza il modulo Offerte e contratti nessuna riga.
 CREATE OR ALTER PROCEDURE dbo.uspFatture_get_Fatturato
 	@IdSessione CHAR(16) = NULL,
 	@Tipo CHAR(1) = NULL,
@@ -38,13 +42,13 @@ BEGIN
 			SET @returnMessage = 'Il parametro @IdSessione non può essere vuoto';
 			GOTO BRANCH_END;
 		END
-		IF @Tipo IS NULL OR @Tipo NOT IN ('C', 'F')
+		IF @Tipo IS NULL OR @Tipo NOT IN ('C', 'F', 'D')
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Il parametro @Tipo deve essere C (cliente) o F (fornitore)';
+			SET @returnMessage = 'Il parametro @Tipo deve essere C (cliente), F (fornitore) o D (documenti da fatturare)';
 			GOTO BRANCH_END;
 		END
-		IF @Raggruppamento IS NULL OR @Raggruppamento NOT IN ('M', 'S', 'C')
+		IF @Raggruppamento IS NULL OR @Raggruppamento NOT IN ('M', 'S', 'C', 'N')
 		BEGIN
 			SET @returnValue = -1;
 			SET @returnMessage = 'Il parametro @Raggruppamento deve essere M (mese), S (cliente o fornitore) o C (conto)';
@@ -72,6 +76,62 @@ BEGIN
 
 		DECLARE @dataDa DATE = DATEFROMPARTS(@Anno, 1, 1);
 		DECLARE @dataA DATE = DATEFROMPARTS(@Anno, 12, 31);
+
+		-- Documenti non ancora fatturati (P2.9)
+		IF @Tipo = 'D'
+		BEGIN
+			IF ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('OFC', @IdSessione), 0) = 0
+			BEGIN
+				SELECT TOP (0) Documento = CAST(NULL AS VARCHAR(200));
+				GOTO BRANCH_END;
+			END
+
+			DECLARE @idAzienda CHAR(16) = (SELECT IdAzienda FROM dbo.tblSessioni WHERE Id = @IdSessione);
+			DECLARE @rifiuti BIT = ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('RIF', @IdSessione), 0);
+			DECLARE @magazzino BIT = ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('MAG', @IdSessione), 0);
+			DECLARE @servizi BIT = ISNULL(dbo.ufnModuli_get_IsAttivoBySessione('SRV', @IdSessione), 0);
+
+			SELECT TOP (@MaxRighe + 1)
+				Documento = CAST(CASE d.IdModulo
+					WHEN 'MAG' THEN 'DDT' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)) + ISNULL('/' + dd.Sezionale, ''), '') + ISNULL(' - ' + sd.NomeCompleto, '')
+					WHEN 'SRV' THEN 'Servizio' + ISNULL(' ' + tp.Nome, '') + ISNULL(' - ' + sd.NomeCompleto, '')
+					ELSE 'Registrazione' + ISNULL(' n. ' + CAST(d.Numero AS VARCHAR(10)), '')
+						+ ISNULL(' - EER ' + e.Nome + IIF(e.Pericoloso = 1, '*', ''), '')
+				END AS VARCHAR(200)),
+				[Data] = CAST(d.[Data] AS DATE),
+				Cliente = sc.NomeCompleto,
+				Imponibile = CAST(d.Imponibile AS DECIMAL(18, 2)),
+				[Pronto da fatturare] = d.Fatturabile,
+				Motivo = CAST(CASE d.Esito
+					WHEN 'P' THEN 'In pre-fattura del ' + ISNULL(CONVERT(VARCHAR(10), f.DataEmissione, 103), '')
+					WHEN 'S' THEN 'Contratto non valido alla data: si applica l''importo standard'
+					WHEN 'I' THEN IIF(d.IdImporto IS NOT NULL AND d.IdModulo IN ('MAG', 'SRV'),
+						'L''importo "' + ISNULL(i.Nome, '') + '" non ha una riga per ' + IIF(d.IdModulo = 'SRV', 'tutte le risorse del servizio', 'tutti gli articoli o i materiali del DDT'),
+						'Nessun importo coincide')
+					WHEN 'C' THEN 'Cliente non determinato: ' + CASE d.IdModulo WHEN 'MAG' THEN 'il destinatario' WHEN 'SRV' THEN 'il richiedente' ELSE 'il produttore' END + ' non ha una scheda cliente'
+					WHEN 'R' THEN 'L''importo non ha righe applicabili'
+					WHEN 'V' THEN 'Aliquota IVA non indicata né sull''importo né sulla scheda del cliente'
+				END AS VARCHAR(300))
+			FROM
+				dbo.ufnFattureGenera_get_Documenti(@IdSessione, @idAzienda, NULL, @dataDa, @dataA, NULL, 1, @rifiuti, @magazzino, @servizi) d
+				LEFT JOIN dbo.tblRifiutiEer e ON d.IdEer = e.Id
+				LEFT JOIN dbo.tblMagazziniDdt dd ON d.IdModulo = 'MAG'
+											  AND d.Id = dd.IdMovimento
+				LEFT JOIN dbo.tblServizi sv ON d.IdModulo = 'SRV'
+										 AND d.Id = sv.Id
+				LEFT JOIN dbo.tblTipi tp ON sv.IdTipo = tp.Id
+				LEFT JOIN dbo.tblSedi sd ON d.IdModulo IN ('MAG', 'SRV')
+										 AND d.IdProduttore = sd.Id
+				LEFT JOIN dbo.tblClientiFornitori c ON d.IdClienteFornitore = c.Id
+				LEFT JOIN dbo.tblSedi sc ON c.IdSede = sc.Id
+				LEFT JOIN dbo.tblImporti i ON d.IdImporto = i.Id
+				LEFT JOIN dbo.tblFatture f ON d.IdPreFattura = f.Id
+			WHERE d.Esito NOT IN ('A', 'N')
+			ORDER BY d.[Data], d.Numero, d.Id
+			OPTION (RECOMPILE);
+
+			GOTO BRANCH_END;
+		END
 
 		-- Fatture dell'anno, con il segno (meno per le note di credito) e i totali
 		DECLARE @fatture TABLE (

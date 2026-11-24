@@ -87,6 +87,14 @@ BEGIN
 			END
 		END
 
+		-- Al massimo 20 campi per tipo, in qualunque combinazione di tipi di campo, contando anche i disattivati (dal
+		-- 2026-11-24, decisione dell'utente; prima 5 per tipo di campo). Ogni tipo di campo ha 20 posti in tblProprieta
+		IF 20 <= (SELECT COUNT(*) FROM dbo.tblTipiProprieta WHERE Id = @Id AND Lock = 0)
+		BEGIN
+			SET @returnValue = -1;
+			SET @returnMessage = 'Sono già presenti 20 campi, il massimo consentito';
+			GOTO BRANCH_END;
+		END
 		-- Trova la prima proprietà disponibile del tipo dato non ancora usata
 		DECLARE @idProprieta CHAR(3);
 		SELECT TOP 1 @idProprieta = Id
@@ -98,7 +106,7 @@ BEGIN
 		IF @idProprieta IS NULL
 		BEGIN
 			SET @returnValue = -1;
-			SET @returnMessage = 'Sono già presenti 5 campi di questo tipo, il massimo consentito';
+			SET @returnMessage = 'Sono già presenti 20 campi, il massimo consentito';
 			GOTO BRANCH_END;
 		END
 		IF EXISTS (

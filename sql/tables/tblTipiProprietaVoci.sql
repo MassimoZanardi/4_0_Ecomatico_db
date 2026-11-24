@@ -1,0 +1,29 @@
+﻿SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[tblTipiProprietaVoci](
+	[Id] [char](16) COLLATE Latin1_General_CI_AS NOT NULL,
+	[IdProprieta] [char](3) COLLATE Latin1_General_CI_AS NOT NULL,
+	[Pos] [int] NOT NULL,
+	[Nome] [varchar](50) COLLATE Latin1_General_CI_AS NOT NULL,
+ CONSTRAINT [PK_tblTipiProprietaVoci] PRIMARY KEY CLUSTERED
+(
+	[Id] ASC,
+	[IdProprieta] ASC,
+	[Pos] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+CREATE UNIQUE NONCLUSTERED INDEX [UX_tblTipiProprietaVoci_Nome] ON [dbo].[tblTipiProprietaVoci]
+(
+	[Id] ASC,
+	[IdProprieta] ASC,
+	[Nome] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+ALTER TABLE [dbo].[tblTipiProprietaVoci]  WITH CHECK ADD  CONSTRAINT [FK_tblTipiProprietaVoci_tblTipiProprieta] FOREIGN KEY([Id], [IdProprieta])
+REFERENCES [dbo].[tblTipiProprieta] ([Id], [IdProprieta])
+GO
+ALTER TABLE [dbo].[tblTipiProprietaVoci] CHECK CONSTRAINT [FK_tblTipiProprietaVoci_tblTipiProprieta]
+GO

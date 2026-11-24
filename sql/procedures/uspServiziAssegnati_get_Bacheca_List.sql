@@ -124,7 +124,9 @@ BEGIN
 				WHERE
 					tp.Id = s.IdTipo
 					AND tp.Lock = 0
-					AND IIF(EXISTS (SELECT 1 FROM dbo.tblTipiProprieta o WHERE o.Id = s.IdTipo AND o.Lock = 0 AND o.Obbligatorio = 1),
+					-- I campi disattivati (S3.8) non contano
+					AND tp.Attivo = 1
+					AND IIF(EXISTS (SELECT 1 FROM dbo.tblTipiProprieta o WHERE o.Id = s.IdTipo AND o.Lock = 0 AND o.Attivo = 1 AND o.Obbligatorio = 1),
 						tp.Obbligatorio, IIF(pr.IdTipoDato <> 'B', 1, 0)) = 1
 			) p
 		ORDER BY

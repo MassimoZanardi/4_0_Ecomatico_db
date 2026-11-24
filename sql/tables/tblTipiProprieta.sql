@@ -11,6 +11,7 @@ CREATE TABLE [dbo].[tblTipiProprieta](
 	[Pos] [int] NULL,
 	[Lock] [tinyint] NULL,
 	[Obbligatorio] [bit] NOT NULL,
+	[Attivo] [bit] NOT NULL,
  CONSTRAINT [PK_tblServiziTipiProprieta] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC,
@@ -35,4 +36,7 @@ ALTER TABLE [dbo].[tblTipiProprieta] CHECK CONSTRAINT [FK_tblTipiProprieta_tblTi
 GO
 
 ALTER TABLE [dbo].[tblTipiProprieta] ADD  CONSTRAINT [DF_tblTipiProprieta_Obbligatorio]  DEFAULT ((0)) FOR [Obbligatorio]
+GO
+
+ALTER TABLE [dbo].[tblTipiProprieta] ADD  CONSTRAINT [DF_tblTipiProprieta_Attivo]  DEFAULT ((1)) FOR [Attivo]
 GO

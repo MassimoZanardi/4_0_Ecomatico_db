@@ -74,6 +74,11 @@ BEGIN
 			WHERE
 				s.IdTipo = @Id
 				AND e.IdProprieta = @IdProprieta;
+			-- Voci dell'Elenco a scelta (S3.7)
+			DELETE dbo.tblTipiProprietaVoci
+			WHERE
+				Id = @Id
+				AND IdProprieta = @IdProprieta;
 			-- Rimuove la proprietà dal tipo
 			DELETE dbo.tblTipiProprieta
 			WHERE

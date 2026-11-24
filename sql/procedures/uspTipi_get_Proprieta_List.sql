@@ -51,7 +51,17 @@ BEGIN
 			p.IdTipoDato,
 			TipoDato = d.Nome,
 			t.Pos,
-			t.Obbligatorio
+			t.Obbligatorio,
+			-- Campo disattivato (S3.8): l'elenco lo mostra in grigio
+			t.Attivo,
+			-- Voci dell'Elenco a scelta (S3.7), una per riga, nell'ordine
+			Voci = (
+				SELECT STRING_AGG(CAST(o.Nome AS VARCHAR(MAX)), CHAR(10)) WITHIN GROUP (ORDER BY o.Pos)
+				FROM dbo.tblTipiProprietaVoci o
+				WHERE
+					o.Id = t.Id
+					AND o.IdProprieta = t.IdProprieta
+			)
 		FROM
 			dbo.tblTipiProprieta t
 			INNER JOIN dbo.tblProprieta p ON t.IdProprieta = p.Id

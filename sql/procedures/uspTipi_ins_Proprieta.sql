@@ -3,7 +3,9 @@
 	@IdSessione CHAR(16) = NULL,
 	@IdTipoDato CHAR(1) = NULL,
 	@Nome VARCHAR(50) = NULL,
-	@Obbligatorio BIT = 0
+	@Obbligatorio BIT = 0,
+	-- Voci dell'Elenco a scelta (S3.7), JSON ["Voce 1","Voce 2", ...]: obbligatorie per il tipo di campo L, ignorate per gli altri
+	@Voci NVARCHAR(MAX) = NULL
 AS
 BEGIN
 	SET NOCOUNT, XACT_ABORT ON;
@@ -60,6 +62,31 @@ BEGIN
 			SET @returnMessage = 'Non si dispone dei diritti necessari';
 			GOTO BRANCH_END;
 		END
+		-- Voci dell'Elenco a scelta (S3.7): almeno una, controllate da ufnTipi_get_ProprietaVoci_List
+		IF @IdTipoDato = 'L'
+		BEGIN
+			IF ISJSON(@Voci) = 0
+				SET @Voci = NULL;
+
+			IF NOT EXISTS (SELECT 1 FROM dbo.ufnTipi_get_ProprietaVoci_List(@Voci))
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Indicare le voci dell''elenco, una per riga';
+				GOTO BRANCH_END;
+			END
+
+			SELECT TOP 1 @returnMessage = Errore
+			FROM dbo.ufnTipi_get_ProprietaVoci_List(@Voci)
+			WHERE Errore IS NOT NULL
+			ORDER BY Pos;
+
+			IF @returnMessage IS NOT NULL
+			BEGIN
+				SET @returnValue = -1;
+				GOTO BRANCH_END;
+			END
+		END
+
 		-- Trova la prima proprietà disponibile del tipo dato non ancora usata
 		DECLARE @idProprieta CHAR(3);
 		SELECT TOP 1 @idProprieta = Id
@@ -99,6 +126,11 @@ BEGIN
 		BEGIN TRANSACTION;
 			INSERT INTO dbo.tblTipiProprieta (Id, IdProprieta, Nome, Pos, Lock, Obbligatorio)
 			VALUES (@Id, @idProprieta, @Nome, ISNULL(@pos + 1, 0), 0, ISNULL(@Obbligatorio, 0));
+
+			IF @IdTipoDato = 'L'
+				INSERT INTO dbo.tblTipiProprietaVoci (Id, IdProprieta, Pos, Nome)
+				SELECT @Id, @idProprieta, Pos, Nome
+				FROM dbo.ufnTipi_get_ProprietaVoci_List(@Voci);
 		COMMIT TRANSACTION;
 		-- Log FUORI dalla transazione
 		EXEC dbo.uspId_upd

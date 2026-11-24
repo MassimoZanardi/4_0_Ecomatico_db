@@ -381,6 +381,7 @@ BEGIN
                OR IdOsepe IN (SELECT Id FROM #OsepeIds);
             DELETE FROM dbo.tblServizi WHERE Id IN (SELECT Id FROM #Servizi);
 
+            DELETE FROM dbo.tblTipiProprietaVoci WHERE Id IN (SELECT Id FROM #TipiProprieta);
             DELETE FROM dbo.tblTipiProprieta WHERE Id IN (SELECT Id FROM #TipiProprieta);
             DELETE FROM dbo.tblTipi          WHERE Id IN (SELECT Id FROM #Tipi);
 

@@ -88,7 +88,15 @@ BEGIN
 			INNER JOIN dbo.tblProprieta p ON t.IdProprieta = p.Id
 			LEFT JOIN dbo.tblEventiProprieta ep ON s.IdEvento = ep.Id
 												  AND t.IdProprieta = ep.IdProprieta
-		WHERE s.Id = @Id
+		WHERE
+			s.Id = @Id
+			AND t.Lock = 0
+			-- Campo disattivato (S3.8): solo se ha un valore (una casella si/no se spuntata)
+			AND
+				(
+				t.Attivo = 1
+				OR (NULLIF(LTRIM(RTRIM(ep.Valore)), '') IS NOT NULL AND NOT (p.IdTipoDato = 'B' AND ep.Valore <> 'true'))
+				)
 		ORDER BY t.Pos;
 
 	END TRY

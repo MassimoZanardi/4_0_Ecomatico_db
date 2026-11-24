@@ -113,7 +113,7 @@ BEGIN
 			WHERE Id = @Id;
 
 			SELECT TOP 1 @returnMessage = Errore
-			FROM dbo.ufnEventi_get_ProprietaValori_List(@idTipo, @Proprieta)
+			FROM dbo.ufnEventi_get_ProprietaValori_List(@IdEvento, @idTipo, @Proprieta)
 			WHERE Errore IS NOT NULL
 			ORDER BY Pos;
 
@@ -346,12 +346,12 @@ BEGIN
 				DELETE p
 				FROM
 					dbo.tblEventiProprieta p
-					INNER JOIN dbo.ufnEventi_get_ProprietaValori_List(@idTipo, @Proprieta) v ON p.IdProprieta = v.IdProprieta
+					INNER JOIN dbo.ufnEventi_get_ProprietaValori_List(@IdEvento, @idTipo, @Proprieta) v ON p.IdProprieta = v.IdProprieta
 				WHERE p.Id = @IdEvento;
 
 				INSERT dbo.tblEventiProprieta (Id, IdProprieta, Valore)
 				SELECT @IdEvento, IdProprieta, Valore
-				FROM dbo.ufnEventi_get_ProprietaValori_List(@idTipo, @Proprieta)
+				FROM dbo.ufnEventi_get_ProprietaValori_List(@IdEvento, @idTipo, @Proprieta)
 				WHERE Valore IS NOT NULL;
 			END
 

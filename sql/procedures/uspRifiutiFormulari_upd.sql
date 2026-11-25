@@ -249,6 +249,9 @@ BEGIN
 
 		IF @AllaRinfusa = 1 SET @IdImballo = NULL;
 		IF @IdImballo = '00' SET @IdImballo = NULL;
+		-- "00" = (Selezionare): ammesso senza attività solo il formulario unico con raggruppamento nel deposito
+		-- temporaneo (controllo nella pagina); senza questa riga violava la FK verso tblRifiutiAttivitaRecuperoSmaltimento
+		IF @IdAttivitaRs = '00' SET @IdAttivitaRs = NULL;
 
 		-- Normalizzazione parametri VARCHAR opzionali
 		SET @ClassiPericolo = dbo.ufnStringhe_get_SenzaSpazi(@ClassiPericolo, 0, 1);
@@ -418,6 +421,15 @@ BEGIN
 			BEGIN
 				SET @returnValue = -1;
 				SET @returnMessage = 'Lo stesso indirizzo di intervento è indicato più volte';
+				GOTO BRANCH_END;
+			END
+			-- Quantità stimata obbligatoria per ogni intervento (delibera Albo n. 14/2021, allegato B, lettera B)
+			IF EXISTS (SELECT 1
+			FROM @elencoSediProduzione
+			WHERE Quantita IS NULL)
+			BEGIN
+				SET @returnValue = -1;
+				SET @returnMessage = 'Indicare la quantità stimata di ogni indirizzo di intervento';
 				GOTO BRANCH_END;
 			END
 			IF EXISTS (SELECT 1

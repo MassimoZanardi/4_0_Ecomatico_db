@@ -184,6 +184,8 @@ BEGIN
 			IsDestinatario = ISNULL(o.IsDestinatario, 0),
 			IsIntermediario = ISNULL(o.IsIntermediario, 0),
 			IsAttivitaRs = ISNULL(o.IsAttivitaRs, 0),
+			-- Formulario unico (art. 230, comma 5): con la Q il codice R o D è facoltativo (formulario-unico.md U2.4)
+			IsFormularioUnico = ISNULL(o.IsFormularioUnico, 0),
 			IsEsito = ISNULL(o.IsEsito, 0),
 			IsRentriAccettazione = ISNULL(o.IsRentriAccettazione, 0),
 			IsAttivitaProvenienza = ISNULL(o.IsAttivitaProvenienza, 0),

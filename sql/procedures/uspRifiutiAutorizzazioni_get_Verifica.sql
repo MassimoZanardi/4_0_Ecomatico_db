@@ -46,7 +46,9 @@ BEGIN
 		SET @IdAutorizzazioneIntermediario1 = NULLIF(LTRIM(RTRIM(@IdAutorizzazioneIntermediario1)), '');
 		SET @IdAutorizzazioneIntermediario2 = NULLIF(LTRIM(RTRIM(@IdAutorizzazioneIntermediario2)), '');
 		SET @IdAutorizzazioneIntermediario3 = NULLIF(LTRIM(RTRIM(@IdAutorizzazioneIntermediario3)), '');
-		SET @IdAttivitaRs = NULLIF(LTRIM(RTRIM(@IdAttivitaRs)), '');
+		-- "00" = (Selezionare): nessuna attività da controllare (formulario unico con raggruppamento nel deposito
+		-- temporaneo, riquadro 5.1, che non ha il codice R o D)
+		SET @IdAttivitaRs = NULLIF(NULLIF(LTRIM(RTRIM(@IdAttivitaRs)), ''), '00');
 		SET @IdTipoTrasporto1 = NULLIF(LTRIM(RTRIM(@IdTipoTrasporto1)), '');
 		SET @TargaMotrice = dbo.ufnStringhe_get_SenzaSpazi(@TargaMotrice, 0, 1);
 		SET @TargaRimorchio = dbo.ufnStringhe_get_SenzaSpazi(@TargaRimorchio, 0, 1);

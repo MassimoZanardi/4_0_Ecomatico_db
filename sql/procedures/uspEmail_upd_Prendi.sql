@@ -3,10 +3,11 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
--- Modulo Email (EML): un giro dell'invio (operazione pianificata ogni 5 minuti, POST /api/email/elabora). Prende fino a
--- @Max email da inviare (stato D, ProssimoTentativo passato), le segna in invio (P) e le restituisce; l'app le invia
--- e scrive l'esito con uspEmail_upd_Esito. Il blocco sp_getapplock fa lavorare un giro alla volta: due giri
--- sovrapposti non prendono mai la stessa email e non superano la quota.
+-- Modulo Email (EML): un lotto del giro dell'invio (operazione pianificata ogni 5 minuti, POST /api/email/elabora: il
+-- giro prende lotti finche' la coda e' vuota o finisce il suo tempo). Prende fino a @Max email da inviare (stato D,
+-- ProssimoTentativo passato), le segna in invio (P) e le restituisce; l'app le invia e scrive l'esito con
+-- uspEmail_upd_Esito (anche per quelle che rimette in coda senza inviarle, @Rilascia = 1). Il blocco sp_getapplock fa
+-- prendere un lotto alla volta: due chiamate sovrapposte non prendono mai la stessa email e non superano la quota.
 -- Ordine: prima le email di servizio, poi gli avvisi agli utenti, poi le comunicazioni ai clienti, dalla piu' vecchia.
 -- Avvisi e comunicazioni (Tipo U e C):
 -- - senza il modulo Email sul dominio, o con il massimo del giorno o del mese vuoto o 0, non partono (stato E);
@@ -16,8 +17,8 @@ GO
 -- Le email di servizio (Tipo S: email di prova, avvisi sulla quota) non contano e non chiedono il modulo.
 -- @GiornoMaxGlobale (EmailSettings:GiornoMax nel web.config, NULL o 0 = nessuno): tetto di sicurezza sulle email prese
 -- oggi da tutti i domini, anche di servizio; raggiunto, il giro si ferma e le email aspettano.
--- Prima del giro, le email in invio da oltre 15 minuti (app fermata a meta') passano a E: non e' noto se siano
--- partite e rimandarle potrebbe farle arrivare due volte.
+-- Prima del lotto, le email in invio da oltre 15 minuti (app fermata a meta': un giro dura al massimo 4 minuti)
+-- passano a E: non e' noto se siano partite e rimandarle potrebbe farle arrivare due volte.
 CREATE OR ALTER PROCEDURE [dbo].[uspEmail_upd_Prendi]
 	@Max INT = 50,
 	@GiornoMaxGlobale INT = NULL

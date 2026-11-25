@@ -77,7 +77,8 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
-		SELECT TOP 5
+		-- Prime 50 per la casella con elenco del formulario: le altre si trovano scrivendo una parte della targa
+		SELECT TOP 50
 			Id = ROW_NUMBER() OVER(ORDER BY Targa),
 			[Text] = Targa
 		FROM

@@ -71,6 +71,8 @@ BEGIN
 			GOTO BRANCH_END;
 		END
 
+		-- Primi 50 per la casella con elenco del formulario, elencati come "Cognome Nome": la ricerca trova il testo
+		-- nel nome, nel cognome o nelle due combinazioni (es. "rossi m" trova Rossi Mario)
 		SELECT TOP 50
 			Id = Nome,
 			Nome,
@@ -86,9 +88,10 @@ BEGIN
 			AND
 				(
 				@Search IS NULL
-				OR Nome LIKE '%' + @Search + '%'
+				OR Cognome + ' ' + Nome LIKE '%' + @Search + '%'
+				OR Nome + ' ' + Cognome LIKE '%' + @Search + '%'
 				)
-		ORDER BY Nome;
+		ORDER BY Cognome, Nome;
 
 	END TRY
 	BEGIN CATCH
